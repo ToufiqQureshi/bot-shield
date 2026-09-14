@@ -101,6 +101,26 @@ wrappers, error layers, comments, or configuration. Every line must
 have a reason to exist. Do not build a scoring engine, cache, or queue
 more complex than the current, real need — measure before optimizing.
 
+### 3a. Comments: Beginner-Friendly, What/Why/Need — Not How
+
+This is a solo-dev project — the code has to explain itself to
+whoever (or whichever future agent) opens the file next, with zero
+memory of this conversation. Every non-trivial function (detection
+logic, fingerprint/TLS parsing, scoring, anything not a one-line
+getter) gets a short comment above it, 2-3 lines, answering:
+
+- **What** it does (plain language, not a restatement of the code).
+- **Why** it exists / what gap or threat it closes (tie back to
+  `docs/ROADMAP.md` / `docs/RESEARCH.md` where relevant).
+- **What need** made it necessary — why this couldn't be skipped.
+
+This does not contradict Section 3's "no unnecessary comments" rule:
+a comment that just restates the code ("// loop over items") is
+still banned. A comment that explains why the code exists and what a
+beginner (the client's ops engineer, a new solo-dev session) needs to
+know to trust and maintain it is not decoration — it earns its place
+the same way a line of code does.
+
 ---
 
 ## 4. Function Names Must Be Simple
