@@ -316,5 +316,65 @@ same as "no more bugs in it." The same adversarial re-read should
 happen again before ROADMAP item 3 (UA consistency) is called done,
 not just for new code but for whatever it touches in `proxy/`.
 
+---
+
+## 2026-09-14 — Mutation-tested our own tests; 2 of them were fake
+Changed:
+  - `proxy/capture_test.go`:
+    `TestCaptureListenerTimesOutSlowHandshake` now checks *why* the
+    connection ended — a server-side close, not the test's own read
+    deadline — and that it happened near the handshake timeout. The
+    old version set a 2s read deadline and only checked `err != nil`,
+    so it passed whether the timeout worked or not.
+  - `proxy/capture_test.go`: `TestCaptureListenerEndToEnd` now matches
+    the header against a JA4 shape regex and fails if the origin was
+    never reached. The old version only checked "not empty", which a
+    garbage string also satisfies.
+  - `proxy/proxy_test.go`: `TestNewStripsSpoofedJA4Header` now asserts
+    the origin was actually reached. Its check lived inside the origin
+    handler, so if the request had never arrived the test would have
+    passed having proved nothing.
+  - `proxy/fingerprint_test.go`: `TestJA4FingerprintRejectsGarbage`
+    went from one 3-byte input to a table of 7 (nil, empty, random,
+    wrong record type, truncated mid-handshake, header-only, and a
+    record lying about its own length), built by chopping up a real
+    curl ClientHello rather than inventing bytes. Also now asserts the
+    returned fingerprint is empty, not just that an error came back.
+  - `CLAUDE.md`: added Section 23 (a green suite proves nothing by
+    itself) with the mandatory mutation check, the five ways a test
+    lies, stale tests, "never write a test to make the suite green",
+    and an explicit "do this without being asked". Linked it from the
+    Section 19 and Section 22 checklists.
+Why: project owner pushed back with the right question — the last two
+rounds of bugs were only found because he asked. If a fake test is
+sitting in the suite, nobody looks again, and it ships. So this round
+audited the tests themselves instead of the production code.
+Tested how: mutation testing, which is the only honest way to answer
+"is this test real":
+  - Deleted the handshake timeout from `capture.go` →
+    `TestCaptureListenerTimesOutSlowHandshake` **passed** (took 2.00s,
+    its own deadline, not the 0.20s timeout). Proof it was fake. After
+    the fix, the same mutation **fails** with "read hit its own
+    5.00s deadline: the server never closed the connection".
+  - Replaced the real fingerprint with the literal
+    `GARBAGE-NOT-A-FINGERPRINT` → `TestCaptureListenerEndToEnd`
+    **passed**. Proof it was weak. After the fix, the same mutation
+    **fails** naming the garbage value.
+  - Removed `r.Header.Del(ja4Header)` from `proxy.go` →
+    `TestNewStripsSpoofedJA4Header` correctly **failed**, so that one
+    was genuinely testing its feature (the vacuous-pass guard was
+    added anyway, since it was structurally possible).
+  - Full suite `-race` green afterwards; production code restored
+    byte-for-byte (verified with `git diff`), no behaviour changed
+    this round.
+Known gaps / follow-up: the remaining tests
+(`TestCaptureListenerDropsBadHandshake`,
+`TestCaptureListenerSurvivesTransientAcceptError`) fail by hanging
+until the test timeout rather than by a clean assertion if their
+feature breaks — they do catch it, but the failure message is poor.
+Worth tightening with an explicit dial timeout next time either file
+is touched. Also still true: the panic-recovery path has no test
+(noted two entries above).
+
 
 

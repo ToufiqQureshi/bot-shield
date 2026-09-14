@@ -51,10 +51,9 @@ func TestNewRejectsBadTarget(t *testing.T) {
 // setting the header themselves — that header is meant to come only
 // from bot-shield's own TLS capture.
 func TestNewStripsSpoofedJA4Header(t *testing.T) {
+	got := make(chan string, 1)
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get(ja4Header); got != "" {
-			t.Errorf("origin got spoofed %s = %q, want it stripped", ja4Header, got)
-		}
+		got <- r.Header.Get(ja4Header)
 	}))
 	defer origin.Close()
 
@@ -72,4 +71,15 @@ func TestNewStripsSpoofedJA4Header(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	resp.Body.Close()
+
+	// Asserting inside the handler alone would let this test pass by
+	// accident if the request never reached the origin at all.
+	select {
+	case v := <-got:
+		if v != "" {
+			t.Errorf("origin got spoofed %s = %q, want it stripped", ja4Header, v)
+		}
+	default:
+		t.Fatal("origin was never reached, so this test proved nothing")
+	}
 }

@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -49,9 +50,9 @@ func selfSignedCert(t *testing.T) tls.Certificate {
 // this is the actual end-to-end path bot-shield will run in
 // production, not just the fingerprint math in isolation.
 func TestCaptureListenerEndToEnd(t *testing.T) {
-	var gotJA4 string
+	gotJA4 := make(chan string, 1)
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotJA4 = r.Header.Get(ja4Header)
+		gotJA4 <- r.Header.Get(ja4Header)
 		w.Write([]byte("ok"))
 	}))
 	defer origin.Close()
@@ -89,10 +90,23 @@ func TestCaptureListenerEndToEnd(t *testing.T) {
 		t.Errorf("got body %q, want %q", body, "ok")
 	}
 
-	if gotJA4 == "" {
-		t.Error("origin got no JA4 fingerprint header, want a non-empty one")
+	// Checking the value actually looks like a JA4, not just that
+	// something was set — a wrong or garbage fingerprint is worse than
+	// none, because the scoring layer would trust it.
+	select {
+	case got := <-gotJA4:
+		if !ja4Shape.MatchString(got) {
+			t.Errorf("origin got %s = %q, want a JA4 like t13d1516h2_8daaf6152771_e5627efa2ab1", ja4Header, got)
+		}
+	default:
+		t.Fatal("origin was never reached, so this test proved nothing")
 	}
 }
+
+// What a real JA4 looks like: t13d1516h2_8daaf6152771_e5627efa2ab1 —
+// protocol, TLS version, SNI flag, cipher/extension counts and ALPN,
+// then two 12-character hashes.
+var ja4Shape = regexp.MustCompile(`^[tq]\d{2}[di]\d{4}[a-z0-9]{2}_[0-9a-f]{12}_[0-9a-f]{12}$`)
 
 // A client that opens a connection and then never sends a ClientHello
 // at all (unlike the garbage-bytes case below, which fails fast) must
@@ -120,13 +134,24 @@ func TestCaptureListenerTimesOutSlowHandshake(t *testing.T) {
 	defer conn.Close()
 	// connect but never send anything - simulates a stalled/slow client
 
-	// the connection should be closed from the server side once the
-	// handshake timeout fires
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	buf := make([]byte, 1)
-	_, err = conn.Read(buf)
+	// The read deadline is deliberately much longer than the handshake
+	// timeout. If the server never closes the connection, this Read
+	// ends in *our own* deadline instead of EOF — that difference is
+	// the only thing separating "the timeout works" from "the test got
+	// bored waiting", so check which one actually happened.
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	start := time.Now()
+	_, err = conn.Read(make([]byte, 1))
+	elapsed := time.Since(start)
+
 	if err == nil {
-		t.Error("expected connection to be closed after handshake timeout, got no error")
+		t.Fatal("connection stayed open, want it closed after the handshake timeout")
+	}
+	if ne, ok := err.(net.Error); ok && ne.Timeout() {
+		t.Fatalf("read hit its own %s deadline: the server never closed the connection, so the handshake timeout did not fire", elapsed)
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("connection closed after %s, want it closed near the 200ms handshake timeout", elapsed)
 	}
 }
 

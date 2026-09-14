@@ -442,6 +442,9 @@ stop and ask the project owner before building it.
 [ ] Implement the smallest solution
 [ ] Run tests, check false-positive impact
 [ ] Add production/failure tests
+[ ] Mutation-check every test: break the code, watch the test go RED,
+    undo the break (Section 23a — a test that passes while the
+    feature is broken is not a test)
 [ ] Update docs
 [ ] Check for unnecessary code
 ```
@@ -501,6 +504,11 @@ pass over your own work.
 [ ] What, concretely, does NO test cover right now? Say it out loud
     (or in `docs/PROGRESS.md`) — don't let "probably fine" stand in
     for a real answer.
+[ ] Did you mutation-check the tests (Section 23a), including the
+    ones that already existed before this change? A green suite is
+    not evidence until you've seen it go red on purpose.
+[ ] Did you change a function whose test you didn't re-read? If so,
+    that test is now untrusted (Section 23c).
 [ ] Say plainly, in your own report of the work: is this "done", or
     is it "done for the current scope, here's what's still missing"?
     Those are different claims — never let the first one cover for
@@ -509,3 +517,75 @@ pass over your own work.
 
 This is Section 15a's bar made checkable — a checklist you actually
 run, not just a mindset you hold.
+
+---
+
+## 23. A Green Test Suite Proves Nothing By Itself
+
+The most dangerous state this project can be in is **a passing test
+suite that isn't actually testing anything.** It reads as safety, so
+nobody looks again — and the bug ships anyway.
+
+This is not hypothetical. Tests written for this repo have already
+been caught doing exactly this: a handshake-timeout test that passed
+with the timeout deleted from the code (it was measuring its own read
+deadline, not the server's behaviour), and a fingerprint test that
+passed when the fingerprint was replaced with the literal string
+`GARBAGE-NOT-A-FINGERPRINT`.
+
+### 23a. The mutation check — mandatory, every test, no exceptions
+
+> **Before a test counts as written: break the code it is supposed to
+> protect, run the test, and watch it go RED. Then undo the break.**
+
+If the test still passes while the feature is broken, it is not a
+test. Delete it or fix it — never keep it, because a fake test is
+worse than no test at all (no test is an honest gap; a fake test is a
+lie that stops anyone from looking).
+
+State in `docs/PROGRESS.md` what you broke and that the test caught
+it. "Tests pass" is not a test report — "I removed X and the test
+failed with Y" is.
+
+### 23b. Ways a test lies (check for each of these)
+
+- **Vacuous assertion** — the check lives inside a handler/callback
+  that never ran. If the request never arrives, nothing is asserted
+  and the test passes. Always assert *separately* that the callback
+  actually ran.
+- **Assertion satisfiable another way** — `err != nil` passes whether
+  the server closed the connection or your own deadline expired.
+  Assert the *specific* cause, not any-failure-will-do.
+- **"Not empty" instead of "correct"** — a garbage value is not empty
+  either. Check the real shape or the real expected value. A wrong
+  fingerprint is worse than a missing one, because the scoring layer
+  will trust it.
+- **Only the easy input** — one obviously-invalid input doesn't prove
+  robustness. Malformed, truncated, empty, nil, and
+  lying-about-its-own-length inputs are the *normal* case for a
+  bot-detection product, not edge cases.
+- **Testing the mock, not the code** — if the test would pass against
+  an empty implementation, it's testing scaffolding.
+
+### 23c. Stale tests are a bug, not leftover clutter
+
+When you change what a function does, its old test is now guarding
+behaviour that no longer exists — and it will keep passing while
+doing it. Every time you touch a function: open its test, and either
+confirm it still checks the *current* behaviour, or update it. A test
+you didn't re-read after changing the code is untrusted.
+
+### 23d. Never write a test to make the suite green
+
+The purpose of a test is to *fail* when the product is broken. If
+you're shaping an assertion so it passes, stop — you're building the
+exact trap described at the top of this section. Write the assertion
+the product owner would want, then make the *code* satisfy it.
+
+### 23e. Do this without being asked
+
+The project owner is solo. There is no QA, no second reviewer, and no
+one else who will catch a fake test. If this audit only happens when
+they think to ask for it, the process has already failed. Run it
+yourself, every time, and report what you found — including "I
+re-checked X and it was genuinely fine."

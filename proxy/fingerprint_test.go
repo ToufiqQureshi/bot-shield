@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+// A real curl 8.6.0 ClientHello, hex-encoded, with its published JA4.
+// Kept as a shared fixture so the malformed-input test can chop up a
+// genuinely valid handshake instead of inventing fake bytes.
+const curlClientHello = "1603010200010001fc030345b0e945658446fb98136c30e1be82ed4bd81e16d332b9f3317a553fcb88e4262032776135cd2a213dcd935ee9f471768d714d8a9e3292102e1a2e840f52644b0100204a4a130113021303c02bc02fc02cc030cca9cca8c013c014009c009d002f0035010001934a4a00000000001900170000146c707461672e6c697665706572736f6e2e6e65740033002b00291a1a000100001d0020a0a1a353c499704a9b56af77f3f87cfdd287e33009eda54f9ab9b43fb2f595630010000e000c02683208687474702f312e3100170000ff0100010000120000002b000706dada03040303000d0012001004030804040105030805050108060601000a000a00081a1a001d00170018002d0002010100050005010000000000230000000b00020100446900050003026832001b0003020002eaea000100001500c3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+
 // Checks our function against 2 real handshakes with already-known,
 // correct JA4 answers (borrowed from fingerproxy's own tests), so we
 // know we're not just matching our own guess.
@@ -16,7 +21,7 @@ func TestJA4Fingerprint(t *testing.T) {
 	}{
 		{
 			name:        "curl 8.6.0",
-			clientHello: "1603010200010001fc030345b0e945658446fb98136c30e1be82ed4bd81e16d332b9f3317a553fcb88e4262032776135cd2a213dcd935ee9f471768d714d8a9e3292102e1a2e840f52644b0100204a4a130113021303c02bc02fc02cc030cca9cca8c013c014009c009d002f0035010001934a4a00000000001900170000146c707461672e6c697665706572736f6e2e6e65740033002b00291a1a000100001d0020a0a1a353c499704a9b56af77f3f87cfdd287e33009eda54f9ab9b43fb2f595630010000e000c02683208687474702f312e3100170000ff0100010000120000002b000706dada03040303000d0012001004030804040105030805050108060601000a000a00081a1a001d00170018002d0002010100050005010000000000230000000b00020100446900050003026832001b0003020002eaea000100001500c3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			clientHello: curlClientHello,
 			want:        "t13d1516h2_8daaf6152771_e5627efa2ab1",
 		},
 		{
@@ -43,10 +48,40 @@ func TestJA4Fingerprint(t *testing.T) {
 	}
 }
 
-// Broken/fake input should give an error, not a crash or a fake
-// fingerprint — bots will send weird data on purpose.
+// Broken/fake input should give an error and an empty fingerprint —
+// never a crash, and never a made-up value the scoring layer would
+// trust. Bots send malformed handshakes on purpose, so these are
+// normal inputs here, not rare edge cases.
 func TestJA4FingerprintRejectsGarbage(t *testing.T) {
-	if _, err := ja4Fingerprint([]byte{0x00, 0x01, 0x02}); err == nil {
-		t.Error("ja4Fingerprint with garbage input: got nil error, want error")
+	realHello, err := hex.DecodeString(curlClientHello)
+	if err != nil {
+		t.Fatalf("bad test fixture: %v", err)
+	}
+
+	cases := []struct {
+		name  string
+		input []byte
+	}{
+		{"nil", nil},
+		{"empty", []byte{}},
+		{"random bytes", []byte{0x00, 0x01, 0x02}},
+		{"not a handshake record", []byte{0x17, 0x03, 0x03, 0x00, 0x05, 1, 2, 3, 4, 5}},
+		{"truncated mid-handshake", realHello[:40]},
+		{"header only, body missing", realHello[:5]},
+		{"length claims more than sent", append([]byte{0x16, 0x03, 0x01, 0xff, 0xff}, realHello[5:60]...)},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// t.Run isolates a panic to this subtest's goroutine, so a
+			// crash here fails loudly instead of being missed.
+			fp, err := ja4Fingerprint(c.input)
+			if err == nil {
+				t.Errorf("got fingerprint %q with no error, want an error", fp)
+			}
+			if fp != "" {
+				t.Errorf("got fingerprint %q on bad input, want empty", fp)
+			}
+		})
 	}
 }
