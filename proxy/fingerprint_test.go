@@ -5,11 +5,9 @@ import (
 	"testing"
 )
 
-// Known-good vectors: real ClientHello bytes captured from curl and a
-// TLS session using a PSK extension, paired with their published JA4
-// hash — taken from fingerproxy's own test suite (github.com/wi1dcard/
-// fingerproxy, pkg/ja4/ja4_test.go), so we're checking our wrapper
-// against already-verified output, not inventing our own answer key.
+// Checks our function against 2 real handshakes with already-known,
+// correct JA4 answers (borrowed from fingerproxy's own tests), so we
+// know we're not just matching our own guess.
 func TestJA4Fingerprint(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -45,10 +43,8 @@ func TestJA4Fingerprint(t *testing.T) {
 	}
 }
 
-// A truncated/garbage ClientHello must return an error, not a
-// crash or a made-up fingerprint — this runs against live,
-// adversarial traffic (CLAUDE.md Section 9), so malformed input is
-// the normal case, not an edge case.
+// Broken/fake input should give an error, not a crash or a fake
+// fingerprint — bots will send weird data on purpose.
 func TestJA4FingerprintRejectsGarbage(t *testing.T) {
 	if _, err := ja4Fingerprint([]byte{0x00, 0x01, 0x02}); err == nil {
 		t.Error("ja4Fingerprint with garbage input: got nil error, want error")

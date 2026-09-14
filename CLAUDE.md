@@ -107,19 +107,42 @@ This is a solo-dev project — the code has to explain itself to
 whoever (or whichever future agent) opens the file next, with zero
 memory of this conversation. Every non-trivial function (detection
 logic, fingerprint/TLS parsing, scoring, anything not a one-line
-getter) gets a short comment above it, 2-3 lines, answering:
+getter) gets **one short comment**, max 2-3 lines, right above it.
 
-- **What** it does (plain language, not a restatement of the code).
-- **Why** it exists / what gap or threat it closes (tie back to
-  `docs/ROADMAP.md` / `docs/RESEARCH.md` where relevant).
-- **What need** made it necessary — why this couldn't be skipped.
+**How to write it:**
+
+- Plain, everyday words. Write it like you're explaining it to a
+  junior dev or the client's ops engineer, not another engineer who
+  already knows TLS/JA4/scoring internals.
+- One line for **what** it does, one line for **why** (what it
+  catches / what problem it solves), if a "why" isn't obvious skip
+  it rather than stretch for one.
+- No jargon dump, no citing three doc files in one comment, no
+  restating the code line by line. If you can't say it in 2-3 short
+  lines, the explanation is too long — cut it, don't wrap it.
+- One comment per function, not one comment per test case / per
+  struct field / per line inside the function.
+
+Example — good:
+```go
+// checkUserAgent flags a request when its claimed browser doesn't
+// match how it actually behaves. Bots often lie about this.
+```
+Example — bad (too long, too technical, restates the code):
+```go
+// checkUserAgent implements a User-Agent consistency check by
+// parsing the UA string, comparing it against the TLS/HTTP2
+// fingerprint's inferred client family per RFC..., iterating over
+// known browser signatures, and returning a mismatch score based on
+// docs/RESEARCH.md section 3 combined with docs/DECISIONS.md's
+// scoring-weight rationale from 2026-09-14...
+```
 
 This does not contradict Section 3's "no unnecessary comments" rule:
 a comment that just restates the code ("// loop over items") is
-still banned. A comment that explains why the code exists and what a
-beginner (the client's ops engineer, a new solo-dev session) needs to
-know to trust and maintain it is not decoration — it earns its place
-the same way a line of code does.
+still banned. A short, plain comment that explains why the code
+exists is not decoration — it earns its place the same way a line of
+code does.
 
 ---
 
