@@ -154,3 +154,78 @@ pattern), deciding fail-open behavior for a failed/timed-out capture
 and a real scripted client — a large piece of its own that would ship
 half-done if rushed into this same commit. This is the next work item,
 not "done."
+
+---
+
+## 2026-09-14 — Comments simplified; CLAUDE.md comment rule tightened
+Changed:
+  - `proxy/fingerprint.go`, `proxy/fingerprint_test.go`: comments were
+    too long/technical (multi-doc citations, jargon) — cut to 1-2
+    plain-English lines each.
+  - `CLAUDE.md` Section 3a: added a concrete good/bad example so
+    future comments stay short and plain instead of drifting long.
+Why: project owner flagged the earlier comments as too dense for a
+solo/beginner-friendly project.
+Tested how: `go build/vet/test ./...` clean (comment-only change).
+Known gaps / follow-up: none.
+
+---
+
+## 2026-09-14 — TLS termination + live JA4 capture (ROADMAP P0 item 2, done)
+Changed:
+  - `proxy/capture.go`: added `NewCaptureListener` — wraps a plain TCP
+    listener so every connection gets TLS-handshaked and its JA4
+    fingerprint read before the HTTP server sees it. One goroutine per
+    connection does the handshake concurrently (capped at 1000
+    in-flight via a semaphore, so a connection flood can't spawn
+    unlimited goroutines — `CLAUDE.md` Section 9), then hands the
+    finished connection to `fingerproxy/pkg/hack.ChannelListener` for
+    the HTTP server to pick up. Added `ConnContext`/`JA4FromContext`
+    to carry the fingerprint from the connection into each request's
+    context.
+  - `proxy/proxy.go`: `New()`'s director now sets `X-BotShield-JA4` on
+    the forwarded request when a fingerprint was captured; forwards
+    normally (no header) otherwise — fingerprinting failing must never
+    block real traffic (fail open, `CLAUDE.md` Section 9).
+  - `cmd/botshield/main.go`: added `-tls-cert`/`-tls-key` flags. With
+    them, botshield terminates TLS and wires the capture listener;
+    without them, it proxies plain HTTP exactly as before (local dev
+    still works without a cert).
+  - `proxy/capture_test.go`: added a real end-to-end test — actual TLS
+    handshake through the capture listener, actual HTTP request
+    proxied to a real origin, asserting the origin received a
+    non-empty JA4 header. Added a bad-handshake test (garbage bytes
+    instead of a ClientHello) proving the listener drops the bad
+    connection and keeps serving good ones afterward, instead of
+    hanging.
+Why: this is the piece the previous "partial" entry flagged as
+missing — without it, `ja4Fingerprint` had no real ClientHello to run
+against. Closes ROADMAP item 2's TLS/JA4 half (HTTP/2 fingerprinting
+is a separate, still-open half — see `DECISIONS.md`).
+Tested how: `go build/vet/test ./... -race` all clean, `gofmt -l .`
+clean. Real end-to-end test (self-signed cert generated in-test, real
+`tls.Dial`/`http.Client` round trip). Also ran the actual compiled
+binary by hand: generated an `openssl` self-signed cert, started
+`botshield -tls-cert ... -tls-key ...` in front of a local Python HTTP
+server, hit it with `curl -k` over real TLS — response came back
+correctly. Also re-ran the plain-HTTP path (no `-tls-cert` flags) by
+hand to confirm it still works unchanged.
+Known gaps / follow-up (not deferred without reason — see `CLAUDE.md`
+Section 17):
+  - HTTP/2 fingerprinting is not built. The capture listener forces
+    `NextProtos = ["http/1.1"]`, so a browser that would otherwise use
+    HTTP/2 falls back to HTTP/1.1 against bot-shield. This is a
+    deliberate scope cut (see `DECISIONS.md`), not an oversight — it
+    is its own roadmap item (item 2's "HTTP/2 fingerprint" half), and
+    building it means hand-rolling HTTP/2 serving alongside the
+    stdlib's own HTTP/1.1 path (the way `fingerproxy/pkg/proxyserver`
+    does), which is a large enough piece to ship on its own.
+  - The 1000-in-flight-handshake cap is a reasonable-guess default,
+    not load-tested against real adversarial volume — that belongs
+    with ROADMAP item 16 (soak testing), once there's real traffic to
+    tune it against.
+  - JA4 alone is not a block/allow decision — nothing reads
+    `X-BotShield-JA4` yet except this proxy setting it. That's
+    ROADMAP items 3 (UA consistency) and 5 (scoring engine), not this
+    item.
+

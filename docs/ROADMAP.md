@@ -68,25 +68,29 @@ and fix), not as a reusable library for outside use.
       Known gap: no timeout/error handling yet for a dead or slow
       origin (proxy just returns Go's default 502) — that belongs
       with item 2 (HTTP fetcher) / retry work, not this skeleton.
+- [x] **2. TLS/JA4 fingerprinting** (`proxy/fingerprint.go`,
+      `proxy/capture.go`) — `cmd/botshield -tls-cert`/`-tls-key` makes
+      bot-shield terminate TLS itself, capture each connection's raw
+      ClientHello, turn it into a JA4 hash, and forward it to the
+      origin as `X-BotShield-JA4`. Tested against known-good JA4
+      vectors, a real end-to-end TLS handshake + proxied request, a
+      bad/garbage handshake (must not hang or crash the listener), and
+      `-race`. Verified with a real binary run (openssl self-signed
+      cert + curl through botshield). Plain HTTP (no `-tls-cert`) still
+      works unchanged for local dev.
+      Known gaps: HTTP/2 fingerprinting is not built — the capture
+      listener only negotiates HTTP/1.1 for now (see `DECISIONS.md`).
+      Concurrent handshakes are capped at 1000 in-flight as a basic
+      safety limit, not load-tested against real adversarial volume
+      yet (that belongs with item 16, soak testing).
 
 ---
 
 ## P0 — MVP (prove the core idea works)
 
 - [x] ~~**1. Reverse proxy skeleton**~~ — done, see "Done" section above.
-- [ ] **2. TLS/JA4 fingerprinting** — capture JA4 (and HTTP/2 fingerprint)
-      per connection, using `fingerproxy`-style approach. This alone
-      catches most naive scripted clients (raw `requests`/`curl`,
-      unconfigured HTTP libraries).
-      **In progress:** `proxy/fingerprint.go` computes the JA4 hash
-      from a raw ClientHello record (wraps `fingerproxy`'s `ja4`
-      package per `DECISIONS.md`), tested against known-good vectors
-      (real curl ClientHello → verified JA4). Not done yet: nothing
-      captures a *live* ClientHello — bot-shield doesn't terminate TLS
-      at all today (`cmd/botshield` proxies plain HTTP). Next step is
-      wiring a TLS-terminating listener (see `fingerproxy/pkg/hack`'s
-      `HijackClientHelloConn` pattern) so a real connection's
-      ClientHello reaches this function.
+- [x] ~~**2. TLS/JA4 fingerprinting**~~ — done (HTTP/2 fingerprint part
+      still open), see "Done" section above.
 - [ ] **3. Basic header/UA consistency check** — does the claimed
       User-Agent match the TLS/HTTP2 fingerprint's real client family?
       Mismatch = strong signal.

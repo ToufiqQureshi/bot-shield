@@ -33,6 +33,42 @@ that point is cheaper than keeping our own thin wrapper.
 
 ---
 
+## TLS capture listener: HTTP/1.1 only for now, no HTTP/2 — 2026-09-14
+**Decision:** `proxy.NewCaptureListener` forces `NextProtos =
+["http/1.1"]`, so browsers fall back to HTTP/1.1 against bot-shield
+instead of using HTTP/2.
+**Why:** capturing JA4 means terminating TLS and handshaking
+ourselves instead of letting Go's `http.Server` do it, which breaks
+the stdlib's automatic HTTP/2 upgrade (it only kicks in when the
+accepted connection is literally a `*tls.Conn`, not our wrapped
+type). Supporting HTTP/2 correctly means serving it ourselves
+alongside HTTP/1.1 (the way `fingerproxy/pkg/proxyserver` does) —
+real, separate work, not a one-line fix.
+**Alternatives considered:** hand-rolling the HTTP/2 branch in this
+same pass — rejected: `ROADMAP.md` item 2 already lists "JA4" and
+"HTTP/2 fingerprint" as two separate things, and JA4 alone already
+catches most naive scripted clients (the ROADMAP's own claim). Ship
+one working half instead of both halves half-working.
+**Revisit when:** ROADMAP's HTTP/2 fingerprint item is picked up.
+
+## Cap concurrent TLS handshakes at 1000 — 2026-09-14
+**Decision:** `proxy.NewCaptureListener` runs each connection's TLS
+handshake in its own goroutine, but only allows 1000 to run at once
+(a buffered channel used as a semaphore); beyond that, new
+connections wait for a slot before their handshake starts.
+**Why:** `CLAUDE.md` Section 9 requires every worker pool to have a
+bounded size — without a cap, a flood of connections (accidental or
+a deliberate flood attack) could spawn unlimited goroutines and take
+the process down, which would fail the client's site closed instead
+of open.
+**Alternatives considered:** no cap (simplest, but violates Section
+9); a smaller/larger number — 1000 is a reasonable starting guess for
+a single small-to-mid deployment, not measured against real traffic.
+**Revisit when:** ROADMAP item 16 (soak testing) gives real numbers
+to tune this against.
+
+---
+
 ## Format for new entries
 
 ```text
