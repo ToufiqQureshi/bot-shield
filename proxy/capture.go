@@ -3,7 +3,10 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
+	"log"
 	"net"
+	"sync/atomic"
+	"time"
 
 	"github.com/wi1dcard/fingerproxy/pkg/hack"
 )
@@ -15,6 +18,18 @@ var captureNextProtos = []string{"http/1.1"}
 // maxHandshakes limits how many TLS handshakes can run at once, so a
 // flood of connections can't spawn unlimited goroutines.
 const maxHandshakes = 1000
+
+// handshakeTimeout caps how long one connection's TLS handshake can
+// take. Without this, a client that never finishes handshaking would
+// hold its goroutine (and its slot in maxHandshakes) forever — a
+// small number of such clients would be enough to block everyone
+// else from connecting. Stored atomically so a test can safely shrink
+// it instead of waiting out the real timeout.
+var handshakeTimeout atomic.Int64
+
+func init() {
+	handshakeTimeout.Store(int64(10 * time.Second))
+}
 
 type ctxKeyJA4 struct{}
 
@@ -74,13 +89,28 @@ func NewCaptureListener(inner net.Listener, tlsConfig *tls.Config) net.Listener 
 
 // handshakeAndCapture does the TLS handshake for one connection, then
 // reads its JA4 fingerprint and hands the finished connection to the
-// HTTP server. Runs in its own goroutine per connection so one
-// slow or malicious client can't block anyone else's request.
+// HTTP server. Runs in its own goroutine per connection so one slow
+// or malicious client can't block anyone else's request.
+//
+// The recover() here is not optional: this parses attacker-controlled
+// bytes (the ClientHello), and Go crashes the *entire process* on an
+// unrecovered panic in any goroutine, not just this one connection.
+// One bad ClientHello must never be able to take bot-shield, and
+// every client behind it, offline.
 func handshakeAndCapture(conn net.Conn, cfg *tls.Config, out *hack.ChannelListener) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("botshield: recovered panic while handling connection: %v", r)
+			conn.Close()
+		}
+	}()
+
 	hijacked := hack.NewHijackClientHelloConn(conn)
 	tlsConn := tls.Server(hijacked, cfg)
 
-	if err := tlsConn.Handshake(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(handshakeTimeout.Load()))
+	defer cancel()
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		tlsConn.Close()
 		return
 	}

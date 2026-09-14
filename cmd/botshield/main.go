@@ -32,7 +32,17 @@ func main() {
 		log.Fatalf("botshield: %v", err)
 	}
 
-	srv := &http.Server{Handler: p, ConnContext: proxy.ConnContext}
+	// ReadHeaderTimeout/IdleTimeout stop a client that opens a
+	// connection and then sends data too slowly (or never) from
+	// holding it open forever — the same slowloris-style risk the
+	// handshake timeout in proxy.NewCaptureListener guards against,
+	// but at the HTTP layer instead of the TLS layer.
+	srv := &http.Server{
+		Handler:           p,
+		ConnContext:       proxy.ConnContext,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {

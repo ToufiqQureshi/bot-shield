@@ -93,6 +93,42 @@ func TestCaptureListenerEndToEnd(t *testing.T) {
 	}
 }
 
+// A client that opens a connection and then never sends a ClientHello
+// at all (unlike the garbage-bytes case below, which fails fast) must
+// still be dropped eventually, not held open forever — that's what
+// handshakeTimeout is for. A slow/silent client is a normal thing for
+// a bot-detection proxy to see on purpose.
+func TestCaptureListenerTimesOutSlowHandshake(t *testing.T) {
+	old := handshakeTimeout.Load()
+	handshakeTimeout.Store(int64(200 * time.Millisecond))
+	defer handshakeTimeout.Store(old)
+
+	rawLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := rawLn.Addr().String()
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{selfSignedCert(t)}}
+	ln := NewCaptureListener(rawLn, tlsConfig)
+	defer ln.Close()
+
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// connect but never send anything - simulates a stalled/slow client
+
+	// the connection should be closed from the server side once the
+	// handshake timeout fires
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 1)
+	_, err = conn.Read(buf)
+	if err == nil {
+		t.Error("expected connection to be closed after handshake timeout, got no error")
+	}
+}
+
 // A connection that never TLS-handshakes correctly (a port scanner, a
 // plain-HTTP client hitting the TLS port) must not hang or crash the
 // listener — it just gets dropped, and the listener keeps working for

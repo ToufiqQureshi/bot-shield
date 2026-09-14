@@ -229,3 +229,46 @@ Section 17):
     ROADMAP items 3 (UA consistency) and 5 (scoring engine), not this
     item.
 
+---
+
+## 2026-09-14 — Fixed 2 real production bugs in the capture listener
+Changed:
+  - `proxy/capture.go`: `handshakeAndCapture` now has `defer recover()`
+    around the whole function. Without it, a crafted ClientHello that
+    triggers a panic in JA4 parsing would crash the *entire process*
+    (Go kills the whole program on an unrecovered panic in any
+    goroutine, not just that connection) — every client behind
+    bot-shield would go down over one bad handshake.
+  - `proxy/capture.go`: TLS handshake now uses `HandshakeContext` with
+    a 10s timeout (`handshakeTimeout`, stored via `sync/atomic` so
+    tests can shrink it) instead of a bare `Handshake()` call that
+    could block forever. Without this, ~1000 clients that open a
+    connection and never finish handshaking would fill
+    `maxHandshakes` and block every legitimate new connection
+    (slowloris-style).
+  - `cmd/botshield/main.go`: added `ReadHeaderTimeout`/`IdleTimeout` to
+    the `http.Server` — the same slowloris risk, one layer up, for a
+    client that completes the TLS handshake but then sends the HTTP
+    request too slowly.
+  - `proxy/capture_test.go`: added
+    `TestCaptureListenerTimesOutSlowHandshake` — a client that
+    connects and sends nothing must be dropped after the timeout, not
+    held open. (No dedicated test added for the panic-recovery path:
+    reliably forcing a panic inside the third-party `ja4` parser
+    without depending on its internals wasn't worth the fragility —
+    the fix itself is a single, obviously-correct `defer recover()`.)
+Why: project owner asked directly whether the fingerprinting code was
+production-grade. Re-reading it against `CLAUDE.md` Section 9
+(fail-open, timeouts, bounded concurrency) surfaced both gaps — real
+bugs, not style nits, found by re-auditing rather than by a report
+from outside.
+Tested how: `go build/vet/test ./... -race` clean, including the new
+timeout test. Confirmed the fix by first reproducing the race in the
+test itself (a shared package var without synchronization) and fixing
+it with `sync/atomic` before trusting the result.
+Known gaps / follow-up: the panic-recovery path is unverified by an
+actual test (see above) — if a real crash from malformed input is ever
+observed in the wild, add a regression test using that exact input at
+that point, don't try to construct one speculatively now.
+
+

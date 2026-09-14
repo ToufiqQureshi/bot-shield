@@ -340,6 +340,38 @@ internals, HTTP/2 frame parsing, scoring/ML approaches): check how
 mature open-source projects (fingerproxy, BotD, open-appsec) solved
 the same problem before writing a naive version.
 
+### 15a. Write Every Line Like a Real Company Will Run It Tomorrow
+
+This is not a demo, a portfolio piece, or a "make it work once"
+script. bot-shield is going to sit directly in front of a paying
+client's live website. Before writing or merging anything, hold it to
+this bar:
+
+- **Every file, every function, every feature needs a real test** —
+  not "it compiled" or "it looked right when I ran it once." Test the
+  normal case, the bad/attacker-controlled input case, and the
+  timeout/failure case. If a function has no test, it is not done.
+- **Fix bugs the moment you find them, in the same pass** — don't
+  write "known issue, fix later" for something you already know how
+  to fix. "Later" doesn't exist for a solo-dev project (see Section
+  17); a bug found and not fixed is a bug shipped.
+- **Neither over-engineered nor under-engineered:**
+  - Under-engineered = missing something a real attacker or real
+    production load would hit on day one: no timeout on a blocking
+    call, no panic recovery on code that parses untrusted input, no
+    cap on a resource a flood of connections could exhaust. This is
+    not "polish for later" — it's the difference between "bot-shield
+    protects the site" and "bot-shield *is* the outage."
+  - Over-engineered = configuration, abstraction layers, or signals
+    for a threat that isn't real yet (this duplicates Section 14 —
+    the same discipline applies in both directions).
+  - When in doubt, ask: "if this exact code ran in front of a real
+    client's checkout page right now, what's the first way a bored
+    attacker or a bad network breaks it?" If you can answer that and
+    haven't handled it, it's not done yet.
+- Before calling any feature finished, re-read this bar and the
+  Section 19 checklist against it — not just "does it pass go test."
+
 ---
 
 ## 16. Self-Report Gaps Without Being Asked
