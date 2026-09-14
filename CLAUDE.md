@@ -110,6 +110,15 @@ Akamai/DataDome — it's to give small/mid-size companies a "good
 enough" defense they can actually afford and self-host. See
 `docs/ROADMAP.md` for product direction and priorities.
 
+**This is closed-source, commercial software — a paid product the
+owner sells, not an open-source project.** It uses open-source
+*libraries* internally where that's the sound engineering choice
+(`fingerproxy`, `BotD`, see Section 24 and `docs/DECISIONS.md`), the
+same way any commercial product depends on open-source components
+without itself being open source. Never suggest an MIT/Apache/GPL
+license, a public GitHub release, or "let's open-source this part" —
+that is the opposite of the business this code exists to run.
+
 Do not add a feature just because a big vendor has it. Every feature
 must earn its place against real bot traffic patterns (see Section
 20, Threat-Driven Development).

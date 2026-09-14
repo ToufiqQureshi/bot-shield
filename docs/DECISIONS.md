@@ -10,6 +10,34 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## bot-shield is closed-source commercial software, not open source — 2026-09-14
+**Decision:** bot-shield is proprietary. `README.md` previously said
+`License: MIT`, which was wrong and is corrected to "Proprietary — All
+Rights Reserved." There is no LICENSE file granting copy/modify/
+redistribute rights, and none should be added.
+**Why:** the project owner is building this to sell as a paid product
+(a SaaS / self-hosted commercial license), not to give away. An MIT
+license would have let anyone legally clone, rebrand, and resell it —
+directly undermining the reason it's being built. This was a docs
+mistake carried over from an earlier session's generic project
+scaffolding, not a considered choice, and it was live in the repo
+until caught here.
+**Alternatives considered:** open-core (core engine open, paid
+features closed) — not rejected outright, just not decided; revisit
+if the owner ever wants community contributions or wider adoption as
+a growth strategy. Until then, default to fully closed.
+**What doesn't change:** bot-shield still *uses* open-source
+libraries internally (`fingerproxy`, `BotD` — see the "assemble
+proven open-source pieces" entry below). Depending on open-source
+components is normal for commercial software and is unrelated to
+whether bot-shield's own code is licensed for redistribution.
+**Revisit when:** the owner explicitly decides on a monetization/
+distribution model (self-hosted license sales, managed SaaS, open-
+core) — that decision picks the real license text, ideally with a
+lawyer's input before any code ships to a paying customer.
+
+---
+
 ## Report an unreadable handshake as a signal, not as "no fingerprint" — 2026-09-14
 **Decision:** when a connection is TLS but we cannot read its
 ClientHello, `JA4FromContext` returns `JA4Unreadable` ("unreadable"),

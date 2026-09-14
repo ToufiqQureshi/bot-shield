@@ -560,3 +560,42 @@ Known gaps / follow-up:
   - The BUILT/planned markers need maintaining. If a future session
     builds scoring and doesn't flip its marker, this file goes back to
     lying, which is the exact failure just fixed.
+
+---
+
+## 2026-09-14 — Corrected a real licensing mistake: MIT → proprietary
+Changed:
+  - `README.md`: License section changed from `MIT` to "Proprietary —
+    All Rights Reserved," with a line explaining no copy/modify/
+    redistribute rights are granted. Also reworded the "combines
+    open-source building blocks" line, which read as if bot-shield
+    itself were open source — it isn't; it uses open-source
+    *libraries* internally.
+  - `CLAUDE.md` Section 1: added an explicit, hard statement that
+    bot-shield is closed-source commercial software, not an
+    open-source project, and that no future session should suggest
+    an open-source license or public release.
+  - `docs/DECISIONS.md`: recorded the correction as a decision entry,
+    including that this was a real mistake (not a considered choice)
+    carried over from early generic scaffolding, and that it was live
+    in the repo — anyone reading `README.md` before this fix would
+    have been told, incorrectly, that they could legally copy and
+    resell this code.
+Why: project owner stated directly that this is a commercial SaaS
+product, not open source. `README.md`'s MIT claim was a real,
+consequential bug in the documentation — not a style issue — since an
+MIT license is a legal grant, and this one was never intended.
+Tested how: not a code change. Grepped every doc for "MIT" after the
+fix; the only remaining hits are (1) this decision entry explaining
+why MIT was wrong, (2) CLAUDE.md telling future sessions never to
+suggest it, and (3) RESEARCH.md correctly noting that a *third-party*
+library (BotD) is MIT-licensed, which is unrelated to bot-shield's
+own license. `go build/vet/test ./... -race` and `gofmt -l .` confirm
+no code was touched.
+Known gaps / follow-up: there is still no actual LICENSE file, and no
+real licensing terms exist yet (the README statement is a placeholder
+saying "not open, ask the owner," not a drafted commercial license).
+Before this is sold to a real paying customer, the owner needs actual
+license terms — ideally reviewed by a lawyer — not just "proprietary"
+in a README. Flagging this now per `CLAUDE.md` Section 16 rather than
+waiting to be asked.

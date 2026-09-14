@@ -19,9 +19,11 @@ large enterprises. Most mid-size companies (e-commerce, ticketing, job
 portals, SaaS) get scraped and abused by bots too, but can't afford
 those tools — so they run with weak or no protection.
 
-bot-shield combines proven open-source building blocks (TLS/JA4
-fingerprinting, behavioral scoring, JS challenges) behind one simple
-service a small team can deploy and actually afford.
+bot-shield is closed-source, commercial software (a paid, self-hosted
+product — see License below). Internally it uses proven open-source
+*libraries* (TLS/JA4 fingerprinting, behavioral scoring, JS
+challenges) so a small team can build and price it affordably,
+instead of reinventing hard, already-solved problems.
 
 ## What it is
 
@@ -81,4 +83,8 @@ include, tooling whose purpose is to help automation evade detection.
 
 ## License
 
-MIT
+**Proprietary — All Rights Reserved.** bot-shield is closed-source
+commercial software. No license to copy, modify, distribute, or use
+this code is granted except as agreed directly with the owner. It is
+not an open-source project, even though it uses open-source libraries
+internally (see below).
