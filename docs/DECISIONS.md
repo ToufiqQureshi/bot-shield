@@ -10,6 +10,63 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Let net/http own the TLS handshake; delete our hand-rolled version — 2026-09-14
+**Decision:** `proxy.NewCaptureListener` returns a real `*tls.Conn`
+from `Accept` and does **not** handshake it. net/http then runs the
+handshake itself. This deleted our handshake timeout, accept-retry
+backoff, per-connection panic recovery, goroutine-per-connection and
+its semaphore, and the `hack.ChannelListener` handoff — roughly 60
+lines.
+**Why:** reading `$GOROOT/src/net/http/server.go` showed all four
+already exist there: `Server.tlsHandshakeTimeout()` (derived from
+`ReadHeaderTimeout`), the `tempDelay` accept-retry loop,
+`conn.serve()`'s `defer recover()`, and its connection handling. The
+stdlib versions are better than ours were — they log handshake
+failures and reply properly to a plain-HTTP client hitting the TLS
+port, both of which our version silently skipped. The one thing we
+genuinely need (the raw ClientHello) is kept by wrapping the
+connection *underneath* `tls.Server`, which costs one line.
+**Alternatives considered:** keeping our own accept loop for "control"
+— rejected, it was control over code we had reimplemented worse.
+**Cost checked, not assumed:** the fingerprint is now derived per
+request rather than once per connection. Benchmarked at **14.3µs**
+against a ~2ms budget (`ARCHITECTURE.md`), so no cache — adding one
+would be optimising something that costs 0.7% of its budget.
+**Trade-off accepted:** `ReadHeaderTimeout` in `cmd/botshield` is now
+load-bearing for the TLS handshake too, not just headers. Noted in a
+comment there so nobody removes it as "just a header thing".
+**Revisit when:** HTTP/2 support is added — returning a real
+`*tls.Conn` is also what makes stdlib h2 negotiation possible, so
+that work got cheaper, not harder.
+
+---
+
+## Use ReverseProxy.Rewrite, not Director — 2026-09-14
+**Decision:** build the reverse proxy with `httputil.ReverseProxy{
+Rewrite: ...}` instead of `NewSingleHostReverseProxy` + `Director`.
+**Why:** net/http strips a visitor's `Forwarded` and `X-Forwarded-*`
+headers before calling `Rewrite`, and does not before calling
+`Director` (verified in `$GOROOT/src/net/http/httputil/reverseproxy.go`).
+With `Director`, a visitor sending `X-Forwarded-For: 1.2.3.4` had it
+forwarded to the origin as `"1.2.3.4, <real ip>"` — and most code
+reads the first entry, i.e. the attacker's chosen value. Per-IP rate
+limiting and geo checks (`ROADMAP.md` items 8 and 9) would have been
+bypassable from day one. `Rewrite` + `SetXForwarded()` sends the real
+client IP only. `Rewrite` also drops unparsable query parameters,
+which closes a proxy/origin request-smuggling gap.
+**Behaviour kept deliberately:** `SetURL` would rewrite the `Host`
+header to the origin's host; we restore the visitor's `Host` (`r.Out
+.Host = r.In.Host`), since the origin serves the client's own domain.
+**Behaviour changed deliberately:** an inbound `X-Forwarded-For` is
+now replaced rather than appended to. That is the secure default and
+there are no deployments yet to break.
+**Revisit when:** bot-shield is ever deployed *behind* another trusted
+proxy (a CDN), where the inbound `X-Forwarded-For` is legitimate — at
+that point it needs an explicit "trusted upstream" setting, never a
+blanket trust of the header.
+
+---
+
 ## Import only fingerproxy's `ja4` package, not the whole library — 2026-09-14
 **Decision:** depend on `github.com/wi1dcard/fingerproxy`, but import
 only its `pkg/ja4` package (JA4 hash computation, stdlib + `utls`

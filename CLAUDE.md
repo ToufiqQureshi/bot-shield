@@ -509,6 +509,10 @@ pass over your own work.
     not evidence until you've seen it go red on purpose.
 [ ] Did you change a function whose test you didn't re-read? If so,
     that test is now untrusted (Section 23c).
+[ ] Did you check the standard library actually has no built-in for
+    what you hand-wrote, by reading its source rather than assuming
+    (Section 24)? Is there dead code or one-use indirection to delete
+    before this ships?
 [ ] Say plainly, in your own report of the work: is this "done", or
     is it "done for the current scope, here's what's still missing"?
     Those are different claims — never let the first one cover for
@@ -582,10 +586,70 @@ you're shaping an assertion so it passes, stop — you're building the
 exact trap described at the top of this section. Write the assertion
 the product owner would want, then make the *code* satisfy it.
 
-### 23e. Do this without being asked
+### 23f. Do this without being asked
 
 The project owner is solo. There is no QA, no second reviewer, and no
 one else who will catch a fake test. If this audit only happens when
 they think to ask for it, the process has already failed. Run it
 yourself, every time, and report what you found — including "I
 re-checked X and it was genuinely fine."
+
+---
+
+## 24. Check the Standard Library Before Writing the Code
+
+The best code in this repo is the code we didn't write. Before
+writing any non-trivial function, and again before calling it done,
+answer these five questions — **by reading the actual source or
+current docs, never from memory**:
+
+```text
+[ ] Could this function be shorter, or does it do more than one thing?
+[ ] Does Go's standard library already do this? (read $(go env GOROOT)/src,
+    or the current package docs — do not guess)
+[ ] Is that built-in production grade? (stdlib and golang.org/x: yes.
+    A random GitHub package: check maintenance, tests, real users)
+[ ] Is it a whole library, or one function/hook we can call?
+[ ] If it exists and it's sound — use it, and delete ours.
+```
+
+**Why this is not optional.** On 2026-09-14, an audit against these
+questions found that hand-written code in `proxy/capture.go` had
+reimplemented four things net/http already does, worse:
+
+| We hand-wrote | Standard library already had | Ours was worse because |
+|---|---|---|
+| TLS handshake timeout (atomic + init + context) | `Server.tlsHandshakeTimeout()`, from `ReadHeaderTimeout` | silently dropped failed handshakes instead of logging them or replying to a plain-HTTP client |
+| Accept retry with backoff | `Server.Serve()`'s `tempDelay` loop | ours was a near-copy of stdlib code, untested against real transient errors |
+| Per-connection panic recovery | `conn.serve()`'s `defer recover()` | duplicated |
+| Goroutine-per-connection + semaphore | net/http's own connection handling | extra machinery, extra bugs |
+
+Deleting all four removed about 60 lines and left the product
+**safer**, because the stdlib's versions handle cases ours didn't.
+
+The same audit found `httputil.ReverseProxy.Director` (what we used)
+does **not** strip a visitor's `X-Forwarded-*` headers, while the
+newer `Rewrite` does — meaning any visitor could forge their own IP,
+defeating per-IP rate limiting before it was even built. One question
+from the list above ("is there a newer built-in?") caught a real
+security hole.
+
+### 24a. Delete dead code before you add to it
+
+Unused variables, one-use indirection, a helper with a single caller,
+a constant nobody reads, a wrapper that wraps nothing — clear these
+out *first*, so the next person reads only code that matters. A
+junior dev opening any file in this repo should be able to tell what
+it does without a guide.
+
+Section 13 still applies: if something looks unused but you're not
+certain, **ask the project owner before deleting it** — say what it
+is and why it looks dead. Certainty deletes; doubt asks.
+
+### 24b. Use the tools instead of eyeballing it
+
+The Claude Code skills `/code-review`, `/security-review` and
+`/simplify` exist and are cheap. Run them on your own work before
+declaring it done — especially `/security-review` on anything that
+touches visitor-controlled input. An independent pass does not share
+your blind spots, which is the entire point on a solo project.

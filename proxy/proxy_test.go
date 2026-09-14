@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +45,45 @@ func TestPassthrough(t *testing.T) {
 func TestNewRejectsBadTarget(t *testing.T) {
 	if _, err := New("://not-a-url"); err == nil {
 		t.Error("New with invalid URL: got nil error, want error")
+	}
+}
+
+// A visitor must not be able to fake where they're coming from. Any
+// X-Forwarded-For they send has to be replaced with their real IP,
+// not appended to — per-IP rate limiting and geo checks are only
+// worth anything if the IP can't be chosen by the caller.
+func TestNewStripsSpoofedForwardedFor(t *testing.T) {
+	got := make(chan string, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get("X-Forwarded-For")
+	}))
+	defer origin.Close()
+
+	p, err := New(origin.URL)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	front := httptest.NewServer(p)
+	defer front.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, front.URL+"/", nil)
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp.Body.Close()
+
+	select {
+	case v := <-got:
+		if strings.Contains(v, "1.2.3.4") {
+			t.Errorf("origin got X-Forwarded-For = %q, want the spoofed 1.2.3.4 gone", v)
+		}
+		if v == "" {
+			t.Error("origin got no X-Forwarded-For at all, want the real client IP")
+		}
+	default:
+		t.Fatal("origin was never reached, so this test proved nothing")
 	}
 }
 

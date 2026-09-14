@@ -78,11 +78,12 @@ and fix), not as a reusable library for outside use.
       `-race`. Verified with a real binary run (openssl self-signed
       cert + curl through botshield). Plain HTTP (no `-tls-cert`) still
       works unchanged for local dev.
-      Known gaps: HTTP/2 fingerprinting is not built — the capture
+      The listener hands net/http a real `*tls.Conn` and lets it run
+      the handshake, so the handshake timeout, error handling, accept
+      retries and panic recovery are the standard library's, not
+      hand-written (see `DECISIONS.md`).
+      Known gap: HTTP/2 fingerprinting is not built — the capture
       listener only negotiates HTTP/1.1 for now (see `DECISIONS.md`).
-      Concurrent handshakes are capped at 1000 in-flight as a basic
-      safety limit, not load-tested against real adversarial volume
-      yet (that belongs with item 16, soak testing).
 
 ---
 

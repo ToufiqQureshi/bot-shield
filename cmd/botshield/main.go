@@ -32,11 +32,11 @@ func main() {
 		log.Fatalf("botshield: %v", err)
 	}
 
-	// ReadHeaderTimeout/IdleTimeout stop a client that opens a
-	// connection and then sends data too slowly (or never) from
-	// holding it open forever — the same slowloris-style risk the
-	// handshake timeout in proxy.NewCaptureListener guards against,
-	// but at the HTTP layer instead of the TLS layer.
+	// These timeouts stop a client that opens a connection and then
+	// sends data slowly (or never) from holding it open forever.
+	// ReadHeaderTimeout does double duty: net/http also uses it as the
+	// TLS handshake deadline, so it covers a stalled handshake too.
+	// Do not remove it thinking it is only about headers.
 	srv := &http.Server{
 		Handler:           p,
 		ConnContext:       proxy.ConnContext,

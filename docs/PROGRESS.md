@@ -378,3 +378,72 @@ is touched. Also still true: the panic-recovery path has no test
 
 
 
+
+---
+
+## 2026-09-14 — Audited against the standard library; deleted ~60 lines we shouldn't have written
+Changed:
+  - `proxy/capture.go`: deleted the hand-rolled TLS handshake timeout
+    (`atomic.Int64` + `init()`), the accept-retry backoff loop, the
+    per-connection panic recovery, the goroutine-per-connection and
+    its 1000-slot semaphore, the `hack.ChannelListener` handoff, and
+    the `capturedConn` type. `Accept` now returns a real `*tls.Conn`
+    without handshaking it, and net/http does the handshake. The file
+    went from 140 lines to 70.
+  - `proxy/capture.go`: JA4 is now derived in `JA4FromContext` from
+    `conn.NetConn()` at request time, instead of being computed in our
+    own handshake goroutine and carried on a wrapper type.
+  - `proxy/proxy.go`: migrated from `NewSingleHostReverseProxy` +
+    `Director` to `httputil.ReverseProxy{Rewrite: ...}`, keeping the
+    inbound `Host` and calling `SetXForwarded()`.
+  - `cmd/botshield/main.go`: comment now records that
+    `ReadHeaderTimeout` is also the TLS handshake deadline, so nobody
+    removes it as "just a header thing".
+  - `proxy/capture_test.go`: rewritten around a `startCapture` helper
+    that runs the real wiring (capture listener + an `http.Server`
+    configured like `cmd/botshield`), since the timeout behaviour now
+    comes from that configuration.
+  - `proxy/proxy_test.go`: added `TestNewStripsSpoofedForwardedFor`.
+  - `CLAUDE.md`: added Section 24 (check the standard library before
+    writing the code — five questions, answered by reading the source,
+    not from memory), 24a (delete dead code first) and 24b (run
+    `/code-review`, `/security-review`, `/simplify` on your own work).
+    Linked from the Section 22 checklist.
+Why: project owner asked whether existing code had unnecessary lines,
+whether Go already provided any of it built-in, and whether we should
+be using that instead. Reading `$GOROOT/src` rather than trusting
+memory answered yes, four times over.
+Tested how:
+  - Read the stdlib source to confirm each claim before deleting
+    anything: `Server.tlsHandshakeTimeout()` (server.go:934, takes the
+    minimum of ReadHeaderTimeout/ReadTimeout/WriteTimeout and applies
+    it around `HandshakeContext`), the `tempDelay` accept-retry loop
+    (server.go:3420, 5ms doubling to a 1s cap, with logging),
+    `conn.serve()`'s `defer recover()` (server.go:1944), and
+    `tls.Conn.NetConn()` (conn.go:165).
+  - Mutation checks on the new code: reverting `Rewrite` to `Director`
+    makes `TestNewStripsSpoofedForwardedFor` fail with the origin
+    seeing `"1.2.3.4, 127.0.0.1"` — the spoofed IP first, which is the
+    value most code reads. Making `Accept` return a wrapper instead of
+    a real `*tls.Conn` makes `TestCaptureListenerEndToEnd` fail.
+  - Benchmarked the per-request fingerprint cost before deciding not
+    to cache it: **14.3µs**, against `ARCHITECTURE.md`'s ~2ms budget.
+  - `go build/vet/test ./... -race` and `gofmt -l .` clean.
+  - Dead-code scan: every declared symbol in `proxy/` has live
+    references; nothing removed silently.
+Known gaps / follow-up:
+  - One mutation check was informative in an uncomfortable way:
+    `TestCaptureListenerTimesOutSlowHandshake` **passed** when `Accept`
+    stopped returning a real `*tls.Conn`, because the connection was
+    then treated as plain HTTP and closed by the same
+    `ReadHeaderTimeout`. The test's comment claimed it proved more
+    than it did; the comment now states its real scope and names the
+    test that does catch that case. Worth remembering: a test can be
+    honest about its result and still lie in its description.
+  - HTTP/2 is still not offered, but this change makes adding it small
+    — stdlib h2 negotiation works precisely because `Accept` now hands
+    back a real `*tls.Conn`.
+  - `proxy/errors.go` holds a single error value. Left alone rather
+    than folded into `proxy.go`: `CLAUDE.md` Section 5 names
+    `errors.go` as a wanted filename, and Section 13 says ask before
+    removing something that merely looks surplus.

@@ -4,7 +4,6 @@
 package proxy
 
 import (
-	"net/http"
 	"net/http/httputil"
 	"net/url"
 )
@@ -26,19 +25,27 @@ func New(target string) (*httputil.ReverseProxy, error) {
 		return nil, &url.Error{Op: "parse", URL: target, Err: errInvalidTarget}
 	}
 
-	p := httputil.NewSingleHostReverseProxy(u)
-	director := p.Director
-	// Passes along the JA4 fingerprint captured for this connection,
-	// if there was one. A visitor could otherwise set this header
-	// themselves to fake a fingerprint, so we always strip whatever
-	// they sent first and only set our own value when we really
-	// captured one.
-	p.Director = func(r *http.Request) {
-		director(r)
-		r.Header.Del(ja4Header)
-		if ja4 := JA4FromContext(r.Context()); ja4 != "" {
-			r.Header.Set(ja4Header, ja4)
-		}
+	// Rewrite, not the older Director: net/http strips the client's
+	// own X-Forwarded-* headers before calling it, so a visitor can't
+	// fake the IP that our rate limiting and geo checks will rely on.
+	// Director leaves those headers untouched.
+	p := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(u)
+			// SetURL would point Host at the origin; the origin serves
+			// the visitor's domain, so it needs the original Host.
+			r.Out.Host = r.In.Host
+			// Fills in the real client IP for the origin's logs.
+			r.SetXForwarded()
+
+			// Only we get to say what the fingerprint is. A request
+			// with none is forwarded as normal — a fingerprint we
+			// couldn't read is never a reason to block someone.
+			r.Out.Header.Del(ja4Header)
+			if ja4 := JA4FromContext(r.In.Context()); ja4 != "" {
+				r.Out.Header.Set(ja4Header, ja4)
+			}
+		},
 	}
 	return p, nil
 }
