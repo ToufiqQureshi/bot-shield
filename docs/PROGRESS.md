@@ -447,3 +447,59 @@ Known gaps / follow-up:
     than folded into `proxy.go`: `CLAUDE.md` Section 5 names
     `errors.go` as a wanted filename, and Section 13 says ask before
     removing something that merely looks surplus.
+
+---
+
+## 2026-09-14 — Independent security review found 2 issues I'd missed
+Changed:
+  - `proxy/capture.go`: added `JA4Unreadable`. A TLS connection whose
+    handshake we can't read now reports `"unreadable"` instead of
+    `""`; `""` now means only "not a TLS connection".
+  - `proxy/proxy.go`: strip `X-Real-IP`, `True-Client-IP`,
+    `CF-Connecting-IP`, `X-Client-IP`, `Fastly-Client-IP`,
+    `X-Cluster-Client-IP` from the outbound request and set
+    `X-Real-IP` ourselves from the connection address.
+  - `proxy/capture_test.go`: added `fragmentingRelay` and
+    `TestFragmentedClientHelloIsReported`.
+  - `proxy/proxy_test.go`: added `TestNewStripsOtherClientIPHeaders`.
+  - `docs/RESEARCH.md`: wrote up ClientHello fragmentation as a
+    technique, including why record-level capture misses it.
+  - `docs/DECISIONS.md`, `docs/ROADMAP.md`: recorded both decisions and
+    the remaining gap.
+Why: ran `/security-review`, which asks for an independent pass. Worth
+recording plainly: **both findings were in code I had already audited
+twice myself and declared clean.** Reviewing your own work does not
+find the things you didn't think of.
+  1. **ClientHello fragmentation (the serious one).** TLS lets one
+     handshake message span several records.
+     `hack.HijackClientHelloConn` reads the record header and sets
+     `expectedLen = 5 + recordLength`, so it only ever captures the
+     first fragment. A bot that splits its ClientHello handshakes
+     normally — the site serves it — but produces no fingerprint. One
+     line in the bot's socket layer, and the product's core detection
+     is silently bypassed.
+  2. **Other client-IP headers.** `Rewrite` strips only
+     `X-Forwarded-*`. `X-Real-IP` and friends went through untouched,
+     and plenty of origin stacks read those first — the same spoof
+     fixed earlier for `X-Forwarded-For`, through a different door.
+Tested how:
+  - Reproduced finding 1 before fixing it: wrote a TCP relay that
+    re-frames the client's first TLS record into two, ran a real
+    client through it. Handshake succeeded, origin received
+    `X-BotShield-JA4: ""`. After the fix the same client produces
+    `"unreadable"`.
+  - Mutation-checked both new tests: reverting `JA4Unreadable` to `""`
+    fails the fragmentation test; removing the header-strip loop fails
+    the IP test, naming all five headers that leaked.
+  - `go build/vet/test ./... -race` and `gofmt -l .` clean.
+Known gaps / follow-up:
+  - The fragmentation evasion still *works* at the capture level — it
+    is now visible, not prevented. Real fix is multi-record handshake
+    reassembly, which we don't hand-write (`DECISIONS.md`); best path
+    is upstream in fingerproxy. Tracked in `ROADMAP.md`/`RESEARCH.md`.
+  - Worth checking whether other JA4 implementations share this gap.
+    If they do, it's an ecosystem-wide blind spot, not just ours, and
+    that is useful competitive information.
+  - Process lesson, not a code gap: `/security-review` is now required
+    before calling security-relevant work done (`CLAUDE.md` 24b), on
+    the evidence of this session.

@@ -193,3 +193,82 @@ func TestCaptureListenerSurvivesBadHandshake(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// fragmentingRelay forwards TCP traffic but re-frames the client's
+// first TLS record into two. A handshake message is allowed to span
+// records, so the handshake still succeeds — this is a bot hiding its
+// fingerprint with a one-line change to its socket code.
+func fragmentingRelay(t *testing.T, target string) (addr string) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+
+	go func() {
+		client, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer client.Close()
+		server, err := net.Dial("tcp", target)
+		if err != nil {
+			return
+		}
+		defer server.Close()
+
+		hdr := make([]byte, 5)
+		if _, err := io.ReadFull(client, hdr); err != nil {
+			return
+		}
+		payload := make([]byte, int(hdr[3])<<8|int(hdr[4]))
+		if _, err := io.ReadFull(client, payload); err != nil {
+			return
+		}
+		writeRecord := func(b []byte) {
+			server.Write(append([]byte{hdr[0], hdr[1], hdr[2], byte(len(b) >> 8), byte(len(b))}, b...))
+		}
+		writeRecord(payload[:1])
+		writeRecord(payload[1:])
+
+		go io.Copy(server, client)
+		io.Copy(client, server)
+	}()
+
+	return ln.Addr().String()
+}
+
+// A client that splits its handshake across TLS records still gets
+// served, but must not come out looking like an ordinary request with
+// no fingerprint — that would be a silent way past the whole product.
+// It has to be reported as JA4Unreadable so the scoring layer can
+// treat it as the evasion attempt it is.
+func TestFragmentedClientHelloIsReported(t *testing.T) {
+	got := make(chan string, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get(ja4Header)
+	}))
+	defer origin.Close()
+
+	addr := fragmentingRelay(t, startCapture(t, origin.URL, 10*time.Second))
+
+	client := &http.Client{
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Timeout:   5 * time.Second,
+	}
+	resp, err := client.Get("https://" + addr + "/")
+	if err != nil {
+		t.Fatalf("GET through fragmenting relay: %v", err)
+	}
+	resp.Body.Close()
+
+	select {
+	case v := <-got:
+		if v != JA4Unreadable {
+			t.Errorf("origin got %s = %q, want %q — a fragmented handshake must not pass as an ordinary unfingerprinted request", ja4Header, v, JA4Unreadable)
+		}
+	default:
+		t.Fatal("origin was never reached, so this test proved nothing")
+	}
+}

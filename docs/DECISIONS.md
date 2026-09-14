@@ -10,6 +10,50 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Report an unreadable handshake as a signal, not as "no fingerprint" — 2026-09-14
+**Decision:** when a connection is TLS but we cannot read its
+ClientHello, `JA4FromContext` returns `JA4Unreadable` ("unreadable"),
+not `""`. `""` now means only "this wasn't a TLS connection".
+**Why:** a client can split its ClientHello across two TLS records.
+The handshake succeeds, but our capture (and `fingerproxy`'s, which
+reads one record) sees a fragment, so JA4 parsing fails. Reproduced
+locally: the request sailed through with an empty fingerprint, which
+looked exactly like an ordinary unfingerprinted request. That made a
+one-line bot change into a *silent* bypass of the product's core
+detection. Making the two states distinguishable doesn't stop the
+evasion, but it stops it being invisible — and a real browser never
+fragments this way, so "TLS but unreadable" is itself a bot signal.
+**Alternatives considered:** blocking on an unreadable handshake —
+rejected: some legitimate stacks and censorship-circumvention clients
+fragment too, and `CLAUDE.md` Section 6 says no single signal decides,
+Section 8 says a false positive is worse than a miss. This is an input
+for scoring, not a verdict. Also considered: writing record-layer
+reassembly ourselves — rejected for now, `DECISIONS.md` above says we
+don't hand-write TLS parsing; see `RESEARCH.md` for the open item.
+**Revisit when:** the scoring engine (`ROADMAP.md` item 5) exists and
+can weight this, or when reassembly lands upstream in fingerproxy.
+
+---
+
+## Strip every client-IP header, not just the X-Forwarded family — 2026-09-14
+**Decision:** the proxy deletes `X-Real-IP`, `True-Client-IP`,
+`CF-Connecting-IP`, `X-Client-IP`, `Fastly-Client-IP` and
+`X-Cluster-Client-IP` from the outbound request, then sets
+`X-Real-IP` itself from the real connection address.
+**Why:** net/http's `Rewrite` strips only `Forwarded` and
+`X-Forwarded-*`. nginx, Rails, Laravel, Cloudflare and Fastly stacks
+routinely read the others, so a visitor could still choose the IP the
+origin logs, allowlists or rate-limits — the same spoof we closed for
+`X-Forwarded-For`, through a different door.
+**Alternatives considered:** stripping only `X-Real-IP` (the most
+common) — rejected, each remaining header is a full bypass on some
+origin stack, and they cost one line each.
+**Revisit when:** bot-shield runs behind a trusted CDN that legitimately
+sets one of these; that needs an explicit trusted-upstream setting,
+never blanket trust.
+
+---
+
 ## Let net/http own the TLS handshake; delete our hand-rolled version — 2026-09-14
 **Decision:** `proxy.NewCaptureListener` returns a real `*tls.Conn`
 from `Accept` and does **not** handshake it. net/http then runs the

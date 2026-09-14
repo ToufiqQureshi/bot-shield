@@ -87,6 +87,49 @@ func TestNewStripsSpoofedForwardedFor(t *testing.T) {
 	}
 }
 
+// X-Forwarded-For isn't the only header an origin trusts for "who is
+// calling". nginx, Cloudflare and Fastly stacks read their own, and
+// net/http doesn't strip those — so a visitor could pick their
+// apparent IP through whichever one the origin happens to honour.
+func TestNewStripsOtherClientIPHeaders(t *testing.T) {
+	got := make(chan http.Header, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Clone()
+	}))
+	defer origin.Close()
+
+	p, err := New(origin.URL)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	front := httptest.NewServer(p)
+	defer front.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, front.URL+"/", nil)
+	for _, h := range clientIPHeaders {
+		req.Header.Set(h, "1.2.3.4")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp.Body.Close()
+
+	select {
+	case h := <-got:
+		for _, name := range clientIPHeaders {
+			if v := h.Get(name); strings.Contains(v, "1.2.3.4") {
+				t.Errorf("origin got %s = %q, want the spoofed 1.2.3.4 gone", name, v)
+			}
+		}
+		if h.Get(realIPHeader) == "" {
+			t.Errorf("origin got no %s, want the real client IP", realIPHeader)
+		}
+	default:
+		t.Fatal("origin was never reached, so this test proved nothing")
+	}
+}
+
 // A visitor must not be able to fake a JA4 fingerprint by just
 // setting the header themselves — that header is meant to come only
 // from bot-shield's own TLS capture.

@@ -82,8 +82,13 @@ and fix), not as a reusable library for outside use.
       the handshake, so the handshake timeout, error handling, accept
       retries and panic recovery are the standard library's, not
       hand-written (see `DECISIONS.md`).
-      Known gap: HTTP/2 fingerprinting is not built — the capture
+      Known gaps: HTTP/2 fingerprinting is not built — the capture
       listener only negotiates HTTP/1.1 for now (see `DECISIONS.md`).
+      A client that splits its ClientHello across two TLS records
+      still handshakes fine but can't be fingerprinted — reported as
+      `JA4Unreadable` rather than silently unfingerprinted, so it's
+      visible, but proper multi-record reassembly is still open (see
+      `RESEARCH.md`).
 
 ---
 

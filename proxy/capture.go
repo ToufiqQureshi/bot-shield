@@ -47,10 +47,17 @@ func ConnContext(ctx context.Context, c net.Conn) context.Context {
 	return context.WithValue(ctx, ctxKeyConn{}, c)
 }
 
+// JA4Unreadable marks a TLS connection whose handshake we could not
+// read. A normal client never causes this; a bot splitting its
+// handshake across TLS records to dodge fingerprinting does. So it is
+// a signal to score later, and must never look the same as a plain
+// HTTP request that simply has no fingerprint.
+const JA4Unreadable = "unreadable"
+
 // JA4FromContext returns the JA4 fingerprint of the connection this
-// request came in on, or "" if there isn't one. "" means "unknown",
-// never "this is a bot" — a fingerprint we failed to read must never
-// be a reason to break someone's site.
+// request came in on, JA4Unreadable if it was TLS but we couldn't
+// read it, or "" if it wasn't TLS at all. None of these block a
+// request on their own — that's the scoring layer's job.
 func JA4FromContext(ctx context.Context) string {
 	conn, _ := ctx.Value(ctxKeyConn{}).(*tls.Conn)
 	if conn == nil {
@@ -62,11 +69,11 @@ func JA4FromContext(ctx context.Context) string {
 	}
 	raw, err := hijacked.GetClientHello()
 	if err != nil {
-		return ""
+		return JA4Unreadable
 	}
 	fp, err := ja4Fingerprint(raw)
 	if err != nil {
-		return ""
+		return JA4Unreadable
 	}
 	return fp
 }
