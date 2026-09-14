@@ -130,6 +130,43 @@ func TestNewStripsOtherClientIPHeaders(t *testing.T) {
 	}
 }
 
+// A visitor must not be able to fake the UA-mismatch flag either — a
+// scanner setting this to "true" on every request would poison
+// scoring, and a real bot setting it to "" wouldn't help them since
+// we always recompute it, but the incoming value must never survive.
+func TestNewStripsSpoofedUAMismatchHeader(t *testing.T) {
+	got := make(chan string, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get(uaMismatchHeader)
+	}))
+	defer origin.Close()
+
+	p, err := New(origin.URL)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	front := httptest.NewServer(p)
+	defer front.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, front.URL+"/", nil)
+	req.Header.Set(uaMismatchHeader, "true")
+	req.Header.Set("User-Agent", "curl/8.6.0") // not claiming to be a browser, so real value is absent
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp.Body.Close()
+
+	select {
+	case v := <-got:
+		if v != "" {
+			t.Errorf("origin got spoofed %s = %q, want it stripped", uaMismatchHeader, v)
+		}
+	default:
+		t.Fatal("origin was never reached, so this test proved nothing")
+	}
+}
+
 // A visitor must not be able to fake a JA4 fingerprint by just
 // setting the header themselves — that header is meant to come only
 // from bot-shield's own TLS capture.

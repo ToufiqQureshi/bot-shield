@@ -89,6 +89,31 @@ and fix), not as a reusable library for outside use.
       `JA4Unreadable` rather than silently unfingerprinted, so it's
       visible, but proper multi-record reassembly is still open (see
       `RESEARCH.md`).
+- [x] **3. Basic header/UA consistency check** (`proxy/useragent.go`)
+      — `UAMismatch(ua, ja4)` flags a request whose User-Agent claims
+      a real browser (Chrome/Firefox/Safari/Edge) but whose TLS
+      handshake says otherwise: negotiates ancient TLS 1.0/1.1 (no
+      current real browser does), or triggers the `JA4Unreadable`
+      fragmentation evasion (real browsers never fragment their
+      ClientHello). Forwarded to the origin as
+      `X-BotShield-UA-Mismatch: true`, stripped from the incoming
+      request first so a visitor can't set it themselves. A UA that
+      openly declares itself a crawler (Googlebot etc.) is exempted —
+      that's not a lie. Tested: known-good (real Chrome + modern TLS),
+      known-bad (claimed browser + old TLS / unreadable handshake),
+      and borderline cases (curl, empty UA, empty/garbage JA4,
+      crawler UA containing "Chrome"), all mutation-checked. A real
+      end-to-end test proves the flag reaches the origin through the
+      actual proxy wiring, not just the pure function.
+      Scope, deliberately narrower than the literal ROADMAP wording
+      ("real client family"): this does not classify JA4 into "this
+      is really Chrome 120" — that needs a maintained database of
+      known-browser fingerprints, which is a real ongoing research
+      cost (see `DECISIONS.md`), not a one-line addition. What's built
+      catches the concrete, well-defined lie (claims modern browser,
+      handshake proves otherwise) without that database.
+      This is a **signal only** — nothing blocks yet (`CLAUDE.md`
+      Section 6); it's an input for item 5's scoring engine.
 
 ---
 
@@ -97,9 +122,9 @@ and fix), not as a reusable library for outside use.
 - [x] ~~**1. Reverse proxy skeleton**~~ — done, see "Done" section above.
 - [x] ~~**2. TLS/JA4 fingerprinting**~~ — done (HTTP/2 fingerprint part
       still open), see "Done" section above.
-- [ ] **3. Basic header/UA consistency check** — does the claimed
-      User-Agent match the TLS/HTTP2 fingerprint's real client family?
-      Mismatch = strong signal.
+- [x] ~~**3. Basic header/UA consistency check**~~ — done (narrower
+      than full HTTP2-family verification, no fingerprint database
+      needed), see "Done" section above.
 - [ ] **4. JS challenge** — a lightweight challenge page (math + timing +
       basic canvas check) served to unscored/ambiguous traffic. A
       plain HTTP client without a JS engine fails immediately.

@@ -10,6 +10,38 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## UA-consistency check: structural heuristics, not a browser-fingerprint database — 2026-09-14
+**Decision:** `UAMismatch` catches a UA claiming a browser while the
+TLS handshake shows TLS 1.0/1.1 or the `JA4Unreadable` fragmentation
+signal — not a full "does this JA4 really belong to Chrome 120"
+classification.
+**Why:** the strict version of ROADMAP item 3 ("real client family")
+needs a maintained table mapping JA4 hashes to real browser versions.
+Real anti-bot vendors run that as a standing research/maintenance
+cost, updated as browsers ship. Building and maintaining that
+database is a project of its own, not a one-line addition, and
+`CLAUDE.md` Section 15 says research before building — not fake a
+version of something that needs real ongoing data. The two conditions
+implemented instead are provably true of every current real browser,
+need no external data to verify, and reuse the `JA4Unreadable` signal
+already established for fragmentation.
+**Alternatives considered:** a hardcoded list of a few known-good JA4
+hashes for major browsers — rejected: browsers update their TLS stack
+often enough that the list would go stale within months and start
+producing false positives on real users (`CLAUDE.md` Section 8), with
+no mechanism in this repo to keep it current.
+**False-positive risk, accepted:** a corporate TLS-inspecting proxy or
+an unusually old/locked-down real browser could legitimately negotiate
+TLS 1.0/1.1 and get flagged. This is why the result is a signal for
+future scoring (item 5), never a block on its own (`CLAUDE.md`
+Section 6).
+**Revisit when:** item 5's scoring engine exists and real traffic data
+shows whether a maintained JA4-to-browser database is worth the
+ongoing cost, or when HTTP/2 fingerprinting is built (adds another
+structural signal of the same no-database kind).
+
+---
+
 ## bot-shield is closed-source commercial software, not open source — 2026-09-14
 **Decision:** bot-shield is proprietary. `README.md` previously said
 `License: MIT`, which was wrong and is corrected to "Proprietary — All

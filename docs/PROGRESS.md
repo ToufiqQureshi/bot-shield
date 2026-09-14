@@ -599,3 +599,78 @@ Before this is sold to a real paying customer, the owner needs actual
 license terms — ideally reviewed by a lawyer — not just "proprietary"
 in a README. Flagging this now per `CLAUDE.md` Section 16 rather than
 waiting to be asked.
+
+---
+
+## 2026-09-14 — UA/header consistency check (ROADMAP P0 item 3, done)
+Changed:
+  - `proxy/useragent.go`: added `UAMismatch(ua, ja4 string) bool` and
+    helpers `claimsBrowser`, `browserMarkers`, `crawlerMarkers`. Flags
+    a request whose User-Agent claims a real browser (Chrome/Firefox/
+    Safari/Edge) but whose TLS handshake says otherwise: negotiates
+    TLS 1.0/1.1 (no current real browser does), or triggers the
+    `JA4Unreadable` fragmentation signal already built for item 2. A
+    UA that openly admits it's a crawler (contains "bot"/"spider"/
+    "crawl") is exempted — declaring yourself isn't lying.
+  - `proxy/proxy.go`: wired into `Rewrite` — strips any incoming
+    `X-BotShield-UA-Mismatch` header first (same anti-spoof pattern as
+    `X-BotShield-JA4`), sets it to `"true"` only when `UAMismatch`
+    fires. Absence means nothing was flagged, not "unknown".
+  - `proxy/useragent_test.go`: 9 cases — real Chrome/modern TLS
+    (negative), claimed Chrome + `JA4Unreadable` (positive), claimed
+    Firefox + TLS 1.0 (positive), claimed Safari + TLS 1.1 (positive),
+    honest curl (negative), Googlebot with "Chrome" in its own UA
+    string (negative — crawler exemption), no JA4 at all / plain HTTP
+    (negative, fail open), empty UA, garbage/too-short JA4.
+  - `proxy/capture_test.go`: `TestUAMismatchReachesOriginEndToEnd` —
+    real Chrome-claiming client through the real fragmenting relay
+    used for item 2's evasion test, checks the flag reaches the origin
+    through the actual proxy wiring, not just the pure function.
+  - `proxy/proxy_test.go`: `TestNewStripsSpoofedUAMismatchHeader`.
+Why: ROADMAP item 3's literal wording ("does the claimed User-Agent
+match the fingerprint's real client family") needs a maintained JA4-
+to-browser-version database to do fully — a real ongoing research
+cost, not something to fake in one pass (`CLAUDE.md` Section 15).
+Built the narrower, well-grounded slice instead: two structurally
+provable facts about every current real browser (TLS version floor,
+never triggering fragmentation), needing no external data. Recorded
+the scope decision and its false-positive trade-off in `DECISIONS.md`.
+Tested how:
+  - Mutation-checked all three real conditions in `UAMismatch`:
+    forcing the function to always return false, removing the crawler
+    exemption (behaviorally — an empty `crawlerMarkers` slice, since
+    deleting the loop outright left a compile error, which the
+    mutation-check step itself caught before it could hide anything),
+    and removing the `JA4Unreadable` branch — all three turned the
+    matching test case red with the exact case named.
+  - Mutation-checked the header spoof-strip in `proxy.go`: removing
+    `r.Out.Header.Del(uaMismatchHeader)` fails
+    `TestNewStripsSpoofedUAMismatchHeader` with the spoofed value
+    named.
+  - `go build/vet/test ./... -race` and `gofmt -l .` clean throughout.
+  - Real binary run: openssl cert + curl through botshield — no
+    mismatch header set (correct, curl doesn't claim to be a browser).
+  - Independent `/security-review` (background agent) on the new
+    surface: checked User-Agent length/ReDoS exposure (bounded by
+    Go's 1MB `DefaultMaxHeaderBytes`, verified in `$GOROOT/src/net/
+    http/server.go:916`, since no `MaxHeaderBytes` override exists in
+    `cmd/botshield`), the crawler-exemption bypass (real gap, but
+    "signal only, no single signal decides" per Section 6 — not a
+    vulnerability today), and the `ja4[1:3]` slice (safe: `ja4` here
+    is never attacker-supplied text, only `""`, `JA4Unreadable`, or
+    `fingerproxy`'s fixed-format output). No findings above the
+    confidence bar.
+Known gaps / follow-up (not deferred without reason — see `CLAUDE.md`
+Section 17):
+  - This does not verify "real client family" the way ROADMAP's
+    literal wording asks — see `DECISIONS.md` for why that needs a
+    maintained database, which is out of scope for this pass.
+  - A bot can trivially avoid the check entirely by putting "bot" in
+    its own UA string. Not fixed because it isn't a security gap at
+    the *current* stage (nothing is blocked yet) — revisit once item 5
+    (scoring) exists and this becomes one input among several, per
+    the independent review.
+  - A corporate TLS-inspecting proxy or a genuinely old/locked-down
+    real browser could trigger a false positive on the TLS-version
+    check. Accepted and documented in `DECISIONS.md` — this is exactly
+    why the result is a signal, never a block, on its own.

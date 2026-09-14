@@ -14,6 +14,11 @@ import (
 // fingerprint without re-capturing it themselves.
 const ja4Header = "X-BotShield-JA4"
 
+// uaMismatchHeader tells the origin the caller's declared browser
+// doesn't match its TLS handshake. Set to "true" only when we caught
+// one — absence means nothing suspicious was found, not "unknown".
+const uaMismatchHeader = "X-BotShield-UA-Mismatch"
+
 // realIPHeader is the client-IP header we set ourselves. nginx, Rails
 // and Laravel apps commonly read this one.
 const realIPHeader = "X-Real-IP"
@@ -67,8 +72,17 @@ func New(target string) (*httputil.ReverseProxy, error) {
 			// with none is forwarded as normal — a fingerprint we
 			// couldn't read is never a reason to block someone.
 			r.Out.Header.Del(ja4Header)
-			if ja4 := JA4FromContext(r.In.Context()); ja4 != "" {
+			ja4 := JA4FromContext(r.In.Context())
+			if ja4 != "" {
 				r.Out.Header.Set(ja4Header, ja4)
+			}
+
+			// Same rule for the UA-mismatch flag: a visitor doesn't
+			// get to set this themselves, and it's a signal for
+			// scoring, not a block, per CLAUDE.md Section 6.
+			r.Out.Header.Del(uaMismatchHeader)
+			if UAMismatch(r.In.UserAgent(), ja4) {
+				r.Out.Header.Set(uaMismatchHeader, "true")
 			}
 		},
 	}

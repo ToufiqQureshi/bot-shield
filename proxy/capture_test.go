@@ -272,3 +272,41 @@ func TestFragmentedClientHelloIsReported(t *testing.T) {
 		t.Fatal("origin was never reached, so this test proved nothing")
 	}
 }
+
+// A real end-to-end check for the UA-consistency signal: a client
+// that claims to be Chrome but fragments its handshake (real Chrome
+// never does) must reach the origin flagged, through the actual
+// proxy wiring — not just the pure function in isolation.
+func TestUAMismatchReachesOriginEndToEnd(t *testing.T) {
+	got := make(chan string, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get(uaMismatchHeader)
+	}))
+	defer origin.Close()
+
+	addr := fragmentingRelay(t, startCapture(t, origin.URL, 10*time.Second))
+
+	req, err := http.NewRequest(http.MethodGet, "https://"+addr+"/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36")
+	client := &http.Client{
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Timeout:   5 * time.Second,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp.Body.Close()
+
+	select {
+	case v := <-got:
+		if v != "true" {
+			t.Errorf("origin got %s = %q, want \"true\"", uaMismatchHeader, v)
+		}
+	default:
+		t.Fatal("origin was never reached, so this test proved nothing")
+	}
+}
