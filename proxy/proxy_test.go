@@ -46,3 +46,30 @@ func TestNewRejectsBadTarget(t *testing.T) {
 		t.Error("New with invalid URL: got nil error, want error")
 	}
 }
+
+// A visitor must not be able to fake a JA4 fingerprint by just
+// setting the header themselves — that header is meant to come only
+// from bot-shield's own TLS capture.
+func TestNewStripsSpoofedJA4Header(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get(ja4Header); got != "" {
+			t.Errorf("origin got spoofed %s = %q, want it stripped", ja4Header, got)
+		}
+	}))
+	defer origin.Close()
+
+	p, err := New(origin.URL)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	front := httptest.NewServer(p)
+	defer front.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, front.URL+"/", nil)
+	req.Header.Set(ja4Header, "t13d1516h2_fake_fake")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp.Body.Close()
+}

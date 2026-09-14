@@ -473,3 +473,39 @@ readable, testable, predictable. Impress with how little code is
 needed to catch real bot traffic reliably — not with clever tricks.
 
 **Every signal, every layer, every line must earn its place.**
+
+---
+
+## 22. Pre-Push Production Verification
+
+Run this before calling any feature "done," even one you already
+tested. It has caught real bugs before (a spoofable header, a
+listener that died silently on one bad Accept) that the first round
+of tests missed — this is not paperwork, it's a second, adversarial
+pass over your own work.
+
+```text
+[ ] Re-read your own diff like an attacker, not the author: what's
+    the cheapest way to break this, crash it, or fool it?
+[ ] Any value that comes from outside bot-shield (a header, a query
+    param, a cookie) and gets trusted or forwarded downstream — is it
+    stripped/validated first, or could a visitor just set it
+    themselves?
+[ ] Every error path, not just the happy path: does it get logged or
+    handled, or does it fail silently? (a swallowed error is a bug
+    hiding, not a bug handled)
+[ ] Every blocking call: does it have a timeout? What happens if 1000
+    clients trigger the slow/worst case at once?
+[ ] Did you fix the exact bug you were looking for, or did you also
+    check the rest of the file for the same class of mistake?
+[ ] What, concretely, does NO test cover right now? Say it out loud
+    (or in `docs/PROGRESS.md`) — don't let "probably fine" stand in
+    for a real answer.
+[ ] Say plainly, in your own report of the work: is this "done", or
+    is it "done for the current scope, here's what's still missing"?
+    Those are different claims — never let the first one cover for
+    the second.
+```
+
+This is Section 15a's bar made checkable — a checklist you actually
+run, not just a mindset you hold.

@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log"
 	"net"
 	"sync/atomic"
@@ -71,11 +72,26 @@ func NewCaptureListener(inner net.Listener, tlsConfig *tls.Config) net.Listener 
 	sem := make(chan struct{}, maxHandshakes)
 
 	go func() {
+		// backoff handles a transient Accept error (e.g. the process
+		// briefly hit its file-descriptor limit) the same way
+		// net/http's own server does: wait a little and keep trying,
+		// instead of a single hiccup permanently killing the whole
+		// listener for every future visitor.
+		backoff := time.Millisecond
 		for {
 			conn, err := inner.Accept()
 			if err != nil {
-				return
+				if errors.Is(err, net.ErrClosed) {
+					return // listener was closed on purpose (shutdown)
+				}
+				log.Printf("botshield: accept error: %v, retrying in %s", err, backoff)
+				time.Sleep(backoff)
+				if backoff < time.Second {
+					backoff *= 2
+				}
+				continue
 			}
+			backoff = time.Millisecond
 			sem <- struct{}{}
 			go func() {
 				defer func() { <-sem }()

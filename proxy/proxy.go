@@ -29,11 +29,13 @@ func New(target string) (*httputil.ReverseProxy, error) {
 	p := httputil.NewSingleHostReverseProxy(u)
 	director := p.Director
 	// Passes along the JA4 fingerprint captured for this connection,
-	// if there was one. A request with no fingerprint (plain HTTP, or
-	// TLS capture wasn't set up) is forwarded as normal — bot-shield
-	// never blocks traffic just because fingerprinting didn't run.
+	// if there was one. A visitor could otherwise set this header
+	// themselves to fake a fingerprint, so we always strip whatever
+	// they sent first and only set our own value when we really
+	// captured one.
 	p.Director = func(r *http.Request) {
 		director(r)
+		r.Header.Del(ja4Header)
 		if ja4 := JA4FromContext(r.Context()); ja4 != "" {
 			r.Header.Set(ja4Header, ja4)
 		}

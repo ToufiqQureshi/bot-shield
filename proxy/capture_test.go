@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"io"
 	"math/big"
 	"net"
@@ -127,6 +128,47 @@ func TestCaptureListenerTimesOutSlowHandshake(t *testing.T) {
 	if err == nil {
 		t.Error("expected connection to be closed after handshake timeout, got no error")
 	}
+}
+
+// fakeFlakyListener returns one fake error from Accept before behaving
+// normally, so tests can check the capture listener survives a
+// transient accept error instead of dying silently.
+type fakeFlakyListener struct {
+	net.Listener
+	failedOnce bool
+}
+
+func (l *fakeFlakyListener) Accept() (net.Conn, error) {
+	if !l.failedOnce {
+		l.failedOnce = true
+		return nil, errors.New("fake transient accept error")
+	}
+	return l.Listener.Accept()
+}
+
+// A one-off Accept error (e.g. the OS briefly hit a file-descriptor
+// limit) must not permanently kill the listener - real deployments
+// hit transient errors like this, and one hiccup silently taking down
+// every future visitor's connection would be worse than the error
+// itself.
+func TestCaptureListenerSurvivesTransientAcceptError(t *testing.T) {
+	rawLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := rawLn.Addr().String()
+	flaky := &fakeFlakyListener{Listener: rawLn}
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{selfSignedCert(t)}}
+	ln := NewCaptureListener(flaky, tlsConfig)
+	defer ln.Close()
+
+	// the listener must still accept a real connection after the
+	// fake transient error above
+	conn, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatalf("dial after transient accept error: %v", err)
+	}
+	conn.Close()
 }
 
 // A connection that never TLS-handshakes correctly (a port scanner, a

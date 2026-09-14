@@ -271,4 +271,50 @@ actual test (see above) — if a real crash from malformed input is ever
 observed in the wild, add a regression test using that exact input at
 that point, don't try to construct one speculatively now.
 
+---
+
+## 2026-09-14 — Re-audit found 2 more real bugs; added CLAUDE.md Section 22
+Changed:
+  - `proxy/proxy.go`: `New()`'s director now does `r.Header.Del(ja4Header)`
+    unconditionally before maybe setting it. Before this, a visitor
+    could set `X-BotShield-JA4` themselves and it would reach the
+    origin untouched whenever real capture didn't produce a value
+    (plain HTTP, or capture failing) — a spoofable "detection" signal.
+  - `proxy/capture.go`: the background accept loop in
+    `NewCaptureListener` now logs and retries (with backoff, capped at
+    1s) on an Accept error, and only stops for real on
+    `net.ErrClosed`. Before this, ANY Accept error (including a
+    transient one like a brief fd-limit hit) silently killed the
+    entire TLS accept loop forever — the process would look alive but
+    quietly stop taking new TLS connections, with nothing logged.
+  - `proxy/proxy_test.go`: added `TestNewStripsSpoofedJA4Header`.
+  - `proxy/capture_test.go`: added
+    `TestCaptureListenerSurvivesTransientAcceptError` (a fake listener
+    that fails once, then works — proves the retry, not just that the
+    code compiles).
+  - `CLAUDE.md`: added Section 22, a concrete pre-push checklist
+    (adversarial re-read, spoofable-input check, silent-failure check,
+    "what's not tested" check) — this is now how these 2 bugs were
+    actually found, made repeatable instead of one-off luck.
+Why: project owner asked directly whether the fingerprinting work was
+really production-grade, whether anything was skipped for speed, and
+to re-check test coverage before moving on — a fair challenge, and
+re-reading the diff adversarially (per the new Section 22, which this
+session wrote and then immediately used) surfaced both bugs. Neither
+was hypothetical: the header spoof directly undermines Section 6
+(detection signals must not be trivially fakeable) before scoring
+even exists to consume it, and the silent accept-loop death is exactly
+the "silent failure" `docs/AGENT.md` calls out by name.
+Tested how: `go build/vet/test ./... -race` clean. Both new tests
+fail against the old code (verified by re-reading the diff, not just
+trusting the fix) and pass against the fix. Re-ran the compiled
+binary by hand: sent a request with a forged `X-BotShield-JA4` header
+through a real TLS connection, confirmed the origin never saw it.
+Known gaps / follow-up: this was a re-audit of already-shipped code,
+not a new feature — a reminder that "tested and merged" isn't the
+same as "no more bugs in it." The same adversarial re-read should
+happen again before ROADMAP item 3 (UA consistency) is called done,
+not just for new code but for whatever it touches in `proxy/`.
+
+
 
