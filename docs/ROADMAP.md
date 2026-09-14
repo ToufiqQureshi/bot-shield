@@ -78,6 +78,15 @@ and fix), not as a reusable library for outside use.
       per connection, using `fingerproxy`-style approach. This alone
       catches most naive scripted clients (raw `requests`/`curl`,
       unconfigured HTTP libraries).
+      **In progress:** `proxy/fingerprint.go` computes the JA4 hash
+      from a raw ClientHello record (wraps `fingerproxy`'s `ja4`
+      package per `DECISIONS.md`), tested against known-good vectors
+      (real curl ClientHello → verified JA4). Not done yet: nothing
+      captures a *live* ClientHello — bot-shield doesn't terminate TLS
+      at all today (`cmd/botshield` proxies plain HTTP). Next step is
+      wiring a TLS-terminating listener (see `fingerproxy/pkg/hack`'s
+      `HijackClientHelloConn` pattern) so a real connection's
+      ClientHello reaches this function.
 - [ ] **3. Basic header/UA consistency check** — does the claimed
       User-Agent match the TLS/HTTP2 fingerprint's real client family?
       Mismatch = strong signal.

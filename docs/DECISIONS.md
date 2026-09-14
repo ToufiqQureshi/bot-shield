@@ -10,6 +10,29 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Import only fingerproxy's `ja4` package, not the whole library — 2026-09-14
+**Decision:** depend on `github.com/wi1dcard/fingerproxy`, but import
+only its `pkg/ja4` package (JA4 hash computation, stdlib + `utls`
+only) for now — not `pkg/fingerprint` (pulls in Prometheus metrics)
+or `pkg/proxyserver`/`pkg/ja3` (pull in `gopacket`/`dreadl0ck/tlsx`).
+**Why:** we don't need JA3, HTTP2-frame fingerprinting, or metrics yet
+— only JA4. Go compiles per-package, so importing the narrower
+package keeps Prometheus and gopacket out of the actual binary
+entirely (verified with `go list -deps`), matching `CLAUDE.md` Section
+3 (no unnecessary dependencies) and Section 14 (no code "in case it's
+needed later").
+**Alternatives considered:** importing `fingerproxy.Run()`'s full
+opinionated server (`pkg/proxyserver`) directly instead of writing our
+own capture wiring — rejected: it owns the entire accept loop and
+HTTP/1.1-vs-HTTP/2 branching, which would mean replacing our own
+`proxy.New` design instead of extending it. Revisit if TLS-capture
+wiring turns out to need functionality we'd otherwise reimplement.
+**Revisit when:** JA3 or HTTP/2 fingerprinting (also on `ROADMAP.md`)
+is actually built — re-check whether pulling in `pkg/fingerprint` at
+that point is cheaper than keeping our own thin wrapper.
+
+---
+
 ## Format for new entries
 
 ```text

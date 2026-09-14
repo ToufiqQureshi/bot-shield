@@ -90,3 +90,67 @@ this session's GitHub access was scoped to a different repo
 project owner pushes it manually. Whoever picks this up next should
 verify the zip's contents actually landed in the real repo before
 building on top of it.
+
+---
+
+## 2026-09-14 — Zip landed in real repo; PR merged
+Changed:
+  - Extracted the handed-off zip (see previous entry) into the actual
+    `bot-shield` repo on branch `claude/code-review-feedback-k1zukr`,
+    replacing the stray `bot-shield.zip` blob that had been committed
+    to `main` directly instead of the real files. Opened as a PR,
+    reviewed, merged into `main`.
+  - `CLAUDE.md`: added Section 3a — every non-trivial function needs a
+    2-3 line comment covering what it does, why it exists, and what
+    need made it necessary. This file didn't have that rule explicit
+    yet even though `docs/AGENT.md` already expects beginner-readable
+    code; added on request, PR merged separately.
+Why: this session had correct `bot-shield` GitHub access (previous
+session did not — see prior entry), so it could close that handoff
+gap instead of leaving it to the project owner.
+Tested how: `go build/vet/test ./...` clean before and after; no
+detection logic touched, pure delivery + docs.
+Known gaps / follow-up: none — this was a delivery/recovery task, not
+a feature. ROADMAP item 2 (fingerprinting) is next.
+
+---
+
+## 2026-09-14 — JA4 fingerprint computation (ROADMAP P0 item 2, partial)
+Changed:
+  - `go.mod`: added `github.com/wi1dcard/fingerproxy` as a dependency.
+    Only its `pkg/ja4` package is imported (self-contained, stdlib +
+    `utls` only) — deliberately did not import `pkg/fingerprint` or
+    `pkg/proxyserver`, which would have pulled in Prometheus metrics
+    and gopacket-based JA3 parsing we don't need yet (see
+    `docs/DECISIONS.md` "minimal fingerproxy surface" entry).
+  - `proxy/fingerprint.go`: added `ja4Fingerprint(clientHello []byte)
+    (string, error)` — turns a raw TLS ClientHello record into its
+    JA4 hash.
+  - `proxy/fingerprint_test.go`: added `TestJA4Fingerprint` using two
+    real, known-good ClientHello-to-JA4 vectors taken from
+    fingerproxy's own test suite (curl 8.6.0, and a PSK-extension
+    handshake) — not invented test data. Added
+    `TestJA4FingerprintRejectsGarbage` for malformed input (this runs
+    against adversarial traffic; garbage input is the normal case,
+    not an edge case, per `CLAUDE.md` Section 9).
+Why: ROADMAP item 2's first slice. TLS/JA4 fingerprinting needs a
+correct hash function before it needs live-capture wiring — built and
+tested that piece first rather than guessing at both at once.
+Tested how: `go build ./...`, `go vet ./...`, `gofmt -l .` all clean.
+`go test ./... -v` — both known-vector cases pass, garbage-input case
+returns an error instead of a wrong/blank fingerprint. Confirmed via
+`go list -deps` that Prometheus and gopacket are NOT compiled into the
+binary (only `utls` and two small `quic-go` internal subpackages
+`utls` itself needs).
+Known gaps / follow-up (real, not deferred without reason — see
+`CLAUDE.md` Section 17): **bot-shield does not terminate TLS at all
+today** — `cmd/botshield` proxies plain HTTP, so nothing currently
+captures a live ClientHello to feed this function. This is deliberately
+not built in this same pass: it means rewriting the accept loop
+(TLS-terminating listener + HTTP/1.1 vs HTTP/2 branching, following
+fingerproxy's own `pkg/hack.HijackClientHelloConn` + `pkg/proxyserver`
+pattern), deciding fail-open behavior for a failed/timed-out capture
+(`CLAUDE.md` Section 9), and end-to-end testing against a real browser
+and a real scripted client — a large piece of its own that would ship
+half-done if rushed into this same commit. This is the next work item,
+not "done."
