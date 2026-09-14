@@ -503,3 +503,60 @@ Known gaps / follow-up:
   - Process lesson, not a code gap: `/security-review` is now required
     before calling security-relevant work done (`CLAUDE.md` 24b), on
     the evidence of this session.
+
+---
+
+## 2026-09-14 — Docs audit: fixed 5 defects, brought every file back in sync
+Changed:
+  - `CLAUDE.md`: added a "four rules that matter most" opener and a
+    "where to find things" index — the file had grown to 24 sections
+    and was no longer navigable.
+  - `CLAUDE.md` Section 4: the "Better:" examples were `score_request()`,
+    `check_fingerprint()`, `run_challenge()` — **snake_case**, which is
+    wrong for Go and contradicted this repo's own code
+    (`ja4Fingerprint`, `JA4FromContext`). A future session following
+    the rule literally would have written non-idiomatic Go. Replaced
+    with real camelCase examples from this codebase.
+  - `CLAUDE.md` Section 9: "never create unlimited goroutines" now
+    says *of your own making*, and points at Section 24 — otherwise it
+    read as contradicting the decision to delete our semaphore and let
+    net/http manage connections.
+  - `CLAUDE.md` Section 23: numbering ran 23d → 23f with no 23e. My
+    own error from an earlier edit. Fixed.
+  - `CLAUDE.md` Section 0: the pre-stop checklist didn't mention
+    mutation-checking, `/security-review`, or checking that docs
+    don't contradict each other. Added.
+  - `docs/ARCHITECTURE.md`: rewritten. It was the most misleading file
+    in the repo — the diagram showed scoring, challenges, rate
+    limiting, Redis and Postgres with no indication that none of them
+    exist, and TLS termination (the defining fact of the current
+    design) wasn't shown at all. Every component is now marked BUILT
+    or planned, the header contract with the origin is documented, the
+    request flow matches the code, and the known limits are listed.
+  - `docs/ARCHITECTURE.md` request budget: the JA4 row said "~2ms"
+    (a guess). It now carries the measured **14.3µs** next to the
+    budget, and explains why there's no cache.
+  - `README.md`: had no usage instructions at all — you couldn't run
+    the product from it. Added flags, a runnable example, the headers
+    the origin receives, the HTTP/1.1-only note, and an honest status
+    line saying bot-shield labels traffic but does not block yet.
+  - `docs/AGENT.md`: doc map now covers `RESEARCH.md` and
+    `PROGRESS.md`, and names the four highest-weight CLAUDE.md rules.
+Why: owner asked for every doc to be brought up to date and properly
+ordered. Auditing rather than assuming found five real defects,
+including two I had introduced myself and one (snake_case) that
+predated this session and would have actively misled a future agent.
+Tested how: not a code change — `go build/vet/test ./... -race` and
+`gofmt -l .` confirm nothing moved. Docs verified mechanically
+against the code rather than by eye: every flag, header name,
+`JA4Unreadable` value and the `NextProtos` setting named in the docs
+was grepped out of the source and matched; every `path/file.go`
+referenced in any doc was checked to exist; every "Section N"
+cross-reference was checked to resolve to a real heading. All clean.
+Known gaps / follow-up:
+  - `docs/ARCHITECTURE.md`'s "proxy overhead" row is still unmeasured.
+    Worth filling in with a real number before item 5 (scoring) adds
+    to the request path — the budget is only useful if it's measured.
+  - The BUILT/planned markers need maintaining. If a future session
+    builds scoring and doesn't flip its marker, this file goes back to
+    lying, which is the exact failure just fixed.

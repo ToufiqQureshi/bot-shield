@@ -3,6 +3,40 @@
 This file is engineering rules only: coding standards, workflow, and
 production-safety rules — **how** we work.
 
+## The four rules that matter most
+
+If you read nothing else in this file, read these. Each one exists
+because breaking it already cost this project something real.
+
+1. **Section 24 — check the standard library first.** Four things
+   here were hand-written that net/http already did better. Reading
+   `$GOROOT/src` deleted ~60 lines and closed a security hole.
+2. **Section 23a — mutation-check every test.** Break the code, watch
+   the test go red. Two tests here passed while the feature they
+   "tested" was deleted.
+3. **Section 22 — run the pre-push checklist.** It has found a
+   spoofable header, a silently dying listener, and a fingerprint
+   bypass, all in code already called done.
+4. **Section 17 — fix it, don't just report it.** A known bug that
+   isn't fixed in the same pass is a bug shipped.
+
+## Where to find things
+
+| Need | Section |
+|---|---|
+| Which doc to read, and updating docs before you stop | 0 |
+| What this project is for, what not to build | 1, 14 |
+| Short code, comments, naming, file names | 3, 3a, 4, 5 |
+| How detection signals must combine | 6 |
+| Testing: order, real tests, mutation checks | 7, 15a, 23 |
+| False positives, production safety, latency | 8, 9 |
+| Respecting and deleting existing code | 12, 13, 24a |
+| Standards for shipped work; reporting gaps honestly | 15, 15a, 16, 17 |
+| Legal and ethical limits | 18 |
+| Checklists: before coding / before pushing | 19, 22 |
+| Threat-driven design | 20 |
+| Standard library first; using the review tools | 24, 24b |
+
 ## 0. Documentation Map — Read In This Order
 
 Before writing any code, read these files in order. Each answers a
@@ -53,9 +87,14 @@ session (not just when a feature is "done"):
       `docs/ARCHITECTURE.md` or `README.md` to match.
 - [ ] Append an entry to `docs/PROGRESS.md` — every change, even a
       single function or a small fix, with what changed, why, and how
-      it was tested. This is mandatory for every session, not just
-      "big" ones — see that file's format and why it matters more than
-      usual for this project.
+      it was tested. "Tested how" means naming what you broke and
+      which test caught it (Section 23a), not "tests pass".
+- [ ] Run the Section 22 pre-push checklist, and `/security-review`
+      if the change touches anything a visitor controls (Section 24b).
+- [ ] Check no doc now contradicts another. If you changed behaviour,
+      `README.md` and `docs/ARCHITECTURE.md` describe the *current*
+      product, not the one you started the session with — a stale doc
+      misleads exactly the person who trusted it.
 
 Skipping this is the same failure mode as Section 16 (Self-Report
 Gaps): work that isn't written down doesn't exist for whoever picks
@@ -172,12 +211,14 @@ initializeAdaptiveRiskAssessmentOrchestrator()
 processInboundTrafficFingerprintCorrelationEngine()
 ```
 
-Better:
+When a name needs more than one word, use Go's camelCase — never
+snake_case, which `gofmt` culture and every Go reviewer will read as
+foreign. Real examples from this repo:
 
 ```go
-score_request()
-check_fingerprint()
-run_challenge()
+ja4Fingerprint()   // unexported: lowercase first letter
+JA4FromContext()   // exported: uppercase first letter
+NewCaptureListener()
 ```
 
 ---
@@ -279,7 +320,11 @@ proxies/VPNs, accessibility tools, privacy-focused browsers).
   (fail open — protects uptime) or blocks it (fail closed — protects
   security). Never let this default silently; make the client choose.
 - **Concurrency**: never create unlimited goroutines or connections.
-  Every worker pool, queue, and cache needs a bounded size.
+  Every worker pool, queue, and cache **you write** needs a bounded
+  size. Handing the work to a battle-tested runtime instead — as the
+  capture listener does by letting net/http manage connections — is
+  the better answer where it exists, and satisfies this rule (see
+  Section 24). What is banned is an unbounded pool of our own making.
 - **Cancellation**: every blocking call takes a `context.Context`.
 - **No unbounded storage**: fingerprint/session stores need eviction
   and size limits — this runs against live, adversarial traffic.
@@ -586,7 +631,7 @@ you're shaping an assertion so it passes, stop — you're building the
 exact trap described at the top of this section. Write the assertion
 the product owner would want, then make the *code* satisfy it.
 
-### 23f. Do this without being asked
+### 23e. Do this without being asked
 
 The project owner is solo. There is no QA, no second reviewer, and no
 one else who will catch a fake test. If this audit only happens when

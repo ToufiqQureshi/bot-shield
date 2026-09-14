@@ -1,80 +1,154 @@
 # bot-shield Architecture
 
-Production-grade tech choices for the MVP. See `docs/ROADMAP.md` for
-build order, `CLAUDE.md` for coding rules.
+What the product is made of and why. See `docs/ROADMAP.md` for build
+order, `docs/DECISIONS.md` for the reasoning behind each choice, and
+`CLAUDE.md` for the rules code must follow.
+
+**Read the status markers.** Most of this document describes the
+target design. Only the parts marked **BUILT** exist today — don't
+assume a box on a diagram is running code.
 
 ---
 
 ## System overview
 
 ```text
-Internet
+Internet (every visitor, hostile until scored)
    │
    ▼
-[bot-shield proxy]  ← sits in front of client's origin server
+[bot-shield]  ← terminates TLS, sits in front of the client's origin
    │
-   ├── fingerprint (TLS/JA4, HTTP/2, headers)
-   ├── score        (combine signals → risk score)
-   ├── challenge    (JS challenge for ambiguous traffic)
-   ├── ratelimit    (per-IP/fingerprint request caps)
+   ├── capture      BUILT   keep the raw TLS handshake  (proxy/capture.go)
+   ├── fingerprint  BUILT   handshake → JA4 hash        (proxy/fingerprint.go)
+   ├── proxy        BUILT   forward, strip spoofable headers (proxy/proxy.go)
    │
-   ├──► Redis        (fast: session/fingerprint cache, rate counters)
-   ├──► Postgres      (durable: client configs, block logs, analytics)
+   ├── score        planned  combine signals → risk score
+   ├── challenge    planned  JS challenge for ambiguous traffic
+   ├── ratelimit    planned  per-IP / per-fingerprint caps
+   │
+   ├──► Redis       planned  session/fingerprint cache, rate counters
+   ├──► Postgres    planned  client configs, block logs, analytics
    │
    ▼
-[Client's origin server]  (only sees traffic bot-shield let through)
+[Client's origin server]
+   receives the request plus the headers in the contract below
 
-[Dashboard] ← reads from Postgres, shown to the client
+[Dashboard]  planned  reads Postgres, shown to the client
 ```
+
+Today bot-shield **observes and labels**; it does not yet block
+anything. Scoring (`ROADMAP.md` item 5) is what turns labels into
+decisions.
+
+---
+
+## What the origin receives — BUILT
+
+This is the product's contract with the client's server, and with our
+own future scoring code. Treat it as an API: changing it breaks both.
+
+| Header | Meaning |
+|---|---|
+| `X-BotShield-JA4` | The connection's JA4 fingerprint, e.g. `t13d1516h2_8daaf6152771_e5627efa2ab1`. |
+| `X-BotShield-JA4: unreadable` | The connection was TLS, but the handshake couldn't be read — see the fragmentation note in `docs/RESEARCH.md`. A normal client never causes this, so it is itself a signal. |
+| *(header absent)* | Not a TLS connection at all — bot-shield is running without `-tls-cert`, so there is nothing to fingerprint. |
+| `X-Real-IP` | The real client address, set by us. |
+| `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto` | Set by us from the real connection. |
+
+**Every one of these is stripped from the inbound request before we
+set our own value.** A visitor cannot forge any of them. That is not
+a detail — a spoofable signal is worse than no signal, because the
+scoring layer would trust it (`CLAUDE.md` Section 6).
 
 ---
 
 ## Tech stack
 
-| Layer | Choice | Why | How it helps |
+| Layer | Choice | Status | Why |
 |---|---|---|---|
-| **Core service** | Go | Same stack as goScraper, team already knows it | Single static binary, low memory, high concurrency — needed since this sits in every request's path |
-| **Reverse proxy** | Go `net/http/httputil.ReverseProxy` (stdlib) | No heavy framework needed for v1 | Fewer dependencies, full control over request/response, easy to instrument |
-| **TLS/JA4 fingerprint** | `fingerproxy` (open-source, Go) | Already solves JA3/JA4/HTTP2 fingerprint extraction correctly | Don't reinvent TLS parsing — biggest single detection signal, for free |
-| **Client-side automation probe** | Small custom JS snippet (BotD-inspired) | Needed in-browser, can't be done server-side alone | Catches automation frameworks that pass TLS checks (real browser, scripted) |
-| **Fast state (rate limits, session cache)** | Redis | Sub-millisecond reads, built-in TTL/eviction | Rate-limiting and fingerprint lookups must not add latency to every request |
-| **Durable state (configs, logs, analytics)** | PostgreSQL | Battle-tested, relational fits client/config/analytics data well | Dashboard queries, historical trends, per-client settings survive restarts |
-| **Dashboard** | Next.js (separate small app, own repo/folder) | Client-facing UI; no reason to couple it to the Go proxy's release cycle | Client sees blocked-bot counts/trends without touching the proxy |
-| **Deployment** | Single Docker image + docker-compose (proxy + Redis + Postgres) | Client should be running in under an hour | This is the actual competitive edge vs. Akamai/DataDome's weeks-long onboarding |
-| **Metrics** | Prometheus client lib (optional, off by default) | Standard, lightweight, no forced dependency | Client can plug into their own monitoring if they want; zero cost if they don't |
+| **Core service** | Go | BUILT | Single static binary, low memory, high concurrency — it sits in every request's path |
+| **Reverse proxy** | stdlib `httputil.ReverseProxy`, using `Rewrite` (not `Director`) | BUILT | `Rewrite` makes net/http strip the visitor's `X-Forwarded-*` headers; `Director` does not (`DECISIONS.md`) |
+| **TLS termination + handshake capture** | stdlib `crypto/tls` + `fingerproxy`'s `pkg/hack` conn wrapper | BUILT | Go discards the raw handshake bytes after the handshake; JA4 needs them. `Accept` returns a real `*tls.Conn`, so net/http owns the handshake, its timeout, its error handling and its connection management |
+| **JA4 computation** | `fingerproxy`'s `pkg/ja4` only | BUILT | Don't reinvent TLS parsing. Importing only this package keeps Prometheus and gopacket out of the binary (`DECISIONS.md`) |
+| **Client-side automation probe** | small custom JS snippet (BotD-inspired) | planned | Catches automation in a real browser, which server-side signals can't see |
+| **Fast state** (rate limits, session cache) | Redis | planned | Sub-millisecond reads with TTL; must not add latency per request |
+| **Durable state** (configs, logs, analytics) | PostgreSQL | planned | Dashboard queries and per-client settings must survive restarts |
+| **Dashboard** | Next.js, separate app | planned | Client-facing UI, no reason to share the proxy's release cycle |
+| **Deployment** | Docker image + compose (proxy + Redis + Postgres) | planned | Running in under an hour is the actual edge over enterprise onboarding |
+| **Metrics** | Prometheus client lib, off by default | planned | Optional; zero cost for clients who don't want it |
+
+---
+
+## How a request flows today — BUILT
+
+1. `cmd/botshield` listens on `-addr`. With `-tls-cert`/`-tls-key` it
+   wraps the listener in `proxy.NewCaptureListener`; without them it
+   serves plain HTTP and no fingerprinting happens.
+2. `Accept` wraps the raw connection so the handshake bytes are kept,
+   then hands net/http a real `*tls.Conn` — **unhandshaked on
+   purpose**, so the standard library performs the handshake with its
+   own timeout (derived from `ReadHeaderTimeout`), its own error
+   handling, and its own panic recovery.
+3. `http.Server.ConnContext` puts the connection in the request
+   context.
+4. Per request, `JA4FromContext` reads the saved handshake off the
+   connection and derives the fingerprint.
+5. The proxy's `Rewrite` strips every spoofable identity header, sets
+   the real ones, and forwards to the origin.
 
 ---
 
 ## Why this shape (not something fancier)
 
-- **No Kubernetes, no microservices for v1.** One binary + two datastores is
-  enough traffic for a single-client or few-client deployment. Split
-  services only when a real bottleneck proves it's needed (`CLAUDE.md`
-  Section 3 — no premature abstraction).
-- **No ML model in v1.** Rule/threshold-based scoring (Section 6/20 in
-  `CLAUDE.md`) is explainable, fast, and good enough to catch naive-to-
-  intermediate bots. ML scoring is a P1+ item once we have real traffic
-  data to train on — training on nothing produces a worse model than
-  simple thresholds.
-- **Fail-open by default.** If bot-shield itself errors or times out,
-  traffic passes through untouched. A broken bot-detector must never
-  take down the client's actual site (see `CLAUDE.md` Section 9).
+- **Let the standard library do the work.** The capture listener
+  deliberately owns as little as possible. Everything net/http
+  already does — handshake timeouts, accept retries, panic recovery,
+  connection handling — is its job, not ours (`CLAUDE.md` Section 24).
+- **No Kubernetes, no microservices for v1.** One binary and two
+  datastores covers a single-client or few-client deployment. Split
+  only when a measured bottleneck proves it's needed.
+- **No ML model in v1.** Rule/threshold scoring is explainable, fast,
+  and good enough for naive-to-intermediate bots. Training a model on
+  no data produces something worse than simple thresholds.
+- **Fail open by default.** If fingerprinting fails, the request is
+  still forwarded — labelled, never blocked. A broken bot-detector
+  must never take down the client's actual site.
 
 ---
 
 ## Request path budget
 
-Every layer adds latency. Target: **under 15ms added to a passthrough
-request** (excludes the JS-challenge path, which is only shown to
-already-suspicious traffic).
+Target: **under 15ms added to a passthrough request** (excluding the
+JS-challenge path, which only suspicious traffic sees).
 
-| Step | Budget |
-|---|---|
-| TLS/JA4 fingerprint lookup | ~2ms |
-| Redis rate-limit check | ~2ms |
-| Scoring (rule-based) | ~1ms |
-| Proxy overhead | ~5ms |
-| Headroom | ~5ms |
+| Step | Budget | Measured |
+|---|---|---|
+| JA4 fingerprint | ~2ms | **14.3µs** — 0.7% of budget |
+| Redis rate-limit check | ~2ms | not built |
+| Scoring (rule-based) | ~1ms | not built |
+| Proxy overhead | ~5ms | not measured |
+| Headroom | ~5ms | — |
 
-If a layer can't hit its budget, it needs a timeout + fail-open
+The fingerprint is derived per request rather than cached per
+connection. At 14.3µs that is deliberate: caching it would be
+optimising 0.7% of a budget (`CLAUDE.md` Section 3 — measure first).
+Re-measure before assuming this still holds.
+
+If a layer can't hit its budget, it needs a timeout and a fail-open
 fallback, not a slower default.
+
+---
+
+## Known architectural limits — BUILT code only
+
+- **HTTP/1.1 only.** The capture listener does not offer h2, because
+  HTTP/2 fingerprinting isn't built. Browsers fall back to HTTP/1.1.
+  Adding h2 is now cheap — stdlib negotiation works precisely because
+  `Accept` returns a real `*tls.Conn`.
+- **A fragmented ClientHello can't be fingerprinted.** A handshake
+  message split across TLS records defeats the capture (it reads one
+  record). Reported as `unreadable` so it is visible, but it is not
+  prevented. See `docs/RESEARCH.md`.
+- **bot-shield must terminate TLS to see anything.** Behind a CDN or
+  load balancer that terminates TLS first, there is no handshake to
+  capture and no fingerprint — a deployment constraint, not a bug.
