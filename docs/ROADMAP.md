@@ -147,11 +147,43 @@ and fix), not as a reusable library for outside use.
 - [ ] **9. Rate & pattern anomaly detection** — per-fingerprint and
       per-IP request velocity, sequential/enumerated URL access,
       missing normal referrer chains.
+- [ ] **9a. API-aware endpoint rules** — tag endpoints by category
+      (login, checkout, listing, generic) in config so item 9's rate
+      thresholds differ per category, instead of one global rate limit
+      for the whole site. Reuses items 9 + 11's machinery — a config
+      field, not a new signal or new package. Competitor gap: see
+      `docs/RESEARCH.md`'s 2026-09-15 competitor scan (DataDome's
+      stated differentiator).
+      **Risk:** wrong category tagging is worse than no tagging — a
+      client mislabeling their login endpoint as "generic" gets the
+      loose threshold on their most sensitive route, silently, with no
+      warning. Needs a sane default (unlabeled endpoint = strictest
+      category, not loosest) and validation that catches an empty/
+      missing category rather than defaulting quietly.
 - [ ] **10. Honeypot fields** — invisible form fields/links only a
       blind selector-based script would interact with.
 - [ ] **11. Per-client rules** — each client (site) can tune thresholds,
       allowlist known-good bots (search engine crawlers, uptime
       monitors), and set custom block pages.
+- [ ] **11a. Deception mode (decoy response)** — a fifth decision
+      outcome alongside allow/challenge/block: for high-confidence-bot
+      traffic, forward the request with `X-BotShield-Decision: deceive`
+      instead of blocking, and let the origin app decide what fake data
+      to return (stale price, dummy inventory). bot-shield only signals
+      the decision — it never generates or owns the fake data itself,
+      keeping this a proxy-layer change, not new business logic.
+      Competitor gap: see `docs/RESEARCH.md`'s 2026-09-15 scan — an
+      under-offered mitigation even among big vendors.
+      **Risk:** this is worse than a false-positive block, not the same
+      severity — a wrongly-deceived real customer doesn't just get an
+      error, they see *wrong data as if it were real* (a fake price,
+      fake stock) and may act on it (place an order, make a decision)
+      before finding out. Only wire this to the highest-confidence
+      band of the scoring engine (item 5), strictly above the block
+      threshold, never as a default action for ambiguous scores. Needs
+      its own false-positive tracking in the dashboard (item 12),
+      separate from block/challenge counts, before any client turns it
+      on for real traffic.
 
 ## P2 — product-grade
 
