@@ -674,3 +674,53 @@ Section 17):
     real browser could trigger a false positive on the TLS-version
     check. Accepted and documented in `DECISIONS.md` — this is exactly
     why the result is a signal, never a block, on its own.
+
+---
+
+## 2026-09-15 — Session handoff: item 3 done, item 4 next, PR #2 about to be merged
+Changed: nothing new this entry — this is a handoff note because the
+previous session hit its context limit mid-way and a new session is
+picking up from here.
+Current state, verified before writing this:
+  - `git status` clean, everything committed and pushed to
+    `claude/code-review-feedback-k1zukr`. Latest commit: `9c230a1`
+    ("Add UA/header consistency check (ROADMAP item 3, done)").
+  - PR #2 (https://github.com/ToufiqQureshi/bot-shield/pull/2) held
+    everything from item 2 (TLS/JA4) and item 3 (UA consistency),
+    clean and CI green as of the last check. **The project owner is
+    merging PR #2 into `main` right now**, outside this session.
+  - `docs/ROADMAP.md` Done section already lists items 1, 2, and 3 as
+    complete — no ROADMAP edit needed for the merge itself.
+What the next session must do first (per `CLAUDE.md` Section 0/2):
+  1. `git fetch origin main && git log origin/main -3` — confirm PR #2
+     actually landed on `main` before doing anything else. Do not
+     assume the merge happened just because this note says it was
+     about to.
+  2. Start item 4 (JS challenge) from a fresh branch off the merged
+     `main`, not by continuing on `claude/code-review-feedback-k1zukr`
+     — that branch's PR is closed once merged; a new branch/PR is the
+     correct next step, same pattern as `CLAUDE.md`'s repo-workflow
+     instructions for a merged PR.
+  3. Re-read `docs/ROADMAP.md` item 4 ("JS challenge — a lightweight
+     challenge page (math + timing + basic canvas check) served to
+     unscored/ambiguous traffic. A plain HTTP client without a JS
+     engine fails immediately.") and `docs/ARCHITECTURE.md`'s current
+     BUILT/planned markers before writing code — this session did not
+     start item 4, so there is no partial implementation to check for
+     duplication, but there may be new commits on `main` from the
+     merge worth reading first.
+  4. Follow the same process items 2 and 3 used: threat-driven design
+     doc (`CLAUDE.md` Section 20) before code, test-first (Section 7),
+     mutation-check every test (Section 23a), check the standard
+     library first (Section 24 — note there is no stdlib equivalent
+     for a JS challenge page itself, but the HTTP serving/timeout
+     parts of it should still be checked), independent
+     `/security-review` before calling it done (Section 24b, and
+     especially relevant here since a challenge page is new
+     visitor-facing surface), and the Section 22 pre-push checklist.
+Known gaps / follow-up: none new. The gaps already on record (HTTP/2
+fingerprinting not built, ClientHello fragmentation detected but not
+prevented, UA-mismatch bypassable by a bot naming itself, no scoring
+engine yet so nothing blocks traffic, no real LICENSE file) are
+unchanged and still listed in `docs/ROADMAP.md`'s Done section and
+`docs/DECISIONS.md`.
