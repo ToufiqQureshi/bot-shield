@@ -3,6 +3,40 @@
 This file is engineering rules only: coding standards, workflow, and
 production-safety rules — **how** we work.
 
+## The four rules that matter most
+
+If you read nothing else in this file, read these. Each one exists
+because breaking it already cost this project something real.
+
+1. **Section 24 — check the standard library first.** Four things
+   here were hand-written that net/http already did better. Reading
+   `$GOROOT/src` deleted ~60 lines and closed a security hole.
+2. **Section 23a — mutation-check every test.** Break the code, watch
+   the test go red. Two tests here passed while the feature they
+   "tested" was deleted.
+3. **Section 22 — run the pre-push checklist.** It has found a
+   spoofable header, a silently dying listener, and a fingerprint
+   bypass, all in code already called done.
+4. **Section 17 — fix it, don't just report it.** A known bug that
+   isn't fixed in the same pass is a bug shipped.
+
+## Where to find things
+
+| Need | Section |
+|---|---|
+| Which doc to read, and updating docs before you stop | 0 |
+| What this project is for, what not to build | 1, 14 |
+| Short code, comments, naming, file names | 3, 3a, 4, 5 |
+| How detection signals must combine | 6 |
+| Testing: order, real tests, mutation checks | 7, 15a, 23 |
+| False positives, production safety, latency | 8, 9 |
+| Respecting and deleting existing code | 12, 13, 24a |
+| Standards for shipped work; reporting gaps honestly | 15, 15a, 16, 17 |
+| Legal and ethical limits | 18 |
+| Checklists: before coding / before pushing | 19, 22 |
+| Threat-driven design | 20 |
+| Standard library first; using the review tools | 24, 24b |
+
 ## 0. Documentation Map — Read In This Order
 
 Before writing any code, read these files in order. Each answers a
@@ -53,9 +87,14 @@ session (not just when a feature is "done"):
       `docs/ARCHITECTURE.md` or `README.md` to match.
 - [ ] Append an entry to `docs/PROGRESS.md` — every change, even a
       single function or a small fix, with what changed, why, and how
-      it was tested. This is mandatory for every session, not just
-      "big" ones — see that file's format and why it matters more than
-      usual for this project.
+      it was tested. "Tested how" means naming what you broke and
+      which test caught it (Section 23a), not "tests pass".
+- [ ] Run the Section 22 pre-push checklist, and `/security-review`
+      if the change touches anything a visitor controls (Section 24b).
+- [ ] Check no doc now contradicts another. If you changed behaviour,
+      `README.md` and `docs/ARCHITECTURE.md` describe the *current*
+      product, not the one you started the session with — a stale doc
+      misleads exactly the person who trusted it.
 
 Skipping this is the same failure mode as Section 16 (Self-Report
 Gaps): work that isn't written down doesn't exist for whoever picks
@@ -70,6 +109,15 @@ and mitigation service** in Go. The goal is NOT to out-feature
 Akamai/DataDome — it's to give small/mid-size companies a "good
 enough" defense they can actually afford and self-host. See
 `docs/ROADMAP.md` for product direction and priorities.
+
+**This is closed-source, commercial software — a paid product the
+owner sells, not an open-source project.** It uses open-source
+*libraries* internally where that's the sound engineering choice
+(`fingerproxy`, `BotD`, see Section 24 and `docs/DECISIONS.md`), the
+same way any commercial product depends on open-source components
+without itself being open source. Never suggest an MIT/Apache/GPL
+license, a public GitHub release, or "let's open-source this part" —
+that is the opposite of the business this code exists to run.
 
 Do not add a feature just because a big vendor has it. Every feature
 must earn its place against real bot traffic patterns (see Section
@@ -101,6 +149,49 @@ wrappers, error layers, comments, or configuration. Every line must
 have a reason to exist. Do not build a scoring engine, cache, or queue
 more complex than the current, real need — measure before optimizing.
 
+### 3a. Comments: Beginner-Friendly, What/Why/Need — Not How
+
+This is a solo-dev project — the code has to explain itself to
+whoever (or whichever future agent) opens the file next, with zero
+memory of this conversation. Every non-trivial function (detection
+logic, fingerprint/TLS parsing, scoring, anything not a one-line
+getter) gets **one short comment**, max 2-3 lines, right above it.
+
+**How to write it:**
+
+- Plain, everyday words. Write it like you're explaining it to a
+  junior dev or the client's ops engineer, not another engineer who
+  already knows TLS/JA4/scoring internals.
+- One line for **what** it does, one line for **why** (what it
+  catches / what problem it solves), if a "why" isn't obvious skip
+  it rather than stretch for one.
+- No jargon dump, no citing three doc files in one comment, no
+  restating the code line by line. If you can't say it in 2-3 short
+  lines, the explanation is too long — cut it, don't wrap it.
+- One comment per function, not one comment per test case / per
+  struct field / per line inside the function.
+
+Example — good:
+```go
+// checkUserAgent flags a request when its claimed browser doesn't
+// match how it actually behaves. Bots often lie about this.
+```
+Example — bad (too long, too technical, restates the code):
+```go
+// checkUserAgent implements a User-Agent consistency check by
+// parsing the UA string, comparing it against the TLS/HTTP2
+// fingerprint's inferred client family per RFC..., iterating over
+// known browser signatures, and returning a mismatch score based on
+// docs/RESEARCH.md section 3 combined with docs/DECISIONS.md's
+// scoring-weight rationale from 2026-09-14...
+```
+
+This does not contradict Section 3's "no unnecessary comments" rule:
+a comment that just restates the code ("// loop over items") is
+still banned. A short, plain comment that explains why the code
+exists is not decoration — it earns its place the same way a line of
+code does.
+
 ---
 
 ## 4. Function Names Must Be Simple
@@ -129,12 +220,14 @@ initializeAdaptiveRiskAssessmentOrchestrator()
 processInboundTrafficFingerprintCorrelationEngine()
 ```
 
-Better:
+When a name needs more than one word, use Go's camelCase — never
+snake_case, which `gofmt` culture and every Go reviewer will read as
+foreign. Real examples from this repo:
 
 ```go
-score_request()
-check_fingerprint()
-run_challenge()
+ja4Fingerprint()   // unexported: lowercase first letter
+JA4FromContext()   // exported: uppercase first letter
+NewCaptureListener()
 ```
 
 ---
@@ -236,7 +329,11 @@ proxies/VPNs, accessibility tools, privacy-focused browsers).
   (fail open — protects uptime) or blocks it (fail closed — protects
   security). Never let this default silently; make the client choose.
 - **Concurrency**: never create unlimited goroutines or connections.
-  Every worker pool, queue, and cache needs a bounded size.
+  Every worker pool, queue, and cache **you write** needs a bounded
+  size. Handing the work to a battle-tested runtime instead — as the
+  capture listener does by letting net/http manage connections — is
+  the better answer where it exists, and satisfies this rule (see
+  Section 24). What is banned is an unbounded pool of our own making.
 - **Cancellation**: every blocking call takes a `context.Context`.
 - **No unbounded storage**: fingerprint/session stores need eviction
   and size limits — this runs against live, adversarial traffic.
@@ -296,6 +393,38 @@ Research before implementing anything nontrivial (TLS fingerprinting
 internals, HTTP/2 frame parsing, scoring/ML approaches): check how
 mature open-source projects (fingerproxy, BotD, open-appsec) solved
 the same problem before writing a naive version.
+
+### 15a. Write Every Line Like a Real Company Will Run It Tomorrow
+
+This is not a demo, a portfolio piece, or a "make it work once"
+script. bot-shield is going to sit directly in front of a paying
+client's live website. Before writing or merging anything, hold it to
+this bar:
+
+- **Every file, every function, every feature needs a real test** —
+  not "it compiled" or "it looked right when I ran it once." Test the
+  normal case, the bad/attacker-controlled input case, and the
+  timeout/failure case. If a function has no test, it is not done.
+- **Fix bugs the moment you find them, in the same pass** — don't
+  write "known issue, fix later" for something you already know how
+  to fix. "Later" doesn't exist for a solo-dev project (see Section
+  17); a bug found and not fixed is a bug shipped.
+- **Neither over-engineered nor under-engineered:**
+  - Under-engineered = missing something a real attacker or real
+    production load would hit on day one: no timeout on a blocking
+    call, no panic recovery on code that parses untrusted input, no
+    cap on a resource a flood of connections could exhaust. This is
+    not "polish for later" — it's the difference between "bot-shield
+    protects the site" and "bot-shield *is* the outage."
+  - Over-engineered = configuration, abstraction layers, or signals
+    for a threat that isn't real yet (this duplicates Section 14 —
+    the same discipline applies in both directions).
+  - When in doubt, ask: "if this exact code ran in front of a real
+    client's checkout page right now, what's the first way a bored
+    attacker or a bad network breaks it?" If you can answer that and
+    haven't handled it, it's not done yet.
+- Before calling any feature finished, re-read this bar and the
+  Section 19 checklist against it — not just "does it pass go test."
 
 ---
 
@@ -367,6 +496,9 @@ stop and ask the project owner before building it.
 [ ] Implement the smallest solution
 [ ] Run tests, check false-positive impact
 [ ] Add production/failure tests
+[ ] Mutation-check every test: break the code, watch the test go RED,
+    undo the break (Section 23a — a test that passes while the
+    feature is broken is not a test)
 [ ] Update docs
 [ ] Check for unnecessary code
 ```
@@ -398,3 +530,180 @@ readable, testable, predictable. Impress with how little code is
 needed to catch real bot traffic reliably — not with clever tricks.
 
 **Every signal, every layer, every line must earn its place.**
+
+---
+
+## 22. Pre-Push Production Verification
+
+Run this before calling any feature "done," even one you already
+tested. It has caught real bugs before (a spoofable header, a
+listener that died silently on one bad Accept) that the first round
+of tests missed — this is not paperwork, it's a second, adversarial
+pass over your own work.
+
+```text
+[ ] Re-read your own diff like an attacker, not the author: what's
+    the cheapest way to break this, crash it, or fool it?
+[ ] Any value that comes from outside bot-shield (a header, a query
+    param, a cookie) and gets trusted or forwarded downstream — is it
+    stripped/validated first, or could a visitor just set it
+    themselves?
+[ ] Every error path, not just the happy path: does it get logged or
+    handled, or does it fail silently? (a swallowed error is a bug
+    hiding, not a bug handled)
+[ ] Every blocking call: does it have a timeout? What happens if 1000
+    clients trigger the slow/worst case at once?
+[ ] Did you fix the exact bug you were looking for, or did you also
+    check the rest of the file for the same class of mistake?
+[ ] What, concretely, does NO test cover right now? Say it out loud
+    (or in `docs/PROGRESS.md`) — don't let "probably fine" stand in
+    for a real answer.
+[ ] Did you mutation-check the tests (Section 23a), including the
+    ones that already existed before this change? A green suite is
+    not evidence until you've seen it go red on purpose.
+[ ] Did you change a function whose test you didn't re-read? If so,
+    that test is now untrusted (Section 23c).
+[ ] Did you check the standard library actually has no built-in for
+    what you hand-wrote, by reading its source rather than assuming
+    (Section 24)? Is there dead code or one-use indirection to delete
+    before this ships?
+[ ] Say plainly, in your own report of the work: is this "done", or
+    is it "done for the current scope, here's what's still missing"?
+    Those are different claims — never let the first one cover for
+    the second.
+```
+
+This is Section 15a's bar made checkable — a checklist you actually
+run, not just a mindset you hold.
+
+---
+
+## 23. A Green Test Suite Proves Nothing By Itself
+
+The most dangerous state this project can be in is **a passing test
+suite that isn't actually testing anything.** It reads as safety, so
+nobody looks again — and the bug ships anyway.
+
+This is not hypothetical. Tests written for this repo have already
+been caught doing exactly this: a handshake-timeout test that passed
+with the timeout deleted from the code (it was measuring its own read
+deadline, not the server's behaviour), and a fingerprint test that
+passed when the fingerprint was replaced with the literal string
+`GARBAGE-NOT-A-FINGERPRINT`.
+
+### 23a. The mutation check — mandatory, every test, no exceptions
+
+> **Before a test counts as written: break the code it is supposed to
+> protect, run the test, and watch it go RED. Then undo the break.**
+
+If the test still passes while the feature is broken, it is not a
+test. Delete it or fix it — never keep it, because a fake test is
+worse than no test at all (no test is an honest gap; a fake test is a
+lie that stops anyone from looking).
+
+State in `docs/PROGRESS.md` what you broke and that the test caught
+it. "Tests pass" is not a test report — "I removed X and the test
+failed with Y" is.
+
+### 23b. Ways a test lies (check for each of these)
+
+- **Vacuous assertion** — the check lives inside a handler/callback
+  that never ran. If the request never arrives, nothing is asserted
+  and the test passes. Always assert *separately* that the callback
+  actually ran.
+- **Assertion satisfiable another way** — `err != nil` passes whether
+  the server closed the connection or your own deadline expired.
+  Assert the *specific* cause, not any-failure-will-do.
+- **"Not empty" instead of "correct"** — a garbage value is not empty
+  either. Check the real shape or the real expected value. A wrong
+  fingerprint is worse than a missing one, because the scoring layer
+  will trust it.
+- **Only the easy input** — one obviously-invalid input doesn't prove
+  robustness. Malformed, truncated, empty, nil, and
+  lying-about-its-own-length inputs are the *normal* case for a
+  bot-detection product, not edge cases.
+- **Testing the mock, not the code** — if the test would pass against
+  an empty implementation, it's testing scaffolding.
+
+### 23c. Stale tests are a bug, not leftover clutter
+
+When you change what a function does, its old test is now guarding
+behaviour that no longer exists — and it will keep passing while
+doing it. Every time you touch a function: open its test, and either
+confirm it still checks the *current* behaviour, or update it. A test
+you didn't re-read after changing the code is untrusted.
+
+### 23d. Never write a test to make the suite green
+
+The purpose of a test is to *fail* when the product is broken. If
+you're shaping an assertion so it passes, stop — you're building the
+exact trap described at the top of this section. Write the assertion
+the product owner would want, then make the *code* satisfy it.
+
+### 23e. Do this without being asked
+
+The project owner is solo. There is no QA, no second reviewer, and no
+one else who will catch a fake test. If this audit only happens when
+they think to ask for it, the process has already failed. Run it
+yourself, every time, and report what you found — including "I
+re-checked X and it was genuinely fine."
+
+---
+
+## 24. Check the Standard Library Before Writing the Code
+
+The best code in this repo is the code we didn't write. Before
+writing any non-trivial function, and again before calling it done,
+answer these five questions — **by reading the actual source or
+current docs, never from memory**:
+
+```text
+[ ] Could this function be shorter, or does it do more than one thing?
+[ ] Does Go's standard library already do this? (read $(go env GOROOT)/src,
+    or the current package docs — do not guess)
+[ ] Is that built-in production grade? (stdlib and golang.org/x: yes.
+    A random GitHub package: check maintenance, tests, real users)
+[ ] Is it a whole library, or one function/hook we can call?
+[ ] If it exists and it's sound — use it, and delete ours.
+```
+
+**Why this is not optional.** On 2026-09-14, an audit against these
+questions found that hand-written code in `proxy/capture.go` had
+reimplemented four things net/http already does, worse:
+
+| We hand-wrote | Standard library already had | Ours was worse because |
+|---|---|---|
+| TLS handshake timeout (atomic + init + context) | `Server.tlsHandshakeTimeout()`, from `ReadHeaderTimeout` | silently dropped failed handshakes instead of logging them or replying to a plain-HTTP client |
+| Accept retry with backoff | `Server.Serve()`'s `tempDelay` loop | ours was a near-copy of stdlib code, untested against real transient errors |
+| Per-connection panic recovery | `conn.serve()`'s `defer recover()` | duplicated |
+| Goroutine-per-connection + semaphore | net/http's own connection handling | extra machinery, extra bugs |
+
+Deleting all four removed about 60 lines and left the product
+**safer**, because the stdlib's versions handle cases ours didn't.
+
+The same audit found `httputil.ReverseProxy.Director` (what we used)
+does **not** strip a visitor's `X-Forwarded-*` headers, while the
+newer `Rewrite` does — meaning any visitor could forge their own IP,
+defeating per-IP rate limiting before it was even built. One question
+from the list above ("is there a newer built-in?") caught a real
+security hole.
+
+### 24a. Delete dead code before you add to it
+
+Unused variables, one-use indirection, a helper with a single caller,
+a constant nobody reads, a wrapper that wraps nothing — clear these
+out *first*, so the next person reads only code that matters. A
+junior dev opening any file in this repo should be able to tell what
+it does without a guide.
+
+Section 13 still applies: if something looks unused but you're not
+certain, **ask the project owner before deleting it** — say what it
+is and why it looks dead. Certainty deletes; doubt asks.
+
+### 24b. Use the tools instead of eyeballing it
+
+The Claude Code skills `/code-review`, `/security-review` and
+`/simplify` exist and are cheap. Run them on your own work before
+declaring it done — especially `/security-review` on anything that
+touches visitor-controlled input. An independent pass does not share
+your blind spots, which is the entire point on a solo project.

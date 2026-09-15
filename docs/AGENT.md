@@ -94,12 +94,21 @@ dead code or unfinished work — do not wait to be asked.
 
 See `CLAUDE.md`'s "Documentation Map" section for the full reading
 order and what lives in each file. Short version: this file is *why*,
-`ARCHITECTURE.md` is *what tech and why that tech*, `ROADMAP.md` is
-*what to build and in what order*, `DECISIONS.md` is *why we chose
-what we chose (and what we rejected)*, `CLAUDE.md` is *how to write
-the code*.
+`ARCHITECTURE.md` is *what tech and why that tech* (and what is
+actually built versus still planned), `ROADMAP.md` is *what to build
+and in what order*, `DECISIONS.md` is *why we chose what we chose
+(and what we rejected)*, `RESEARCH.md` is *what we learned about the
+threat*, `PROGRESS.md` is *what happened in each session*, and
+`CLAUDE.md` is *how to write the code*.
 
-`CLAUDE.md` also has a mandatory rule: update `ROADMAP.md`'s Done list
-and `DECISIONS.md` before ending any work session. Follow it — it's
-the only reason a future session (yours or another agent's) won't
-start from zero.
+`CLAUDE.md` also has a mandatory rule: update `ROADMAP.md`'s Done
+list, `DECISIONS.md`, and `PROGRESS.md` before ending any work
+session. Follow it — it's the only reason a future session (yours or
+another agent's) won't start from zero.
+
+Four of its rules carry more weight than the rest, because breaking
+each one has already cost this project something real: check the
+standard library before writing code (Section 24), mutation-check
+every test (23a), run the pre-push checklist (22), and fix a bug in
+the same pass you find it (17). They're listed at the top of
+`CLAUDE.md` for that reason.

@@ -10,6 +10,226 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## UA-consistency check: structural heuristics, not a browser-fingerprint database — 2026-09-14
+**Decision:** `UAMismatch` catches a UA claiming a browser while the
+TLS handshake shows TLS 1.0/1.1 or the `JA4Unreadable` fragmentation
+signal — not a full "does this JA4 really belong to Chrome 120"
+classification.
+**Why:** the strict version of ROADMAP item 3 ("real client family")
+needs a maintained table mapping JA4 hashes to real browser versions.
+Real anti-bot vendors run that as a standing research/maintenance
+cost, updated as browsers ship. Building and maintaining that
+database is a project of its own, not a one-line addition, and
+`CLAUDE.md` Section 15 says research before building — not fake a
+version of something that needs real ongoing data. The two conditions
+implemented instead are provably true of every current real browser,
+need no external data to verify, and reuse the `JA4Unreadable` signal
+already established for fragmentation.
+**Alternatives considered:** a hardcoded list of a few known-good JA4
+hashes for major browsers — rejected: browsers update their TLS stack
+often enough that the list would go stale within months and start
+producing false positives on real users (`CLAUDE.md` Section 8), with
+no mechanism in this repo to keep it current.
+**False-positive risk, accepted:** a corporate TLS-inspecting proxy or
+an unusually old/locked-down real browser could legitimately negotiate
+TLS 1.0/1.1 and get flagged. This is why the result is a signal for
+future scoring (item 5), never a block on its own (`CLAUDE.md`
+Section 6).
+**Revisit when:** item 5's scoring engine exists and real traffic data
+shows whether a maintained JA4-to-browser database is worth the
+ongoing cost, or when HTTP/2 fingerprinting is built (adds another
+structural signal of the same no-database kind).
+
+---
+
+## bot-shield is closed-source commercial software, not open source — 2026-09-14
+**Decision:** bot-shield is proprietary. `README.md` previously said
+`License: MIT`, which was wrong and is corrected to "Proprietary — All
+Rights Reserved." There is no LICENSE file granting copy/modify/
+redistribute rights, and none should be added.
+**Why:** the project owner is building this to sell as a paid product
+(a SaaS / self-hosted commercial license), not to give away. An MIT
+license would have let anyone legally clone, rebrand, and resell it —
+directly undermining the reason it's being built. This was a docs
+mistake carried over from an earlier session's generic project
+scaffolding, not a considered choice, and it was live in the repo
+until caught here.
+**Alternatives considered:** open-core (core engine open, paid
+features closed) — not rejected outright, just not decided; revisit
+if the owner ever wants community contributions or wider adoption as
+a growth strategy. Until then, default to fully closed.
+**What doesn't change:** bot-shield still *uses* open-source
+libraries internally (`fingerproxy`, `BotD` — see the "assemble
+proven open-source pieces" entry below). Depending on open-source
+components is normal for commercial software and is unrelated to
+whether bot-shield's own code is licensed for redistribution.
+**Revisit when:** the owner explicitly decides on a monetization/
+distribution model (self-hosted license sales, managed SaaS, open-
+core) — that decision picks the real license text, ideally with a
+lawyer's input before any code ships to a paying customer.
+
+---
+
+## Report an unreadable handshake as a signal, not as "no fingerprint" — 2026-09-14
+**Decision:** when a connection is TLS but we cannot read its
+ClientHello, `JA4FromContext` returns `JA4Unreadable` ("unreadable"),
+not `""`. `""` now means only "this wasn't a TLS connection".
+**Why:** a client can split its ClientHello across two TLS records.
+The handshake succeeds, but our capture (and `fingerproxy`'s, which
+reads one record) sees a fragment, so JA4 parsing fails. Reproduced
+locally: the request sailed through with an empty fingerprint, which
+looked exactly like an ordinary unfingerprinted request. That made a
+one-line bot change into a *silent* bypass of the product's core
+detection. Making the two states distinguishable doesn't stop the
+evasion, but it stops it being invisible — and a real browser never
+fragments this way, so "TLS but unreadable" is itself a bot signal.
+**Alternatives considered:** blocking on an unreadable handshake —
+rejected: some legitimate stacks and censorship-circumvention clients
+fragment too, and `CLAUDE.md` Section 6 says no single signal decides,
+Section 8 says a false positive is worse than a miss. This is an input
+for scoring, not a verdict. Also considered: writing record-layer
+reassembly ourselves — rejected for now, `DECISIONS.md` above says we
+don't hand-write TLS parsing; see `RESEARCH.md` for the open item.
+**Revisit when:** the scoring engine (`ROADMAP.md` item 5) exists and
+can weight this, or when reassembly lands upstream in fingerproxy.
+
+---
+
+## Strip every client-IP header, not just the X-Forwarded family — 2026-09-14
+**Decision:** the proxy deletes `X-Real-IP`, `True-Client-IP`,
+`CF-Connecting-IP`, `X-Client-IP`, `Fastly-Client-IP` and
+`X-Cluster-Client-IP` from the outbound request, then sets
+`X-Real-IP` itself from the real connection address.
+**Why:** net/http's `Rewrite` strips only `Forwarded` and
+`X-Forwarded-*`. nginx, Rails, Laravel, Cloudflare and Fastly stacks
+routinely read the others, so a visitor could still choose the IP the
+origin logs, allowlists or rate-limits — the same spoof we closed for
+`X-Forwarded-For`, through a different door.
+**Alternatives considered:** stripping only `X-Real-IP` (the most
+common) — rejected, each remaining header is a full bypass on some
+origin stack, and they cost one line each.
+**Revisit when:** bot-shield runs behind a trusted CDN that legitimately
+sets one of these; that needs an explicit trusted-upstream setting,
+never blanket trust.
+
+---
+
+## Let net/http own the TLS handshake; delete our hand-rolled version — 2026-09-14
+**Decision:** `proxy.NewCaptureListener` returns a real `*tls.Conn`
+from `Accept` and does **not** handshake it. net/http then runs the
+handshake itself. This deleted our handshake timeout, accept-retry
+backoff, per-connection panic recovery, goroutine-per-connection and
+its semaphore, and the `hack.ChannelListener` handoff — roughly 60
+lines.
+**Why:** reading `$GOROOT/src/net/http/server.go` showed all four
+already exist there: `Server.tlsHandshakeTimeout()` (derived from
+`ReadHeaderTimeout`), the `tempDelay` accept-retry loop,
+`conn.serve()`'s `defer recover()`, and its connection handling. The
+stdlib versions are better than ours were — they log handshake
+failures and reply properly to a plain-HTTP client hitting the TLS
+port, both of which our version silently skipped. The one thing we
+genuinely need (the raw ClientHello) is kept by wrapping the
+connection *underneath* `tls.Server`, which costs one line.
+**Alternatives considered:** keeping our own accept loop for "control"
+— rejected, it was control over code we had reimplemented worse.
+**Cost checked, not assumed:** the fingerprint is now derived per
+request rather than once per connection. Benchmarked at **14.3µs**
+against a ~2ms budget (`ARCHITECTURE.md`), so no cache — adding one
+would be optimising something that costs 0.7% of its budget.
+**Trade-off accepted:** `ReadHeaderTimeout` in `cmd/botshield` is now
+load-bearing for the TLS handshake too, not just headers. Noted in a
+comment there so nobody removes it as "just a header thing".
+**Revisit when:** HTTP/2 support is added — returning a real
+`*tls.Conn` is also what makes stdlib h2 negotiation possible, so
+that work got cheaper, not harder.
+
+---
+
+## Use ReverseProxy.Rewrite, not Director — 2026-09-14
+**Decision:** build the reverse proxy with `httputil.ReverseProxy{
+Rewrite: ...}` instead of `NewSingleHostReverseProxy` + `Director`.
+**Why:** net/http strips a visitor's `Forwarded` and `X-Forwarded-*`
+headers before calling `Rewrite`, and does not before calling
+`Director` (verified in `$GOROOT/src/net/http/httputil/reverseproxy.go`).
+With `Director`, a visitor sending `X-Forwarded-For: 1.2.3.4` had it
+forwarded to the origin as `"1.2.3.4, <real ip>"` — and most code
+reads the first entry, i.e. the attacker's chosen value. Per-IP rate
+limiting and geo checks (`ROADMAP.md` items 8 and 9) would have been
+bypassable from day one. `Rewrite` + `SetXForwarded()` sends the real
+client IP only. `Rewrite` also drops unparsable query parameters,
+which closes a proxy/origin request-smuggling gap.
+**Behaviour kept deliberately:** `SetURL` would rewrite the `Host`
+header to the origin's host; we restore the visitor's `Host` (`r.Out
+.Host = r.In.Host`), since the origin serves the client's own domain.
+**Behaviour changed deliberately:** an inbound `X-Forwarded-For` is
+now replaced rather than appended to. That is the secure default and
+there are no deployments yet to break.
+**Revisit when:** bot-shield is ever deployed *behind* another trusted
+proxy (a CDN), where the inbound `X-Forwarded-For` is legitimate — at
+that point it needs an explicit "trusted upstream" setting, never a
+blanket trust of the header.
+
+---
+
+## Import only fingerproxy's `ja4` package, not the whole library — 2026-09-14
+**Decision:** depend on `github.com/wi1dcard/fingerproxy`, but import
+only its `pkg/ja4` package (JA4 hash computation, stdlib + `utls`
+only) for now — not `pkg/fingerprint` (pulls in Prometheus metrics)
+or `pkg/proxyserver`/`pkg/ja3` (pull in `gopacket`/`dreadl0ck/tlsx`).
+**Why:** we don't need JA3, HTTP2-frame fingerprinting, or metrics yet
+— only JA4. Go compiles per-package, so importing the narrower
+package keeps Prometheus and gopacket out of the actual binary
+entirely (verified with `go list -deps`), matching `CLAUDE.md` Section
+3 (no unnecessary dependencies) and Section 14 (no code "in case it's
+needed later").
+**Alternatives considered:** importing `fingerproxy.Run()`'s full
+opinionated server (`pkg/proxyserver`) directly instead of writing our
+own capture wiring — rejected: it owns the entire accept loop and
+HTTP/1.1-vs-HTTP/2 branching, which would mean replacing our own
+`proxy.New` design instead of extending it. Revisit if TLS-capture
+wiring turns out to need functionality we'd otherwise reimplement.
+**Revisit when:** JA3 or HTTP/2 fingerprinting (also on `ROADMAP.md`)
+is actually built — re-check whether pulling in `pkg/fingerprint` at
+that point is cheaper than keeping our own thin wrapper.
+
+---
+
+## TLS capture listener: HTTP/1.1 only for now, no HTTP/2 — 2026-09-14
+**Decision:** `proxy.NewCaptureListener` forces `NextProtos =
+["http/1.1"]`, so browsers fall back to HTTP/1.1 against bot-shield
+instead of using HTTP/2.
+**Why:** capturing JA4 means terminating TLS and handshaking
+ourselves instead of letting Go's `http.Server` do it, which breaks
+the stdlib's automatic HTTP/2 upgrade (it only kicks in when the
+accepted connection is literally a `*tls.Conn`, not our wrapped
+type). Supporting HTTP/2 correctly means serving it ourselves
+alongside HTTP/1.1 (the way `fingerproxy/pkg/proxyserver` does) —
+real, separate work, not a one-line fix.
+**Alternatives considered:** hand-rolling the HTTP/2 branch in this
+same pass — rejected: `ROADMAP.md` item 2 already lists "JA4" and
+"HTTP/2 fingerprint" as two separate things, and JA4 alone already
+catches most naive scripted clients (the ROADMAP's own claim). Ship
+one working half instead of both halves half-working.
+**Revisit when:** ROADMAP's HTTP/2 fingerprint item is picked up.
+
+## Cap concurrent TLS handshakes at 1000 — 2026-09-14
+**Decision:** `proxy.NewCaptureListener` runs each connection's TLS
+handshake in its own goroutine, but only allows 1000 to run at once
+(a buffered channel used as a semaphore); beyond that, new
+connections wait for a slot before their handshake starts.
+**Why:** `CLAUDE.md` Section 9 requires every worker pool to have a
+bounded size — without a cap, a flood of connections (accidental or
+a deliberate flood attack) could spawn unlimited goroutines and take
+the process down, which would fail the client's site closed instead
+of open.
+**Alternatives considered:** no cap (simplest, but violates Section
+9); a smaller/larger number — 1000 is a reasonable starting guess for
+a single small-to-mid deployment, not measured against real traffic.
+**Revisit when:** ROADMAP item 16 (soak testing) gives real numbers
+to tune this against.
+
+---
+
 ## Format for new entries
 
 ```text

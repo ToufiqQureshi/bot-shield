@@ -113,3 +113,39 @@ Principle: assemble proven open-source primitives for the hard,
 well-solved parts (TLS parsing, client-side automation detection);
 spend original engineering on the part that's actually the product —
 the scoring/decision layer and the deployment experience.
+
+---
+
+## ClientHello fragmentation — a cheap way past TLS fingerprinting
+
+Found on 2026-09-14 by an independent security review of our own
+capture code, then reproduced locally.
+
+**The trick:** TLS allows a single handshake message to span several
+records. A client can therefore send its ClientHello split across two
+records. Go's `crypto/tls` server reassembles them and the handshake
+completes normally — the site works fine for that client.
+
+**Why it defeats naive capture:** code that grabs the first TLS
+*record* (rather than the whole handshake *message*) only ever sees
+the first fragment. `fingerproxy`'s `hack.HijackClientHelloConn` does
+exactly this: it reads the record header, sets
+`expectedLen = 5 + recordLength`, and truncates there. The captured
+bytes are a partial ClientHello, so JA4 parsing fails.
+
+**Cost to the attacker:** one line in their socket layer. No special
+tooling, no fingerprint forging, no proxy network.
+
+**What we do about it today** (see `DECISIONS.md`): a TLS connection
+whose handshake we cannot read is reported as `JA4Unreadable`, not as
+an empty fingerprint. The evasion still works at the capture level,
+but it stops being *invisible* — and a real browser never triggers it,
+so it becomes a scoring signal of its own rather than a silent bypass.
+
+**Still open:** actually reassembling a multi-record handshake message
+before fingerprinting. That means record-layer reassembly, which
+`DECISIONS.md` says we don't hand-write. Right fix is upstream in
+fingerproxy, or a small well-tested reassembly step in front of it.
+Worth checking whether other JA4 implementations (and commercial
+vendors) handle this — if they don't, fragmentation is a general gap
+in the JA4 ecosystem, not just ours.
