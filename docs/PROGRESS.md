@@ -1618,3 +1618,107 @@ Still item 18 (shadow mode) to build. But scope item 19 early —
 cheaply, on paper — because if refreshing that database turns out
 bigger than one maintainer can carry, that's a strategy problem worth
 hitting now rather than after more features ship.
+
+---
+
+## 2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it
+
+**Read this entry first.** It is the state of the project at merge
+time and a standing instruction for the session that picks it up.
+
+### Where things stand
+
+PR #4 merged into `main`. It carried four commits across three
+sessions of work:
+
+1. Scoring engine (item 5), JS-challenge automation probe (item 6),
+   dashboard stats endpoint, and the `dashboard/` Next.js skeleton
+   (built by Antigravity — see `claude_and_agy.md` and Section 25).
+2. Positioning rewrite across every doc — bot-shield is no longer an
+   "affordable alternative", it is the inline, self-hostable layer
+   that decides which automated clients get in and proves why.
+3. Decision evidence trail (item 12a) — `proxy/evidence.go`.
+4. The moat decision — ROADMAP item 19, the maintained browser
+   fingerprint database.
+
+**ROADMAP P0 items 1–6 plus 12a are done.** Item 18 (shadow mode) is
+the next build. Item 19 needs scoping on paper before anyone starts
+it.
+
+### Standing instruction from the project owner
+
+> Audit the entire codebase brutally before building anything new.
+
+This is not a review-the-recent-diff request. It means:
+
+- **Unit tests** — every existing test, not just the new ones. Break
+  the code each one guards and confirm it goes RED (Section 23a).
+  Tests written in earlier sessions have **not all** been re-verified
+  since the code around them changed; treat any test you haven't
+  personally watched fail as untrusted (Section 23c).
+- **Load / soak testing** — ROADMAP item 16 exists and has never been
+  run. Sustained adversarial traffic for hours: does memory stay
+  flat, do the `Trail` and `Stats` behave, does latency hold?
+- **Production failure modes** — what a real attacker or a bad network
+  does on day one, not the happy path. Section 22's checklist is the
+  script for this.
+- **Dead code** — find it, and follow Section 13 exactly: **alert the
+  owner and explain what it is and why it looks unused. Do not delete
+  it silently.** If you are not certain it is dead, leave it alone —
+  the owner's words were "only remove it if you're sure, otherwise
+  ignore it."
+
+### Where I would point an auditor first (honest list)
+
+These are known or suspected weak spots, written down so the next
+session doesn't have to rediscover them:
+
+- **Latency has never been measured.** `CLAUDE.md` Section 9 requires
+  a p50/p99 budget per signal. Nobody has produced one. This service
+  sits in the request path — this is the biggest unmeasured risk in
+  the project.
+- **Fail-open vs fail-closed was never implemented.** Section 9 says
+  the client must choose deliberately and it must never default
+  silently. Today it defaults silently. That is a rule violation
+  sitting in shipped code.
+- **`/api/v1/dashboard/stats` has no auth and wildcard CORS.** It was
+  justified as aggregate-only, which is defensible, but it has never
+  been re-examined since. The evidence endpoint (12a) went the other
+  way — token required, no wildcard — so the two are now inconsistent
+  by design. Confirm that's still the right call.
+- **All state is in-memory and resets on restart**: the challenge
+  HMAC secret (every issued cookie dies on restart), `Stats`, and the
+  `Trail`. Fine for now, deliberately; verify nothing newer assumed
+  otherwise.
+- **`Trail` retention is enforced on read, not on write.** A record
+  past 24h stops being returned but stays resident until overwritten.
+  Bounded by the ring buffer so it can't grow — but "deleted after
+  24h" is not literally true.
+- **`dashboard/` is ~14k lines this session never audited line by
+  line.** It came from Antigravity. Section 25 makes reviewing it
+  Claude Code's job regardless of who wrote it. Check at minimum:
+  does it leak anything, does it handle a failed/slow stats fetch,
+  and is there leftover boilerplate from `create-next-app`.
+- **Only 2 scoring signals with fixed thresholds.** Everything scores
+  0, 50 or 100. Worth asking whether the block threshold is defensible
+  against real traffic before more signals pile on top.
+- **No test uses real elapsed time** anywhere — the 24h window and
+  the challenge TTL are only ever exercised with injected clocks.
+
+### What NOT to do
+
+- Don't start item 18 or any new feature until the audit above is
+  done and reported. The owner asked for the audit first, explicitly.
+- Don't delete anything you're merely suspicious of. Ask.
+- Don't rewrite working detection logic because you'd write it
+  differently (Section 12).
+- Don't treat a green `go test ./...` as evidence of anything
+  (Section 23).
+
+### Report back with
+
+What you broke and which test caught it, the latency numbers, what
+the soak test did to memory, a list of anything that looks dead with
+your reasoning, and — per Section 16 — every gap you found even if you
+couldn't fix it. If you found something genuinely fine after checking,
+say that too.
