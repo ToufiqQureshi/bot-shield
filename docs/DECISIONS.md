@@ -10,6 +10,39 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Added 2 competitor-gap items to roadmap, rejected the rest — 2026-09-15
+**Decision:** after a competitor scan (DataDome, Akamai, Cloudflare,
+Kasada, Arkose, HUMAN/PerimeterX — see `RESEARCH.md`), added item 9a
+(API-aware endpoint rules) and item 11a (deception/decoy response) to
+`ROADMAP.md`. Both reuse existing machinery (item 9/11's config, the
+scoring engine's decision output) rather than adding a new detection
+layer or package.
+**Why these two:** low implementation cost, no new architecture, and
+genuine differentiation — deception in particular is under-offered
+even by big vendors. Both fit `CLAUDE.md` Section 14 (real gap, not
+"vendor X has it so we should too").
+**Rejected:** persistent cross-session device fingerprinting (needs a
+standing ML similarity model + cross-session storage — an infra
+project of its own), native mobile SDK (separate codebase/maintenance
+surface, off bot-shield's web-proxy shape), shared cross-customer
+threat intel (needs a consent/data-sharing framework first, or it's a
+Section 18 data-overreach problem), WASM deep browser-engine
+fingerprinting (research-heavy, no observed client need yet). Full
+reasoning for each in `RESEARCH.md`.
+**Risk accepted knowingly:** item 11a (deception) is scoped narrow on
+purpose — origin app owns the fake data, bot-shield only signals the
+decision, and it's gated to only the highest-confidence score band
+(above the block threshold) because a wrongly-deceived real customer
+sees *wrong data as real*, which is a worse failure mode than a
+false-positive block. Not to be turned on for any client until the
+scoring engine (item 5) and dashboard (item 12) both exist to measure
+it separately from block/challenge false positives.
+**Revisit when:** item 5 (scoring engine) ships — that's the actual
+blocker for both 9a and 11a, since neither can be built before there's
+a decision layer to plug into.
+
+---
+
 ## UA-consistency check: structural heuristics, not a browser-fingerprint database — 2026-09-14
 **Decision:** `UAMismatch` catches a UA claiming a browser while the
 TLS handshake shows TLS 1.0/1.1 or the `JA4Unreadable` fragmentation

@@ -149,3 +149,50 @@ fingerproxy, or a small well-tested reassembly step in front of it.
 Worth checking whether other JA4 implementations (and commercial
 vendors) handle this — if they don't, fragmentation is a general gap
 in the JA4 ecosystem, not just ours.
+
+---
+
+## Competitor feature scan — 2026-09-15
+
+What DataDome, Akamai Bot Manager, Cloudflare Bot Management, Kasada,
+Arkose Labs, and HUMAN/PerimeterX offer that this roadmap doesn't
+cover, so a future session doesn't re-research this from scratch.
+
+- **API-aware rules** (DataDome's stated differentiator) — endpoints
+  get different thresholds by role (login vs. checkout vs. product
+  listing), not one generic rate limit. Cheap to add: it's `ROADMAP.md`
+  item 9 + item 11 combined with an "endpoint category" config field,
+  not a new signal. **Added to roadmap as item 9a.**
+- **Deception / decoy responses** (mentioned across several vendors as
+  an alternative mitigation to CAPTCHA/block) — serve fake data instead
+  of blocking, so a scraper doesn't know it's been caught and keeps
+  burning its own time on garbage. Genuinely under-offered even by big
+  vendors — a real differentiator for a small product. **Added to
+  roadmap as item 11a**, scoped so bot-shield only signals the
+  decision; the origin app owns what fake data means for it.
+- **Persistent cross-session device fingerprinting** (Arkose Device
+  ID) — AI similarity matching that re-identifies the same device
+  across IP/session changes, not just per-connection JA4. Not added:
+  needs a continuously-updated similarity model and cross-session
+  storage — that's an ML infra project of its own, not a roadmap item.
+  Revisit only if a client's real traffic shows per-connection
+  fingerprinting isn't enough.
+- **Native mobile SDK** (PerimeterX/HUMAN) — protects native iOS/
+  Android app traffic, not just web. Not added: separate codebase,
+  separate maintenance surface, and bot-shield's whole product shape
+  (`ROADMAP.md`) is a web reverse proxy. Out of scope unless a client
+  need makes it real.
+- **Shared cross-customer threat intelligence** (DataDome/Cloudflare's
+  network effect: a bad fingerprint seen on one customer gets blocked
+  network-wide) — not added: requires sharing one client's traffic
+  data to protect another, which needs an explicit consent/data-sharing
+  framework to not violate `CLAUDE.md` Section 18 (no data overreach).
+  Worth revisiting once there are enough paying clients for the network
+  effect to matter, with that consent model designed first.
+- **WASM-based deep browser-engine fingerprinting** (PerimeterX's
+  2025–26 move: measure execution speed of math ops to tell a real
+  browser engine from an automated one, even through CDP-suppression
+  tools like Patchright) — not added: this is a genuinely hard,
+  research-heavy signal; revisit after `RESEARCH.md`'s existing
+  Patchright/Scrapling gap (see above) is a real, observed problem in
+  client traffic, not before.
