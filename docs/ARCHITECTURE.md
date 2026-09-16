@@ -78,6 +78,12 @@ Internet (every visitor, hostile until scored)
              the real /api/v1/dashboard/stats endpoint (proxy/stats.go)
              — one stat card, no history/charts/auth yet
 
+[Mode]       BUILT  -mode enforce|shadow (proxy/mode.go) — shadow
+             scores and records every request but forwards all of it,
+             so a client can watch real traffic at zero risk. Surfaced
+             in the startup log, /stats, every evidence record, and the
+             dashboard (badge + banner + relabelled counters).
+
 [Evidence]   BUILT  /api/v1/dashboard/evidence (proxy/evidence.go) —
              per-request record of why each decision was made, in a
              fixed 1000-entry ring buffer with a 24h retention window.

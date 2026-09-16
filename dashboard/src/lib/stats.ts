@@ -1,11 +1,14 @@
 // Real API client for the scoring engine's stats endpoint
-// (proxy/stats.go). Shape and field names are the contract agreed in
-// agentchat/chat.jsonl on 2026-09-15 - GET /api/v1/dashboard/stats.
+// (proxy/stats.go): GET /api/v1/dashboard/stats.
 export interface DashboardStatsData {
   total_requests: number;
   passed: number;
   challenged: number;
   blocked: number;
+  // In shadow mode the counts describe decisions that were recorded
+  // but never acted on, so nothing may be shown without them.
+  mode: "enforce" | "shadow";
+  enforcing: boolean;
 }
 
 // Overridable so a deployed dashboard can point at a botshield

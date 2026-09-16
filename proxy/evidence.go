@@ -28,6 +28,10 @@ type Evidence struct {
 	Signals  []string  `json:"signals"`
 	Score    int       `json:"score"`
 	Decision string    `json:"decision"`
+	// Enforced is false when the decision was only recorded, not acted
+	// on (shadow mode). Without it a reader cannot tell a real block
+	// from one that never happened.
+	Enforced bool `json:"enforced"`
 }
 
 // Trail holds the most recent decisions in a fixed-size ring buffer,

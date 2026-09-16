@@ -165,3 +165,66 @@
 .retryButton:hover {
   background: #e53e3e;
 }
+
+/* Shadow mode says the numbers below did not actually happen, so it
+   has to be impossible to skim past. */
+.shadowBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #b45309;
+  border-left: 5px solid #f59e0b;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.shadowBanner strong {
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.shadowBanner span {
+  color: #fcd34d;
+  opacity: 0.9;
+}
+
+/* The old header badge said "System Active" unconditionally — even
+   with the backend down. These two only render once real stats have
+   been fetched, so they can only ever claim what is true. */
+.statusEnforcing,
+.statusShadow {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.statusEnforcing {
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+}
+
+.statusShadow {
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}

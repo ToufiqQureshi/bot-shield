@@ -22,7 +22,13 @@ func main() {
 	certFile := flag.String("tls-cert", "", "TLS certificate file; enables TLS + JA4 fingerprinting")
 	keyFile := flag.String("tls-key", "", "TLS private key file, required with -tls-cert")
 	evidenceToken := flag.String("evidence-token", "", "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
+	modeFlag := flag.String("mode", "enforce", `"enforce" acts on scores; "shadow" only records what it would have done`)
 	flag.Parse()
+
+	mode, err := proxy.ParseMode(*modeFlag)
+	if err != nil {
+		log.Fatalf("botshield: %v", err)
+	}
 
 	if *target == "" {
 		log.Fatal("botshield: -target is required")
@@ -42,9 +48,9 @@ func main() {
 
 	// Guard is where scoring (ROADMAP item 5) actually acts: allow,
 	// challenge, or block, instead of just labeling the request.
-	stats := &proxy.Stats{}
+	stats := &proxy.Stats{Mode: mode}
 	trail := proxy.NewTrail()
-	guard := proxy.NewGuard(p, challenge, stats, trail)
+	guard := proxy.NewGuard(p, challenge, stats, trail, mode)
 
 	mux := http.NewServeMux()
 	mux.Handle("/__botshield/", challenge.Handler())
@@ -94,6 +100,9 @@ func main() {
 
 	go func() {
 		log.Printf("botshield: listening on %s, protecting %s", *addr, *target)
+		if mode == proxy.ModeShadow {
+			log.Print("botshield: SHADOW MODE — scoring and recording only, NOTHING will be blocked or challenged")
+		}
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("botshield: %v", err)
 		}

@@ -10,10 +10,10 @@ import (
 
 func TestStatsHandlerShape(t *testing.T) {
 	s := &Stats{}
-	s.recordAllow()
-	s.recordAllow()
-	s.recordChallenge()
-	s.recordBlock()
+	s.record(DecisionAllow)
+	s.record(DecisionAllow)
+	s.record(DecisionChallenge)
+	s.record(DecisionBlock)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/stats", nil)
 	rec := httptest.NewRecorder()
@@ -27,7 +27,7 @@ func TestStatsHandlerShape(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("response wasn't valid JSON matching the contract: %v (body: %s)", err, rec.Body.String())
 	}
-	want := statsResponse{TotalRequests: 4, Passed: 2, Challenged: 1, Blocked: 1}
+	want := statsResponse{TotalRequests: 4, Passed: 2, Challenged: 1, Blocked: 1, Mode: "enforce", Enforcing: true}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
@@ -116,7 +116,7 @@ func startGuardWithStats(t *testing.T, origin string) (guardWithStats, *Stats) {
 		t.Fatalf("NewChallenge: %v", err)
 	}
 	stats := &Stats{}
-	guard := NewGuard(p, challenge, stats, NewTrail())
+	guard := NewGuard(p, challenge, stats, NewTrail(), ModeEnforce)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -127,4 +127,39 @@ func startGuardWithStats(t *testing.T, origin string) (guardWithStats, *Stats) {
 	t.Cleanup(func() { srv.Close() })
 
 	return guardWithStats{addr: ln.Addr().String(), stats: stats}, stats
+}
+
+// The counts are meaningless without knowing whether they describe
+// enforced decisions or shadow-mode ones, so the mode travels with
+// them on every response.
+func TestStatsHandlerReportsMode(t *testing.T) {
+	for _, tc := range []struct {
+		mode          Mode
+		wantMode      string
+		wantEnforcing bool
+	}{
+		{ModeEnforce, "enforce", true},
+		{ModeShadow, "shadow", false},
+	} {
+		s := &Stats{Mode: tc.mode}
+		s.record(DecisionBlock)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/stats", nil)
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+
+		var got statsResponse
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatalf("decoding response: %v", err)
+		}
+		if got.Mode != tc.wantMode {
+			t.Errorf("mode = %q, want %q", got.Mode, tc.wantMode)
+		}
+		if got.Enforcing != tc.wantEnforcing {
+			t.Errorf("enforcing = %v, want %v", got.Enforcing, tc.wantEnforcing)
+		}
+		if got.Blocked != 1 {
+			t.Errorf("blocked = %d, want 1 — shadow mode still counts what it would have done", got.Blocked)
+		}
+	}
 }

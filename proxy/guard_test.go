@@ -16,6 +16,10 @@ import (
 // origin — same shape as capture_test.go's startCapture, but through
 // Guard instead of the bare proxy.
 func startGuard(t *testing.T, origin string) (addr string, challenge *Challenge, trail *Trail) {
+	return startGuardMode(t, origin, ModeEnforce)
+}
+
+func startGuardMode(t *testing.T, origin string, mode Mode) (addr string, challenge *Challenge, trail *Trail) {
 	t.Helper()
 
 	p, err := New(origin)
@@ -27,7 +31,7 @@ func startGuard(t *testing.T, origin string) (addr string, challenge *Challenge,
 		t.Fatalf("NewChallenge: %v", err)
 	}
 	trail = NewTrail()
-	guard := NewGuard(p, challenge, &Stats{}, trail)
+	guard := NewGuard(p, challenge, &Stats{Mode: mode}, trail, mode)
 
 	rawLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -266,4 +270,111 @@ func extractTokenAndNonce(t *testing.T, body string) (token, nonce string) {
 		t.Fatalf("could not extract token/nonce: %s", body)
 	}
 	return tm[1], nm[1]
+}
+
+// Shadow mode's whole promise: traffic that would be blocked still
+// reaches the origin. If this ever fails, a client running shadow mode
+// is silently breaking their own customers.
+func TestGuardShadowModeNeverBlocks(t *testing.T) {
+	reached := make(chan bool, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached <- true
+		w.Write([]byte("ok"))
+	}))
+	defer origin.Close()
+
+	guardAddr, _, trail := startGuardMode(t, origin.URL, ModeShadow)
+	addr := fragmentingRelay(t, guardAddr)
+
+	req, _ := http.NewRequest(http.MethodGet, "https://"+addr+"/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36")
+	resp, err := tlsClient().Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 — shadow mode must not block", resp.StatusCode)
+	}
+	if string(body) != "ok" {
+		t.Fatalf("body = %q, want the origin's own response", body)
+	}
+	select {
+	case <-reached:
+	default:
+		t.Fatal("origin was never reached; shadow mode blocked a request it was only supposed to score")
+	}
+
+	// It must still have scored and recorded the real decision —
+	// otherwise the report it produces is worthless.
+	e := lastEvidence(t, trail)
+	if e.Decision != "block" || e.Score != 100 {
+		t.Errorf("evidence = %+v, want the block-at-100 it would have made", e)
+	}
+	if e.Enforced {
+		t.Error("evidence says Enforced=true in shadow mode; a reader could not tell this block never happened")
+	}
+}
+
+// A score that would earn a challenge must not serve the challenge
+// page either — shadow mode means the visitor sees nothing at all.
+func TestGuardShadowModeNeverChallenges(t *testing.T) {
+	reached := make(chan bool, 1)
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached <- true
+		w.Write([]byte("origin page"))
+	}))
+	defer origin.Close()
+
+	guardAddr, _, trail := startGuardMode(t, origin.URL, ModeShadow)
+	addr := fragmentingRelay(t, guardAddr)
+
+	req, _ := http.NewRequest(http.MethodGet, "https://"+addr+"/some-page", nil)
+	req.Header.Set("User-Agent", "curl/8.6.0")
+	resp, err := tlsClient().Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if containsChallengeMarker(string(body)) {
+		t.Fatal("challenge page was served in shadow mode")
+	}
+	if string(body) != "origin page" {
+		t.Fatalf("body = %q, want the origin's own response", body)
+	}
+	select {
+	case <-reached:
+	default:
+		t.Fatal("origin was never reached")
+	}
+
+	if e := lastEvidence(t, trail); e.Decision != "challenge" || e.Enforced {
+		t.Errorf("evidence = %+v, want a recorded-but-unenforced challenge", e)
+	}
+}
+
+// Enforce mode must keep stamping Enforced=true, or the two modes
+// become indistinguishable in the record.
+func TestGuardEnforceModeMarksEvidenceEnforced(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer origin.Close()
+
+	guardAddr, _, trail := startGuard(t, origin.URL)
+	addr := fragmentingRelay(t, guardAddr)
+
+	req, _ := http.NewRequest(http.MethodGet, "https://"+addr+"/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36")
+	resp, err := tlsClient().Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if e := lastEvidence(t, trail); !e.Enforced {
+		t.Errorf("evidence = %+v, want Enforced=true in enforce mode", e)
+	}
 }

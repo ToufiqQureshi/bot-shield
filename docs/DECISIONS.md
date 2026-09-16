@@ -10,6 +10,45 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Back to one agent; Claude Code owns the dashboard too — 2026-09-16
+
+**Decision:** the two-agent workflow is over. The project owner ended
+the Antigravity arrangement. `claude_and_agy.md` is deleted,
+`CLAUDE.md` Section 25 is replaced with a plain statement of sole
+ownership, and `proxy/`, `cmd/botshield/` **and** `dashboard/` are all
+Claude Code's.
+
+**What does not change:** the `dashboard/` code stays. It works, it is
+wired to the real stats endpoint, and `CLAUDE.md` Sections 12 and 13
+apply to it exactly as to any other code — read it before changing it,
+and don't delete parts of it as "dead" without checking. Ending a
+working arrangement is not a reason to throw away working code.
+
+**What does change, and it is the part worth remembering:** the
+dashboard now has to meet this file's bar rather than a softer "it's
+only UI" one. It needs real tests, it must not fail silently, and it
+must behave when the backend is slow, down, or returning an error. A
+dashboard that shows a blank card when the API is unreachable is not
+a cosmetic bug — it tells the customer their traffic is clean when we
+have no idea what their traffic is.
+
+It is also the only part of the product a customer ever sees. They
+will never read `proxy/score.go`; they will judge bot-shield entirely
+on whether the numbers on screen make sense and are believable.
+
+**Also retired with it:** `agentchat/` (the two-agent coordination
+log) has no remaining purpose. It was already gitignored and is not
+shipped product, so nothing in the repo depends on it. The earlier
+entries in this file about the agentchat MCP server stay as history —
+they record a real lesson about why MCP tool calls cannot wake an idle
+agent, which is worth keeping even though the setup is gone.
+
+**Revisit when:** a second builder joins, human or agent. At that
+point re-read the earlier entries rather than re-deriving the file
+collision and edit-war problems from scratch.
+
+---
+
 ## Pivot: hosted SaaS is the product; self-hosting becomes Enterprise — 2026-09-16
 
 **Decision:** bot-shield is sold as a **hosted service we run**.

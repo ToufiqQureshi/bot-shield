@@ -10,10 +10,6 @@ export default function Home() {
             <span className={styles.shieldIcon}>🛡️</span>
             <h1>Bot-Shield</h1>
           </div>
-          <div className={styles.statusBadge}>
-            <span className={styles.pulseDot}></span>
-            System Active
-          </div>
         </div>
 
         <section className={styles.dashboardSection}>

@@ -7,7 +7,11 @@ const mockStats = {
   passed: 12500,
   challenged: 2000,
   blocked: 500,
+  mode: 'enforce' as const,
+  enforcing: true,
 };
+
+const mockShadowStats = { ...mockStats, mode: 'shadow' as const, enforcing: false };
 
 function mockFetchOnce(status: number, body: unknown) {
   global.fetch = jest.fn().mockResolvedValueOnce({
@@ -69,5 +73,96 @@ describe('DashboardStats', () => {
     await waitFor(() => {
       expect(screen.getByText('Connection Lost')).toBeInTheDocument();
     });
+  });
+});
+
+// Shadow mode's one job is to be impossible to mistake for
+// enforcement. A customer who thinks they are protected while nothing
+// is being blocked is worse off than one with no bot-shield at all
+// (docs/ROADMAP.md item 18).
+describe('DashboardStats in shadow mode', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('warns that nothing is being blocked', async () => {
+    mockFetchOnce(200, mockShadowStats);
+    render(<DashboardStats />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Shadow mode — nothing is being blocked.')
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('labels the counts as hypothetical, never as things that happened', async () => {
+    mockFetchOnce(200, mockShadowStats);
+    render(<DashboardStats />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Would block')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Would challenge')).toBeInTheDocument();
+    expect(screen.getByText('Would pass')).toBeInTheDocument();
+
+    // The enforcing labels must be gone entirely - not merely
+    // accompanied by a warning somewhere else on the page.
+    expect(screen.queryByText('Blocked')).not.toBeInTheDocument();
+    expect(screen.queryByText('Challenged')).not.toBeInTheDocument();
+    expect(screen.queryByText('Passed')).not.toBeInTheDocument();
+  });
+
+  it('shows no shadow warning and real labels when enforcing', async () => {
+    mockFetchOnce(200, mockStats);
+    render(<DashboardStats />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Blocked')).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText('Shadow mode — nothing is being blocked.')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Would block')).not.toBeInTheDocument();
+  });
+});
+
+// The old header badge read "System Active" unconditionally, so it
+// claimed the product was working even with the backend down or
+// shadow mode on. Its replacement may only say what is true.
+describe('status badge honesty', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('says enforcing only when actually enforcing', async () => {
+    mockFetchOnce(200, mockStats);
+    render(<DashboardStats />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Enforcing')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Shadow mode — not enforcing')).not.toBeInTheDocument();
+  });
+
+  it('says not enforcing in shadow mode', async () => {
+    mockFetchOnce(200, mockShadowStats);
+    render(<DashboardStats />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Shadow mode — not enforcing')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Enforcing')).not.toBeInTheDocument();
+  });
+
+  it('claims nothing at all when the backend is unreachable', async () => {
+    global.fetch = jest.fn().mockRejectedValueOnce(new Error('network down'));
+    render(<DashboardStats />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connection Lost')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Enforcing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shadow mode — not enforcing')).not.toBeInTheDocument();
   });
 });

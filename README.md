@@ -75,13 +75,28 @@ go build -o botshield ./cmd/botshield
 | `-target` | The origin server to protect, e.g. `http://127.0.0.1:9000` |
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — bot-shield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
+| `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
+
+### Shadow mode
+
+`-mode shadow` runs the full scoring pipeline and records what it
+*would* have done, while forwarding every request to your origin
+untouched. Nothing your visitors do can be broken by a score while it
+is on, which makes it the safe way to see what bot-shield finds in
+your real traffic before enforcing anything.
+
+It is deliberately hard to miss that it is on: a startup log line,
+`"mode":"shadow"` on every stats response, `"enforced":false` on every
+evidence record, and in the dashboard a status badge plus a banner —
+with the counters relabelled "Would block" / "Would challenge" /
+"Would pass".
 
 Two read-only endpoints are served alongside your traffic:
 
 | Endpoint | What it gives you |
 |---|---|
-| `GET /api/v1/dashboard/stats` | Running totals: requests seen, passed, challenged, blocked. No per-visitor data, so it needs no token. |
-| `GET /api/v1/dashboard/evidence` | The last 1000 decisions (24h max), newest first: timestamp, JA4, which signals fired, score, decision. Accepts `?limit=N`. **Requires `Authorization: Bearer <-evidence-token>`.** |
+| `GET /api/v1/dashboard/stats` | Running totals: requests seen, passed, challenged, blocked, plus `mode` and `enforcing` so the counts can't be read out of context. No per-visitor data, so it needs no token. |
+| `GET /api/v1/dashboard/evidence` | The last 1000 decisions (24h max), newest first: timestamp, JA4, which signals fired, score, decision, and whether it was `enforced`. Accepts `?limit=N`. **Requires `Authorization: Bearer <-evidence-token>`.** |
 
 The evidence endpoint is off unless you set a token, and it never gets
 wildcard CORS — it returns visitor fingerprints, and left open it would

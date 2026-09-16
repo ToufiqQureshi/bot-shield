@@ -257,7 +257,7 @@ always the operator.
       `proxy/stats.go` (added same day, same item): `Guard` counts
       every decision, and `GET /api/v1/dashboard/stats` serves
       `{total_requests, passed, challenged, blocked}` — the exact
-      contract Antigravity posted in `agentchat/chat.jsonl` for the
+      contract agreed for the
       dashboard skeleton (ROADMAP item 12) to consume. In-memory
       counters only (resets on restart — same class of gap as
       Challenge's in-memory secret, see `docs/DECISIONS.md`); durable
@@ -345,6 +345,37 @@ always the operator.
       filtering or search, the dashboard doesn't read this endpoint
       yet, and the record carries no request path — so correlating a
       specific complaint still means matching on time and fingerprint.
+
+- [x] **18. Shadow mode** (`proxy/mode.go`, `proxy/guard.go`,
+      `proxy/stats.go`, `dashboard/`) — `botshield -mode shadow` scores
+      and records every request exactly as enforce mode does, then
+      forwards all of it to the origin. Nothing is blocked or
+      challenged, so a client can point real traffic at bot-shield with
+      zero risk to their customers.
+      `-mode` accepts only `enforce` (default) or `shadow`; anything
+      else refuses to start rather than defaulting quietly.
+      **Visible in four places, because the one real danger here is a
+      client believing they are protected when they are not:** a
+      startup log line, `mode`/`enforcing` on every `/stats` response,
+      `enforced: false` on every evidence record, and in the dashboard
+      both a status badge ("Shadow mode — not enforcing") and a banner
+      over the numbers. In shadow mode the stat labels themselves
+      change to "Would block" / "Would challenge" / "Would pass" —
+      "Blocked: 500" when nothing was blocked is the worst thing this
+      product could say.
+      Tested: shadow never blocks, shadow never serves the challenge
+      page, enforce still stamps `Enforced: true`, `ParseMode` rejects
+      unknown values, `/stats` reports the mode, and the dashboard
+      shows the right labels and badge in each mode and claims nothing
+      when the backend is down. Eight mutations run across Go and the
+      frontend, all eight went red (`docs/PROGRESS.md` 2026-09-16).
+      Verified against a real binary in both modes and in a real
+      browser against a real backend.
+      **Not done — the traffic report.** There is no "here is your two
+      weeks of traffic" summary yet: no history (the trail is a
+      1000-entry in-memory ring), no top-offenders view, no export.
+      That is the part a client is actually shown, and it needs item
+      12's dashboard work plus durable storage.
 
 ---
 
@@ -504,25 +535,8 @@ always the operator.
       and **Enterprise** (self-hosted, sales-led, invoiced) priced
       *above* both — never below. What is not decided: cap sizes,
       metering unit, overage rates, and every price.
-- [ ] **18. Shadow mode + traffic report** — a mode that scores every
-      request and records the decision it *would* have made, while
-      forwarding everything to the origin untouched. Ends with a
-      report: how much traffic scored as automated, which fingerprints
-      and which endpoints.
-      **Why it's a roadmap item and not polish:** this is how a
-      client's trust is earned before enforcement is ever switched on,
-      and it is the honest way to measure our own false-positive rate
-      against real traffic instead of guessing (`CLAUDE.md` Section 8).
-      It doubles as the thing that makes a buyer say yes — a number
-      from their own site beats any claim we make about ours.
-      **Depends on:** item 12a (evidence trail) for the per-request
-      detail; item 12 (dashboard) for the report.
-      **Risk:** shadow mode must be impossible to leave on by
-      accident and impossible to confuse with enforcement. A client
-      who believes they are protected while running in shadow mode is
-      in a worse position than one with no bot-shield at all — the
-      mode must be visible in the dashboard, in the logs, and at
-      startup, not buried in a config file.
+- [x] ~~**18. Shadow mode + traffic report**~~ — the mode is done; the
+      report is not. See "Done" section.
 
 ## P0-SaaS — required before anyone can pay us
 
