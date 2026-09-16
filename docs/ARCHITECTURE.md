@@ -22,8 +22,10 @@ Internet (every visitor, hostile until scored)
    ├── fingerprint  BUILT   handshake → JA4 hash        (proxy/fingerprint.go)
    ├── proxy        BUILT   forward, strip spoofable headers (proxy/proxy.go)
    │
-   ├── score        planned  combine signals → risk score
-   ├── challenge    planned  JS challenge for ambiguous traffic
+   ├── score        BUILT    combine signals → risk score (proxy/score.go,
+   │                         proxy/guard.go) — allow/challenge/block
+   ├── challenge    BUILT    JS challenge (proxy/challenge.go), now
+   │                         triggered by score via Guard
    ├── ratelimit    planned  per-IP / per-fingerprint caps
    │
    ├──► Redis       planned  session/fingerprint cache, rate counters
@@ -33,12 +35,21 @@ Internet (every visitor, hostile until scored)
 [Client's origin server]
    receives the request plus the headers in the contract below
 
-[Dashboard]  planned  reads Postgres, shown to the client
+[Dashboard]  BUILT (skeleton)  Next.js app in dashboard/, wired to
+             the real /api/v1/dashboard/stats endpoint (proxy/stats.go)
+             — one stat card, no history/charts/auth yet
+
+[Evidence]   BUILT  /api/v1/dashboard/evidence (proxy/evidence.go) —
+             per-request record of why each decision was made, in a
+             fixed 1000-entry ring buffer with a 24h retention window.
+             Token-gated and off unless -evidence-token is set.
 ```
 
-Today bot-shield **observes and labels**; it does not yet block
-anything. Scoring (`ROADMAP.md` item 5) is what turns labels into
-decisions.
+As of 2026-09-15, bot-shield **acts** on what it observes: `Guard`
+(`proxy/guard.go`) scores every request and allows, JS-challenges, or
+blocks it — see `ROADMAP.md` item 5. Only 2 of the planned signals
+feed the score so far (JA4 fragmentation, UA mismatch); items 6+ add
+more inputs, not a new decision mechanism.
 
 ---
 
@@ -73,7 +84,7 @@ scoring layer would trust it (`CLAUDE.md` Section 6).
 | **Client-side automation probe** | small custom JS snippet (BotD-inspired) | planned | Catches automation in a real browser, which server-side signals can't see |
 | **Fast state** (rate limits, session cache) | Redis | planned | Sub-millisecond reads with TTL; must not add latency per request |
 | **Durable state** (configs, logs, analytics) | PostgreSQL | planned | Dashboard queries and per-client settings must survive restarts |
-| **Dashboard** | Next.js, separate app | planned | Client-facing UI, no reason to share the proxy's release cycle |
+| **Dashboard** | Next.js, separate app (`dashboard/`) | BUILT (skeleton) | Client-facing UI, no reason to share the proxy's release cycle. Wired to the real `/api/v1/dashboard/stats` endpoint (`proxy/stats.go`); one stat card, no history/charts/auth yet |
 | **Deployment** | Docker image + compose (proxy + Redis + Postgres) | planned | Running in under an hour is the actual edge over enterprise onboarding |
 | **Metrics** | Prometheus client lib, off by default | planned | Optional; zero cost for clients who don't want it |
 

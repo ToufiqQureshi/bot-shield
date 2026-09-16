@@ -21,6 +21,7 @@ func main() {
 	target := flag.String("target", "", "origin server to protect, e.g. https://example.com")
 	certFile := flag.String("tls-cert", "", "TLS certificate file; enables TLS + JA4 fingerprinting")
 	keyFile := flag.String("tls-key", "", "TLS private key file, required with -tls-cert")
+	evidenceToken := flag.String("evidence-token", "", "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
 	flag.Parse()
 
 	if *target == "" {
@@ -32,13 +33,40 @@ func main() {
 		log.Fatalf("botshield: %v", err)
 	}
 
+	// The challenge page/verify endpoints stay reachable directly too,
+	// for manual testing.
+	challenge, err := proxy.NewChallenge()
+	if err != nil {
+		log.Fatalf("botshield: %v", err)
+	}
+
+	// Guard is where scoring (ROADMAP item 5) actually acts: allow,
+	// challenge, or block, instead of just labeling the request.
+	stats := &proxy.Stats{}
+	trail := proxy.NewTrail()
+	guard := proxy.NewGuard(p, challenge, stats, trail)
+
+	mux := http.NewServeMux()
+	mux.Handle("/__botshield/", challenge.Handler())
+	mux.Handle("/api/v1/dashboard/stats", stats.Handler())
+	mux.Handle("/", guard)
+
+	// The evidence endpoint returns per-visitor fingerprints, so it
+	// only exists once an operator has set a token for it. Left off, it
+	// can't leak anything or tell a bot whether it's being flagged.
+	if *evidenceToken != "" {
+		mux.Handle("/api/v1/dashboard/evidence", trail.Handler(*evidenceToken))
+	} else {
+		log.Print("botshield: -evidence-token not set, evidence endpoint disabled")
+	}
+
 	// These timeouts stop a client that opens a connection and then
 	// sends data slowly (or never) from holding it open forever.
 	// ReadHeaderTimeout does double duty: net/http also uses it as the
 	// TLS handshake deadline, so it covers a stalled handshake too.
 	// Do not remove it thinking it is only about headers.
 	srv := &http.Server{
-		Handler:           p,
+		Handler:           mux,
 		ConnContext:       proxy.ConnContext,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
