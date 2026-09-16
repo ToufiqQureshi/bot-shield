@@ -7,9 +7,10 @@ practical alternative to Akamai Bot Manager / DataDome / PerimeterX for
 companies that can't justify enterprise pricing.
 
 > 🚧 **Early development.** What works today: a TLS-terminating reverse
-> proxy that fingerprints every connection (JA4) and passes that to
-> your origin. It **labels** traffic; it does not block anything yet.
-> Scoring, challenges and the dashboard are still to come — see
+> proxy that fingerprints every connection (JA4), checks it against the
+> claimed browser, and scores each request — allowing it, serving a JS
+> challenge, or blocking it outright. Only 2 signals feed the score so
+> far, thresholds aren't per-client yet, and there's no dashboard — see
 > `docs/ROADMAP.md`.
 
 ## Why this exists

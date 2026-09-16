@@ -724,3 +724,544 @@ prevented, UA-mismatch bypassable by a bot naming itself, no scoring
 engine yet so nothing blocks traffic, no real LICENSE file) are
 unchanged and still listed in `docs/ROADMAP.md`'s Done section and
 `docs/DECISIONS.md`.
+
+---
+
+## 2026-09-15 — JS challenge page (ROADMAP P0 item 4, mechanism done)
+Changed:
+  - `proxy/challenge.go`: added `Challenge` — `NewChallenge()` (random
+    in-process HMAC secret), `Handler()` exposing GET
+    `/__botshield/challenge` (issue a puzzle) and POST
+    `/__botshield/verify` (check the answer), and `Passed(r)` for
+    whatever wires this in next to check an already-solved visitor.
+    The puzzle: a signed token binds a random nonce + issue time + the
+    exact page the visitor was on; the page's JS must compute
+    SHA-256(nonce) via `crypto.subtle` and submit a real
+    `canvas.toDataURL()` render. A wrong answer, missing/malformed
+    canvas proof, tampered/expired token, or a token signed by a
+    different secret all fail closed back to a fresh puzzle. On
+    success: a signed, HttpOnly/Secure/SameSite=Lax
+    `X-BotShield-Passed` cookie, and a redirect back to the exact
+    original path+query — `serveChallenge` is designed to be called in
+    place of proxying a real request (item 5's job, not built yet), so
+    the "page to return to" is just that request's own URL.
+    `safeRedirectPath` rejects `//host`, backslash tricks, and empty
+    paths to keep that redirect from becoming an open redirect.
+    `handleVerify` wraps the body in `http.MaxBytesReader` (64KB) since
+    this is a new unauthenticated, visitor-controlled POST endpoint.
+  - `proxy/challenge_test.go`: real end-to-end pass (GET the page,
+    extract the actual nonce/token a browser's JS would see via regex,
+    compute the real SHA-256 answer, POST it, confirm redirect + signed
+    cookie), wrong answer, missing canvas proof, tampered token,
+    expired token, cross-instance secret isolation, forged/expired
+    passed-cookie, oversized body (`MaxBytesReader` actually enforced),
+    wrong HTTP methods, `safeRedirectPath` open-redirect table, and two
+    tests specifically proving the redirect-back target is the exact
+    original path+query (not just "starts with the challenge route") —
+    added after the first version of that test was too weak to catch a
+    real bug (see below).
+  - `cmd/botshield/main.go`: mounts `challenge.Handler()` at
+    `/__botshield/` on a new `http.ServeMux`, proxy still on `/`.
+    Endpoints are reachable today for manual testing; nothing routes a
+    real visitor to them automatically yet.
+  - `docs/ROADMAP.md`: item 4 moved to Done with the design rationale
+    and known gaps inline.
+  - `docs/DECISIONS.md`: two entries — why the challenge requires a
+    canvas proof and not just a math answer (a sha256-only puzzle is
+    not actually JS-specific — any language can compute one), and why
+    the signing secret is random/in-process/unshared.
+Why: this is the ROADMAP's next P0 item after fingerprinting (item 2)
+and UA consistency (item 3). Both of those shipped as signals with no
+scoring engine to act on them yet (item 5); item 4 follows the same
+pattern deliberately — it builds the challenge *mechanism* fully and
+correctly, but does not invent an automatic triggering policy that
+belongs to scoring.
+Tested how:
+  - Design-level catch, mid-session: the first version of the
+    "redirects to the original path" test only asserted the Location
+    header *started with* the challenge route, which is trivially true
+    in that test's own setup and would have passed even with the
+    redirect logic doing something else. Rewrote it (plus added a
+    second test using an arbitrary site path) to assert the exact
+    original path+query round-trips — this is exactly the "assertion
+    satisfiable another way" trap `CLAUDE.md` Section 23b warns about,
+    caught before merge, not after.
+  - Mutation-checked three of the security-critical checks in
+    `challenge.go`, one at a time: removed the token-expiry check
+    (`TestChallengeRejectsExpiredToken` went red), removed the
+    canvas-proof check (`TestChallengeRejectsMissingCanvasProof` went
+    red), removed the answer comparison
+    (`TestChallengeRejectsWrongAnswer` went red). Each reverted
+    afterward, verified byte-for-byte against a backup before
+    continuing.
+  - `go build/vet/test ./...` clean, `gofmt -l` clean on the new files.
+    `-race` could not be run this session — no C compiler/CGO
+    available in this environment (`CGO_ENABLED=0`, no `gcc` on PATH),
+    unlike prior sessions' environment. Flagging this as an actual gap
+    in this session's verification, not silently skipping it.
+  - Real compiled binary run: local Python origin server + `botshield`
+    in front of it, both a plain passthrough request (200, proxied
+    correctly) and a full challenge solve done for real over HTTP
+    (GET the challenge, `sha256sum` the real nonce, POST the real
+    answer + a canvas-shaped value, confirmed 303 redirect back to the
+    exact original path+query and a signed `Set-Cookie`).
+  - Independent `/security-review` via a background agent (fresh eyes,
+    no context from this session): checked html/template escaping
+    context (JS-string context inside `<script>`, no `template.JS`/
+    `template.HTML` casts anywhere — correct), open-redirect bypasses
+    against `safeRedirectPath` (`//`, backslash, tab/CR/LF stripping,
+    double-encoded slash — traced through Go's URL
+    escaping/round-tripping, none survive), and signature/cookie
+    forgery (constant-time compares used throughout, token and
+    passed-cookie payload shapes are structurally incompatible so one
+    can't be replayed as the other). No findings.
+Known gaps / follow-up (not deferred without reason — see `CLAUDE.md`
+Section 17):
+  - **Not wired to automatic triggering.** Nothing currently sends a
+    real visitor to the challenge — that decision (who counts as
+    "ambiguous") is ROADMAP item 5's job, which doesn't exist yet. The
+    endpoints are live and correct but inert in production today,
+    matching exactly how items 2 and 3 shipped as signals nothing yet
+    consumed.
+  - **Canvas proof is a shape check, not a render check.** A bot that
+    specifically studies bot-shield can fake a passing string without
+    ever rendering anything server-verifiable. Documented in
+    `DECISIONS.md` as an accepted MVP-scope limitation, same class as
+    item 3's JA4-database gap — real pixel verification is a project
+    of its own.
+  - **Signing secret is per-process, in-memory only.** A restart or a
+    second instance invalidates every outstanding challenge/cookie.
+    Correct for the current single-process architecture; needs the
+    planned Redis store before bot-shield can run more than one
+    instance.
+  - **This session could not run `-race`** (no cgo/gcc in this
+    environment). The code was still reviewed for the same concurrency
+    concerns `-race` would catch (the HMAC secret is read-only after
+    construction, no shared mutable state introduced), but that is
+    reasoning, not a tool result — worth an actual `-race` run in an
+    environment that has it before this is called fully verified.
+  - No rate limiting on `/__botshield/verify` — out of scope
+    deliberately (ROADMAP item 9, not item 4), matching the project's
+    "don't build ahead of the roadmap order" pattern from item 1.
+
+---
+
+## 2026-09-15 — Scoring engine v1 (ROADMAP P0 item 5, done); Antigravity joins the project
+Changed:
+  - `proxy/score.go`: added `Score(ja4, ua string) int` (combines the
+    JA4-fragmentation and UA-mismatch signals, 50 points each,
+    additive) and `Decide(score int) Decision` (allow/challenge/block
+    at fixed 50/100 thresholds), plus the `Decision` type and its
+    `String()`.
+  - `proxy/guard.go`: added `Guard`, wrapping the proxy and the JS
+    challenge into the real per-request decision — a passed-challenge
+    visitor goes straight through, otherwise `Score`/`Decide` picks
+    allow (proxy as before), challenge (serve the JS challenge in
+    place of proxying), or block (403, origin never sees the request).
+  - `proxy/challenge.go`: renamed `serveChallenge` to the exported
+    `Serve`, since `Guard` needs to call it from outside the package's
+    own challenge-handling code — same method, no behavior change.
+  - `cmd/botshield/main.go`: `/` is now served by `Guard`, not the bare
+    proxy. `/__botshield/` stays mounted for direct manual testing.
+  - `proxy/score_test.go`, `proxy/guard_test.go`: unit tests for every
+    `Score`/`Decide` boundary, plus four real end-to-end tests through
+    actual TLS handshakes (reusing items 2-4's `startCapture`/
+    `fragmentingRelay` harness): allowed (no signal), blocked (both
+    signals), challenged (one signal, origin never reached), and a
+    real passed-cookie bypassing what would otherwise block.
+  Why: this is the item the whole product has been building toward —
+  every earlier item (fingerprint, UA check, JS challenge) was
+  deliberately a label with nothing consuming it yet
+  (`docs/ROADMAP.md`'s own recurring note on items 2-4). This closes
+  that loop: bot-shield now actually allows, challenges, or blocks a
+  real request instead of only describing it.
+  Tested how:
+    - Real end-to-end tests, not the pure functions in isolation: a
+      real TLS client through a real capture listener, using the same
+      `fragmentingRelay` trick items 2-4 already built to produce a
+      real `JA4Unreadable` fingerprint, checking actual HTTP status
+      codes and that the origin was or wasn't reached (via a buffered
+      channel, same pattern as every other end-to-end test in this
+      package).
+    - Mutation-checked: removed the passed-cookie bypass from `Guard`
+      → `TestGuardPassedCookieBypassesBadSignals` failed naming the
+      wrong status code (403 instead of 200). Removed the UA-mismatch
+      weighting from `Score` → three tests went red
+      (`TestScoreUAMismatchOnly`, `TestScoreBothSignals`, and the real
+      end-to-end `TestGuardBlocksCombinedSignals`), proving the unit
+      tests and the integration test both actually depend on that
+      code path, not just one of them. Both mutations reverted,
+      confirmed byte-for-byte via diff against a backup before
+      continuing.
+    - Found and fixed a real bug in my own first draft of
+      `guard_test.go`, not in production code: a hand-built
+      `application/x-www-form-urlencoded` body containing the literal
+      canvas value `data:image/png;base64,...` failed to parse — Go's
+      `url.ParseQuery` rejects a literal `;` in a form body (since Go
+      1.17, RFC 3986 ambiguity). A real browser's `URLSearchParams`
+      percent-encodes it automatically; my test's raw string
+      concatenation didn't. Fixed by reusing `challenge_test.go`'s
+      existing `postVerify` helper, which builds the body correctly
+      via `url.Values.Encode()`, instead of hand-rolling a second,
+      wrong way to do the same thing.
+    - `go build/vet/test ./proxy/... ./cmd/...` clean (`-race`
+      unavailable this session, same gap noted in item 4's entry).
+      `gofmt -l` clean on every new/changed file (pre-existing files
+      still show CRLF-only diffs unrelated to this change, as noted in
+      item 4's entry).
+    - Real compiled binary run: a local origin plus `botshield` in
+      front of it, plain HTTP (no `-tls-cert`) request through
+      `Guard` — 200, unchanged from before this change, confirming
+      the fail-open path (no TLS, so nothing to score, so nothing is
+      ever penalized for a connection bot-shield genuinely can't
+      examine) still holds with `Guard` in the path.
+  Known gaps / follow-up (not deferred without reason — `CLAUDE.md`
+  Section 17):
+    - Thresholds and weights (50/50, challenge at 50, block at 100)
+      are reasoned, not tuned against real traffic — there is none
+      yet. See `docs/DECISIONS.md` for the reasoning and what would
+      trigger a revisit.
+    - Not yet per-client configurable (`docs/ROADMAP.md` item 11).
+    - Only 2 of the planned signals (items 2, 3) feed the score; item
+      6 (client-side automation probe) is the next input, not built.
+    - Antigravity (dashboard/frontend) asked for a simple analytics
+      endpoint (total/allowed/challenged/blocked counts) to build the
+      dashboard against — not built in this pass, tracked as a
+      follow-up task for whoever picks up the API-contract work next.
+    - Independent `/security-review` was not run for this specific
+      change — `Guard`/`Score`/`Decide` don't introduce new
+      visitor-controlled *input* (they only read signals items 2-4
+      already validated and reviewed), so the Section 24b trigger
+      ("especially on visitor-controlled input") is weaker here than
+      it was for the challenge page itself. Worth a pass before this
+      is called fully done if the thresholds change or a new signal is
+      added.
+Also this session: **Antigravity (a second coding agent, Google's
+IDE) joined the project**, working in parallel via `agentchat/`. Real,
+consequential process changes came out of that — recorded in
+`claude_and_agy.md` (new file, roles/workflow) and the two
+`docs/DECISIONS.md` entries above/below this one (scoring thresholds;
+why the MCP-based coordination attempt was tried and removed the same
+day). Ownership split: Antigravity owns dashboard/frontend, Claude
+Code owns backend/proxy — and per direct project-owner correction
+mid-session, Claude Code's role going forward is PM/senior-dev/CTO
+(assign small tasks to Antigravity, review its work against
+`CLAUDE.md`, fix/improve it directly when needed — not "rubber-stamp
+or reject"), not "write every line personally by default." See
+`claude_and_agy.md` for the full model; read it before assigning or
+reviewing any cross-agent work next session.
+
+---
+
+## 2026-09-15 — Dashboard analytics endpoint; first real Antigravity code review
+Changed:
+  - `proxy/stats.go`: added `Stats` (atomic counters:
+    total/passed/challenged/blocked) and its `Handler()`, serving
+    `GET /api/v1/dashboard/stats` in the exact shape Antigravity
+    specified in `agentchat/chat.jsonl`.
+  - `proxy/guard.go`: `Guard` now takes a `*Stats` and increments the
+    matching counter on every decision (allow, challenge, block,
+    including the already-passed-challenge bypass path).
+  - `cmd/botshield/main.go`: mounts the stats endpoint at
+    `/api/v1/dashboard/stats`.
+  - `proxy/stats_test.go`: JSON shape/field-name tests, wrong-method
+    rejection, CORS header check, and a real end-to-end test that
+    `Guard` actually increments counters, not just decides outcomes.
+  - `dashboard/__tests__/DashboardStats.test.tsx`,
+    `dashboard/src/components/DashboardStats.tsx`: **reviewed
+    Antigravity's dashboard skeleton** (first real review under the
+    new PM/reviewer model, `claude_and_agy.md`) and found + fixed one
+    real gap: the component has a full error/retry UI branch
+    (`Connection Lost`, retry button) that had zero test coverage,
+    because the mock data source (`StatsMock.ts`) never actually
+    fails. Added a test that makes it fail once (`jest.mock` +
+    `mockRejectedValueOnce`) and asserts the error UI renders and
+    stale/partial stats don't. This is exactly the gap `CLAUDE.md`
+    Section 23b calls out ("only the easy input... doesn't prove
+    robustness") — a real backend being down is the normal case for a
+    bot-detection dashboard, not an edge case.
+Why: Antigravity finished the dashboard skeleton and posted its own
+API contract (`/api/v1/dashboard/stats`,
+`{total_requests, passed, challenged, blocked}`) in `agentchat/`
+before this session got to it — built the backend to match that
+contract exactly, contract-first, rather than the other way around.
+Then reviewed Antigravity's frontend work for real, per the
+project owner's direct instruction that reviewing means fixing gaps
+directly, not just reporting them back.
+Tested how:
+  - Ran Antigravity's existing dashboard test suite for real
+    (`npm test` in `dashboard/`) before touching anything — both tests
+    passed, confirmed not just trusted.
+  - Mutation-checked Antigravity's existing tests before adding
+    anything: changed the mock's `total_requests` value — both
+    existing tests **stayed green**, because they assert against
+    `mockDashboardStats` imported from the same module rather than a
+    fixed expected value (so they verify internal consistency between
+    mock and render, not a wrong number by itself — noted, not
+    necessarily a defect, but worth knowing what the test actually
+    proves). Then swapped which field renders under the "Passed"
+    label (a realistic copy-paste bug class) — this **did** turn the
+    existing "renders mock stats" test red, confirming it does catch
+    real rendering bugs even though it wouldn't catch a wrong mock
+    value. Reverted both mutations, confirmed clean via diff against a
+    backup.
+  - Added the error-state test, then mutation-checked it the same way
+    every test in this project is checked: removed the `catch` block's
+    `setError` call → the new test went red (`Connection Lost` never
+    found). Reverted, confirmed green (3/3 tests) again.
+  - `proxy/stats.go`: full `go build/vet/test ./proxy/... ./cmd/...`
+    clean, `gofmt -l` clean on every new/changed Go file. Mutation-
+    checked `Guard`'s counter increment (see `docs/ROADMAP.md` item 5
+    entry). Real compiled-binary run: two plain-HTTP requests through
+    the actual `Guard`, then `curl` the stats endpoint — response was
+    `{"total_requests":2,"passed":2,"challenged":0,"blocked":0}`,
+    exactly matching Antigravity's contract, confirmed the CORS header
+    is present for the dashboard's separate origin to call it.
+Known gaps / follow-up:
+  - The dashboard's real `fetch("/api/v1/dashboard/stats")` call is
+    still commented out in `DashboardStats.tsx` — it renders mock data
+    only. Wiring it to the now-real backend endpoint is Antigravity's
+    next piece; posted the working endpoint + confirmed response shape
+    in `agentchat/chat.jsonl` so that's unblocked.
+  - Counters are in-memory only (resets on restart) — acceptable for a
+    skeleton/demo, not for a real client dashboard. Needs the planned
+    Postgres store before this is real analytics, not a placeholder.
+  - This was Claude Code's first full review-and-fix pass on
+    Antigravity's code under the new model
+    (`claude_and_agy.md`) — worth checking next session whether this
+    depth of review (read the code, run its tests, mutation-check
+    both the existing tests and the ones added, fix a real gap
+    directly) is the right amount, too much, or not enough, once
+    there's more than one data point.
+
+---
+
+## 2026-09-16 — Client-side automation probe (ROADMAP P0 item 6, done); session wrap-up
+Changed:
+  - `proxy/challenge.go`: the challenge page's JS now also checks
+    `navigator.webdriver` and known Selenium/PhantomJS/Nightmare.js
+    globals, sending the result as `automation` in the verify POST.
+    `handleVerify` fails the challenge (no passed cookie) if it's
+    `"true"`, even when the sha256/canvas checks already passed.
+  - `proxy/challenge_test.go`: added `postVerifyFull` (extends
+    `postVerify` with an automation param, existing calls unaffected)
+    and `TestChallengeRejectsAutomationFlag`.
+  - `docs/ROADMAP.md`: item 6 moved to Done with the scope reasoning
+    inline; `docs/DECISIONS.md` has the full "why inside the challenge
+    page, not site-wide" entry.
+Why: next P0 item after the scoring engine. Scoped deliberately
+narrower than the literal wording — see the new `docs/DECISIONS.md`
+entry — reusing the one place this codebase already runs its own JS
+in a visitor's browser, instead of building a new (and much larger)
+HTML-injection feature with no roadmap decision behind it.
+Tested how: mutation-checked (removed the automation check, the new
+test went red, reverted, confirmed byte-for-byte via diff). Full
+`go build/vet/test ./proxy/... ./cmd/...` clean, `gofmt -l` clean on
+changed files.
+Known gaps / follow-up: Patchright-class tools that specifically strip
+these markers aren't caught (documented, matches `docs/RESEARCH.md`'s
+existing "behavioral/timing signals, item 7" answer for that tier).
+Only runs for traffic that already reached the challenge, not
+site-wide — see `docs/DECISIONS.md` for why and when to revisit.
+
+**Session wrap-up (project owner asked to stop for today) — status of
+everything built by both agents, checked against `CLAUDE.md`:**
+
+*Claude Code (backend, `proxy/`, `cmd/botshield/`) — all items below
+built test-first, mutation-checked, verified against the real compiled
+binary this session, `go build/vet/test ./proxy/... ./cmd/...` clean
+as of this entry:*
+- Item 1 (reverse proxy), item 2 (TLS/JA4), item 3 (UA consistency):
+  built in earlier sessions, unchanged today, still green.
+- Item 4 (JS challenge): built earlier this session (2026-09-15).
+- Item 5 (scoring engine — `score.go`, `guard.go`): built today.
+- `proxy/stats.go` (dashboard analytics endpoint, matches
+  Antigravity's contract): built today.
+- Item 6 (automation probe): built today, this entry.
+- **Not done / explicitly out of scope for now:** item 7+ (P1,
+  behavioral scoring and beyond) — not started. `-race` could not be
+  run this session (no cgo/gcc in this environment) — noted as a real
+  gap in each entry it affects, not silently skipped. No per-client
+  config (item 11). Counters/challenge secret are in-memory only
+  (need the still-planned Redis/Postgres).
+
+*Antigravity (frontend, `dashboard/`) — reviewed by Claude Code once
+this session (see the "first real Antigravity code review" entry
+above):*
+- Dashboard skeleton (Next.js, `dashboard/`) built against mock data,
+  with loading/error/happy-path states and tests. One real gap
+  (untested error state) found and fixed during review.
+- API contract (`/api/v1/dashboard/stats`) proposed by Antigravity,
+  now implemented for real on the backend and confirmed matching via
+  `curl` against the compiled binary.
+- **Not done:** the dashboard's real `fetch()` call to that endpoint
+  is still commented out — it renders mock data only. This is
+  Antigravity's next piece, not blocked on anything now that the real
+  endpoint exists and its shape is confirmed. Not reviewed again since
+  the one pass above (no new Antigravity commits landed in
+  `agentchat/chat.jsonl` before this session ended).
+
+**Honest overall answer to "is everything done and CLAUDE.md-compliant":**
+Backend items 1-6 are each individually done to this project's own bar
+(tested, mutation-checked, real-binary-verified, docs updated) — yes.
+The *product* is not done: nothing beyond items 1-6 exists (no
+behavioral scoring, no rate limiting, no per-client config, no
+dashboard wired to real data, no deployment story). That's expected —
+P0 was always items 1-6, and P1/P2 are explicitly next, not skipped.
+Next session should read `claude_and_agy.md` and this entry before
+assigning new work.
+
+---
+
+## 2026-09-16 — Dashboard wired to the real backend; dead code removed; merged a landed upstream PR
+Changed:
+  - `dashboard/src/lib/stats.ts` (new): `fetchStats()` — the real
+    `fetch("${API_BASE_URL}/api/v1/dashboard/stats")` call, checks
+    `res.ok` before returning, throws on a non-2xx status.
+    `API_BASE_URL` reads `NEXT_PUBLIC_API_BASE_URL`, defaults to
+    `http://localhost:8080` for local dev. `DashboardStatsData` moved
+    here from the deleted mock file.
+  - `dashboard/src/components/DashboardStats.tsx`: now calls
+    `fetchStats()` instead of `fetchStatsMock()`; the commented-out
+    "replace with real API call when backend is ready" block is gone
+    — it *is* the real call now.
+  - `dashboard/src/components/StatsMock.ts`: **deleted**. Once
+    `DashboardStats.tsx` called the real endpoint, this was dead code
+    (`CLAUDE.md` Section 24a) — nothing referenced `fetchStatsMock`
+    outside the test file.
+  - `dashboard/src/app/page.tsx`: removed `import Image from "next";`
+    — unused, and actually broken (`Image` isn't a default export of
+    `"next"`, that's `"next/image"`) — leftover, never-fixed
+    `create-next-app` boilerplate.
+  - `dashboard/src/app/layout.tsx`: page metadata (`title`,
+    `description`) still said "Create Next App" / "Generated by create
+    next app" — replaced with the actual product name/description.
+  - `dashboard/__tests__/DashboardStats.test.tsx`: rewritten to mock
+    `global.fetch` directly instead of mocking the now-deleted
+    `StatsMock` module. Added a test for a non-2xx backend response
+    (the existing rejected-promise test only covered a network-level
+    failure, not "backend responded but with an error status" — a
+    different, equally real failure mode for a live HTTP call that
+    didn't exist when the code only called a mock).
+Why: the project owner asked directly — "Antigravity ne jo kaam kiya,
+usko connect aur polish kar, tests aur unnecessary lines/dead code
+hatao" (connect Antigravity's work to the real backend, polish it per
+`CLAUDE.md`, clean up dead code) — before stopping for the day. The
+skeleton was correct but explicitly unfinished (its own comment said
+"replace with real API call when backend is ready" — the backend
+was ready as of the previous entry).
+Tested how:
+  - `npm test` in `dashboard/`: 4/4 passing (was 3/4 — added the
+    non-2xx-status case).
+  - Mutation-checked the new `res.ok` check in `fetchStats()`:
+    removed it, the non-2xx test went red (rendered nothing instead
+    of the error UI), reverted, confirmed green again.
+  - `npx eslint .` clean, `npx tsc --noEmit` clean, `npm run build`
+    (real Next.js production build, not just dev mode) succeeded.
+  - Real end-to-end integration test, not just unit tests: built and
+    ran the actual `botshield` binary on `:8080` with a real origin
+    behind it, ran the actual Next.js dev server on `:3000`, confirmed
+    (a) the compiled JS bundle contains `api/v1/dashboard/stats` and
+    no reference to the deleted mock, (b) `curl` with an
+    `Origin: http://localhost:3000` header against the backend returns
+    `Access-Control-Allow-Origin: *` — the exact cross-origin request
+    shape a real browser's `fetch()` would make from the dashboard's
+    dev server to the backend, confirmed to succeed.
+  - Killed only the specific PIDs this session's test processes were
+    bound to (checked via `netstat`), not a blanket `taskkill` of all
+    `node.exe`/`python.exe` — other node/python processes on this
+    machine belong to Antigravity's own tooling, not this session's.
+  **Also this session: merged a landed upstream PR before any of this
+  was pushed.** The project owner flagged that PR #3 (a different
+  Claude Code session's work — new `docs/RESEARCH.md` competitor
+  research and two new `docs/ROADMAP.md`/`docs/DECISIONS.md` items,
+  9a/11a) had merged to `main` overnight, and asked to check for
+  conflicts before pushing anything from this session. It had, and
+  both sessions had touched `docs/DECISIONS.md` and `docs/ROADMAP.md`.
+  Resolved safely since nothing from this session was committed yet:
+  `git stash -u` (all uncommitted changes, tracked and untracked),
+  `git merge origin/main` (clean fast-forward), `git stash pop`.
+  `docs/ROADMAP.md` auto-merged with no conflict; `docs/DECISIONS.md`
+  had one (both sessions added a new entry at the top of the file) —
+  resolved by keeping both entries in full, newest-dated first, no
+  content from either side dropped. Verified `go build/vet/test
+  ./proxy/... ./cmd/...` still clean after the resolution before
+  dropping the stash.
+Known gaps / follow-up:
+  - Nothing in this session has been committed or pushed yet — still
+    working tree changes only. Next step, if the project owner wants
+    it, is to commit and open a PR the same way items 1-4's sessions
+    did.
+  - `dashboard/AGENTS.md`/`dashboard/CLAUDE.md` (a `next dev`-generated
+    file, per its own header comment) weren't touched — out of scope
+    for this pass, and the file itself says it's regenerated
+    automatically.
+  - The dashboard's own `README.md` is still the unedited
+    `create-next-app` default (generic Next.js getting-started text,
+    not bot-shield-specific). Noticed during this review, not fixed —
+    lower priority than the dead code/wiring issues actually blocking
+    real functionality, flagging per `CLAUDE.md` Section 16 rather than
+    silently leaving it unmentioned.
+
+---
+
+## 2026-09-16 — Session handoff: P0 (items 1–6) complete, nothing committed yet
+Changed: nothing new in this entry — end-of-day handoff, project owner
+asked to stop for today after finishing what was in flight.
+**Verified state, right before writing this:**
+  - `git log -1 HEAD` = `2c3e33f` (origin/main, PR #3 merged in — see
+    the "merged a landed upstream PR" note in the entry above this
+    one). Local branch is caught up with `origin/main`; no divergent
+    local commits.
+  - **Nothing from today is committed.** `git status` shows all of
+    today's work as working-tree changes (modified: `.gitignore`,
+    `CLAUDE.md`, `README.md`, `cmd/botshield/main.go`,
+    `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`,
+    `docs/ROADMAP.md`; new/untracked: `claude_and_agy.md`,
+    `proxy/{challenge,guard,score,stats}.go` + their `_test.go` files,
+    `dashboard/`). `agentchat/` and `.agents/` are gitignored, not
+    tracked — expected.
+  - `go build/vet/test ./proxy/... ./cmd/...` clean (44 tests, all
+    green). `dashboard/`: `npm test` (4/4), `npx eslint .` clean,
+    `npx tsc --noEmit` clean, `npm run build` (real production build)
+    succeeds.
+  - `agentchat/web.py` was left running on `http://localhost:9999`
+    (background process) so the chat UI stays usable — a new session
+    doesn't need to restart it unless it's actually down; check with
+    `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9999/`
+    before assuming it needs restarting.
+
+**What a new session must do first (per `CLAUDE.md` Section 0/2):**
+  1. Read `docs/AGENT.md` → `ARCHITECTURE.md` → `ROADMAP.md` →
+     `DECISIONS.md` → `RESEARCH.md` → `PROGRESS.md` (this file, read
+     the last ~3 entries in full, not just this one) → `CLAUDE.md` →
+     **`claude_and_agy.md`** (new this session — the two-agent
+     workflow model; read it before assigning or reviewing any work).
+  2. `git status` and `git log -1` to confirm the state above still
+     holds — don't assume it does just because this note says so.
+  3. Check `agentchat/chat.jsonl` (or `http://localhost:9999`) for
+     anything from Antigravity since this session ended — no automatic
+     notification exists, it must be checked manually (see
+     `claude_and_agy.md` and the "agentchat: removed the MCP server"
+     `DECISIONS.md` entry for why).
+  4. Decide whether to commit/PR today's work — this session did not,
+     since committing/pushing wasn't explicitly requested and is a
+     more consequential action than the polish/connect work that was
+     asked for. Everything is verified and working in the tree; it's
+     ready to commit whenever the project owner confirms they want
+     that.
+
+**What's actually done (P0, items 1–6):** reverse proxy, TLS/JA4
+fingerprinting, UA-consistency check, JS challenge (sha256 + canvas +
+automation-framework detection), scoring engine (`Score`/`Decide`/
+`Guard`), and a live dashboard-stats endpoint wired to a real (skeleton)
+Next.js dashboard. All individually tested, mutation-checked, and
+verified against real compiled binaries this session and prior ones.
+
+**What's next (not started, no code exists for these yet):** P1 items
+7–11 (behavioral scoring, session consistency, rate/pattern anomaly
+detection, honeypot fields, per-client rules) and the rest of P2 item
+12 (dashboard history-over-time, top offenders, false-positive report
+button — today's work is a live-snapshot skeleton, not the full item).
+Read `docs/ROADMAP.md`'s "How to read this list" section before
+picking the next item — P1 comes after P0 is proven, not before.

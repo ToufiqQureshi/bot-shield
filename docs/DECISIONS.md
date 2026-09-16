@@ -10,6 +10,39 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Automation probe lives inside the JS challenge, not injected site-wide — 2026-09-16
+**Decision:** ROADMAP item 6's "client-side automation-tool probe"
+runs inside the existing JS challenge page (`proxy/challenge.go`),
+checked only for visitors who reach that page — not injected into
+every proxied origin response.
+**Why:** injecting a JS snippet into arbitrary origin HTML is a real,
+separate feature (parse/rewrite HTML, handle charset and compressed
+responses, interact correctly with the origin's own CSP) that this
+codebase has no infrastructure for and no roadmap decision to build.
+The challenge page is the one place bot-shield already controls its
+own JS execution in a visitor's browser — reusing it is both smaller
+and immediately testable with the existing harness, matching
+`CLAUDE.md` Section 3/13's bias against building new machinery when
+existing machinery already does the job.
+**Alternatives considered:** a full response-body JS-injection
+middleware — rejected as a large, undecided feature of its own; would
+also need to handle every origin's existing CSP header correctly to
+avoid breaking real sites, which is a meaningful security surface on
+its own.
+**Coverage trade-off, accepted:** the probe only ever runs for traffic
+that already reached the challenge (score ≥ 50) — a request scored
+`DecisionAllow` never executes it. This narrows item 6's literal
+"flags obvious automation frameworks in-browser" (which reads as
+site-wide) to "flags them for traffic already under suspicion,"
+similar in spirit to item 3's narrowing of "verify real client family"
+to what's provable without a maintained database.
+**Revisit when:** HTML-injection into origin responses becomes an
+actual roadmap item for other reasons (e.g. behavioral scoring, item
+7, likely needs this too) — at that point item 6 should extend to
+run everywhere, not just on the challenge page.
+
+---
+
 ## Added 2 competitor-gap items to roadmap, rejected the rest — 2026-09-15
 **Decision:** after a competitor scan (DataDome, Akamai, Cloudflare,
 Kasada, Arkose, HUMAN/PerimeterX — see `RESEARCH.md`), added item 9a
@@ -40,6 +73,150 @@ it separately from block/challenge false positives.
 **Revisit when:** item 5 (scoring engine) ships — that's the actual
 blocker for both 9a and 11a, since neither can be built before there's
 a decision layer to plug into.
+
+---
+
+## Scoring thresholds: additive weights, no single signal blocks alone — 2026-09-15
+**Decision:** `Score()` gives the JA4-fragmentation signal and the
+UA-mismatch signal 50 points each, additive. `Decide()` blocks at 100,
+challenges at 50, allows below that. A single signal firing alone can
+only ever reach 50 (challenge), never 100 (block) — block requires
+both.
+**Why:** `CLAUDE.md` Section 6 is explicit that no single signal may
+be the only thing between allow and block. Fragmentation and UA
+mismatch are correlated (a fragmented handshake is one of UAMismatch's
+own inputs) but not the same finding: fragmentation is a
+fingerprint-layer anomaly true regardless of what the client claims to
+be; UA mismatch is a consistency-layer *lie*, which needs a browser
+claim to exist at all. Scoring them as two separate, additive signals
+— rather than collapsing them into one — means a bot that fragments
+its handshake but doesn't claim to be a browser (most naive scripts:
+curl, requests, a bare `net/http` client) gets challenged, not
+blocked, matching the product's own "don't hard-block on a single
+imperfect signal" principle even when that signal is strong.
+**Alternatives considered:** a single combined "TLS anomaly" signal
+worth 100 whenever fragmentation OR UA mismatch fires — rejected,
+that's exactly the single-point-of-failure shape Section 6 forbids,
+and it would immediately hard-block anything that merely fragments
+without ever claiming to be a browser (an honest scripted client that
+happens to fragment for unrelated reasons — a censorship-circumvention
+tool, per `docs/RESEARCH.md` — shouldn't get the harshest outcome for
+one imperfect signal).
+**False-positive risk, accepted:** a claimed-browser client on an old
+TLS stack or a fragmenting network path hits the challenge threshold
+alone (50) — costs a real user one extra JS-challenge page load, not a
+block. A corporate proxy that both intercepts TLS *and* somehow
+triggers fragmentation would hit the block threshold — considered
+unlikely enough to accept for v1, revisit if real traffic shows
+otherwise.
+**Revisit when:** item 6 (client-side automation probe) adds a third
+signal — weights need rebalancing so three signals firing doesn't make
+the threshold model meaningless (e.g. any two of three always
+blocking regardless of severity). Also revisit once real client
+traffic exists to tune against instead of reasoned guesses.
+
+---
+
+## agentchat: removed the MCP server, kept plain file + manual relay — 2026-09-15
+**Decision:** built, then deleted the same day, `agentchat/mcp_server.py`
+— an MCP server exposing `send_message`/`get_messages`/
+`wait_for_message` tools over `chat.jsonl` so Claude Code and
+Antigravity could message each other without hand-editing a file.
+Reverted to the original design: a plain `chat.jsonl` log plus
+`agentchat/web.py` (stdlib-only HTTP bridge) for the project owner to
+type into directly. Coordination between the two agents is manual —
+the owner tells each one to check the log.
+**Why:** two real problems, found by actually building and testing it,
+not guessed in advance:
+1. **Shared code file caused a live edit war.** Both agents were told
+   they could edit `mcp_server.py`; when both did, each fix silently
+   overwrote the other's — twice, in the same session, confirmed by
+   the file breaking (`ImportError`/`AttributeError` from a
+   low-level-API rewrite that removed the decorator the working
+   version needed) right after being fixed.
+2. **It never actually solved the problem it was built for.** MCP
+   tool calls only execute when an agent's host chooses to call them —
+   there is no push. Verified two ways: (a) Antigravity's own
+   background script "just prints to stdout, which doesn't wake me
+   up," confirmed live in `chat.jsonl`; (b) web research (see below)
+   confirms this isn't specific to our setup — MCP's 2026-07-28 spec
+   added `notifications/resources/updated` subscriptions, but even
+   working implementations "do not guarantee durable event delivery,
+   wake a model, or start an agent turn," and adoption is near zero
+   because of it.
+**Alternatives considered:** giving each agent its own separate MCP
+server file (no shared code, avoids problem 1) — rejected once problem
+2 was confirmed, since it wouldn't have fixed the actual goal
+(automatic notification), only the file-collision symptom.
+**What would actually work, and why it's not built here:** a trigger
+inside each agent's own host application (a file-watcher, a scheduled
+job, a webhook-driven automation — the pattern real products like
+Cursor's "Automations" use). This has to be configured per-agent, in
+that agent's own tool/IDE settings — Claude Code cannot build or
+enable this for Antigravity, and vice versa. If the project owner
+wants real automatic wake-up, it needs enabling on each side
+separately, not more code in `agentchat/`.
+**Revisit when:** either agent's host natively supports a
+"wake on event" mechanism the owner can point at `chat.jsonl`, or the
+MCP ecosystem's server-initiated-events work (webhooks/channels, on
+its own 2026 roadmap per the research below) actually ships and gets
+adopted — not before.
+**Sources checked:** [Using MCP Push Notifications in AI Agents](https://gelembjuk.com/blog/post/using-mcp-push-notifications-in-ai-agents/), [MCP Has Notifications. So Why Can't Your Agent Watch Your Inbox?](https://ankitmundada.medium.com/mcp-has-notifications-so-why-cant-your-agent-watch-your-inbox-bb688fde7ac5), [anthropics/claude-code#36665](https://github.com/anthropics/claude-code/issues/36665), [MCP Roadmap 2026](https://www.explainx.ai/blog/the-new-mcp-roadmap-2026).
+
+---
+
+## JS challenge: sha256+canvas proof, not a math-only puzzle — 2026-09-15
+**Decision:** `proxy.Challenge` requires two things from the client's
+JS, not just one: the SHA-256 of a server-issued nonce, and a
+`canvas.toDataURL()` render. It does not stop at the math step alone.
+**Why:** a sha256-of-a-nonce puzzle by itself is not actually
+JS-specific — any language can compute a SHA-256 in one line, so a
+scripted client that bothers to parse the challenge HTML and hash the
+nonce defeats it without ever running JS, which would fail the
+ROADMAP's own claim ("a plain HTTP client without a JS engine fails
+immediately"). Requiring an actual `canvas.toDataURL()` output raises
+the real bar toward needing a genuine browser rendering engine, which
+a bare HTTP client cannot produce without one.
+**Alternatives considered:** math-only challenge (simpler, matches a
+literal reading of "math + timing") — rejected once traced through:
+it only filters clients too lazy to read the page, not clients without
+a JS engine, which is the actual stated threat.
+**Known limitation, accepted:** the canvas proof is a client-reported
+string (`validCanvasProof` checks its shape — prefix + minimum
+length — not its actual pixel content). A bot author who studies
+bot-shield specifically can fake a plausible-looking string without
+ever rendering anything. Verifying real pixel content server-side
+needs either a headless-render comparison service or a much larger
+research effort — out of MVP scope, same class of accepted limitation
+as item 3's JA4-database gap. This is why the challenge raises cost
+for a naive-to-intermediate bot; it does not claim to stop a bot built
+specifically against bot-shield.
+**Revisit when:** real traffic data shows the canvas check is either
+pulling its weight or not worth the false-positive risk on browsers
+with canvas disabled (privacy tools, some accessibility setups).
+
+---
+
+## JS challenge secret: random, in-process, not shared — 2026-09-15
+**Decision:** `NewChallenge()` generates a random 32-byte HMAC secret
+at process start, kept in memory only. No config flag, no persisted
+key.
+**Why:** a hardcoded secret in source would let anyone who reads the
+code forge challenge tokens and passed-cookies — worse than no signing
+at all. A random per-process secret closes that immediately, at the
+cost of invalidating outstanding challenges on restart or across
+multiple instances. Since there's only one process in the current
+architecture (`docs/ARCHITECTURE.md` — "No Kubernetes, no
+microservices for v1"), that cost is real but currently free.
+**Alternatives considered:** a secret passed via flag/env var — not
+implemented yet; would let a restart survive without invalidating
+outstanding cookies, but there's no config-loading mechanism in the
+codebase yet to hang it off, and the current architecture is single-
+instance so the gap has no observable effect yet.
+**Revisit when:** bot-shield runs more than one process (needs a
+shared secret — the planned Redis store, `docs/ARCHITECTURE.md`, is
+the natural place) or when the passed-cookie's 30-minute lifetime
+surviving a restart becomes something a real client asks for.
 
 ---
 

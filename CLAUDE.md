@@ -36,6 +36,7 @@ because breaking it already cost this project something real.
 | Checklists: before coding / before pushing | 19, 22 |
 | Threat-driven design | 20 |
 | Standard library first; using the review tools | 24, 24b |
+| Working alongside Antigravity; review scope | 25 |
 
 ## 0. Documentation Map — Read In This Order
 
@@ -65,6 +66,10 @@ different question; do not skip ahead.
    checklist doesn't carry.
 7. **`CLAUDE.md`** (this file) — *how* to write the code: standards,
    naming, testing, safety rules, workflow.
+8. **`claude_and_agy.md`** — *who* does what: Claude Code's role
+   (PM/senior dev/reviewer) versus Antigravity's (implementer), the
+   60/40 split, and how the two agents coordinate. Read this whenever
+   assigning or reviewing work, not just when writing code.
 
 If any of these is unclear or missing something you need, resolve
 that before coding — do not guess and proceed.
@@ -707,3 +712,75 @@ The Claude Code skills `/code-review`, `/security-review` and
 declaring it done — especially `/security-review` on anything that
 touches visitor-controlled input. An independent pass does not share
 your blind spots, which is the entire point on a solo project.
+
+---
+
+## 25. Multi-Agent Workflow — Claude Code + Antigravity
+
+As of 2026-09-15, bot-shield is built by two coding agents working in
+parallel, coordinated by the project owner through `agentchat/` (a
+local dev tool, gitignored, not shipped product — see
+`docs/DECISIONS.md`). It's a shared, plain `chat.jsonl` log — one
+JSON object per line, `{"agent": "...", "text": "..."}` — plus
+`agentchat/web.py` (stdlib-only, no dependencies) serving
+`agentchat/index.html` and a `POST /api/messages` endpoint so the
+project owner can type into the page directly.
+
+**An MCP server (`agentchat/mcp_server.py`) was tried and removed the
+same day.** Two real problems killed it, in this order: (1) it gave
+both agents a shared code file to edit, which caused a live edit war
+— each side's fix overwrote the other's, twice, confirmed in
+`docs/DECISIONS.md`; (2) even working, it never solved the actual
+goal — MCP tool calls only run when an agent chooses to call them, so
+neither agent was ever notified when the other posted. Antigravity
+confirmed its own background polling script "just prints to stdout,
+which doesn't wake me up." Do not reintroduce an MCP server here for
+this purpose — see `docs/DECISIONS.md` for what was actually verified
+(via web research, cited there) about why MCP notifications can't wake
+an idle agent, and what would actually be needed instead (a trigger
+built into each agent's own host, which neither agent can build for
+the other).
+
+**Coordination is manual, by design now:** the project owner tells
+each agent to check `chat.jsonl` when there's something to relay.
+**`chat.jsonl` has no authentication on the `agent` field** — anyone
+with write access to the file can claim to be anyone (confirmed: one
+message was posted under "Claude Code" that Claude Code didn't send).
+Accepted for a local, single-machine dev tool; never replicate this
+pattern in bot-shield's own product.
+
+**Split, by owner's direction:**
+- **Antigravity** owns the dashboard/frontend and overall UI
+  architecture (`docs/ROADMAP.md` P2 item 12 and related work) —
+  roughly 60% of remaining build effort.
+- **Claude Code** (this file's audience) owns the backend/proxy side —
+  `proxy/`, `cmd/botshield/` — starting with ROADMAP item 5 (scoring
+  engine). Roughly 40% of remaining build effort.
+
+**Review responsibility sits with Claude Code, not just for its own
+work:**
+> Every change either agent makes — Antigravity's included — gets
+> checked by Claude Code against this file's rules (Sections 6, 7, 8,
+> 9, 22, 23, 24 in particular) before it counts as done. Owning less
+> of the build does not mean reviewing less of it.
+
+This does not make Claude Code Antigravity's gatekeeper for permission
+to ship — it means: read what Antigravity built, check it against the
+same bar this file sets for any change (tested, mutation-checked
+where it claims to be tested, no single-signal verdicts, no silent
+failures, standard library checked first), and say plainly in
+`docs/PROGRESS.md` what was reviewed and what was found — the same
+honesty Section 16 already requires for Claude Code's own work.
+
+**Coordination is file-based, not continuous.** Claude Code has no
+standing background process — it can read/post to `agentchat/` and
+watch it for a bounded time within an active session (as done to get
+Antigravity's item-5 confirmation on 2026-09-15), but cannot monitor
+it 24/7 outside a session. Don't assume a message posted to
+`agentchat/` reaches the other agent immediately; the owner relaying
+or triggering a check-in is still sometimes necessary.
+
+**Before touching a file outside your own owned area** (see split
+above), check `agentchat/chat.jsonl` for a conflict and post there
+first — this project already hit one real file collision in
+`agentchat/` itself before this split was agreed.

@@ -114,6 +114,152 @@ and fix), not as a reusable library for outside use.
       handshake proves otherwise) without that database.
       This is a **signal only** — nothing blocks yet (`CLAUDE.md`
       Section 6); it's an input for item 5's scoring engine.
+- [x] **4. JS challenge** (`proxy/challenge.go`) — `Challenge` issues a
+      signed, single-use puzzle: the page's JS must compute the SHA-256
+      of a server-issued nonce (proves it parsed the page and hashed
+      something we chose, not a cached/replayed answer) and submit a
+      `canvas.toDataURL()` render (raises the bar toward needing a real
+      browser engine, not just an HTTP client). A plain scripted client
+      that never runs JS never reaches the verify step at all. On
+      success, sets a signed, HttpOnly/Secure/SameSite=Lax cookie
+      (`X-BotShield-Passed`) and redirects back to the exact page the
+      visitor originally asked for. Token and cookie are HMAC-signed
+      with a random in-process secret, checked with
+      `subtle.ConstantTimeCompare`; the redirect target is validated by
+      `safeRedirectPath` against open-redirect. Wired into
+      `cmd/botshield` at `/__botshield/challenge` and
+      `/__botshield/verify` — reachable today for manual testing, not
+      yet triggered automatically for real visitors (that decision
+      belongs to item 5's scoring engine, which doesn't exist yet).
+      Tested: full round-trip against real end-to-end flow (extract
+      nonce/token from the rendered page, compute the real answer,
+      verify), wrong answer, missing/malformed canvas proof, tampered
+      token, expired token, a token signed by a different `Challenge`
+      instance, forged/expired passed-cookie, oversized POST body,
+      wrong HTTP methods, and open-redirect payloads against
+      `safeRedirectPath`. Mutation-checked: removed the expiry check,
+      the canvas-proof check, and the answer comparison one at a time —
+      each turned the matching test red with the exact case named, then
+      reverted. Also run as the real compiled binary against a real
+      local origin: full challenge solve over actual HTTP, confirmed
+      redirect + signed cookie, confirmed plain proxy passthrough on
+      `/` still works unchanged. Independent `/security-review`
+      (background agent) checked XSS/template-escaping, open-redirect
+      bypasses, and signature/cookie forgery — no findings.
+      Known gaps (see `docs/DECISIONS.md`):
+        - Not wired to automatic triggering — nothing decides *who*
+          gets challenged yet; that's item 5.
+        - The canvas proof is a client-reported string, not a verified
+          render — spoofable by a bot that specifically studies
+          bot-shield. Documented, accepted limitation, same class as
+          item 3's JA4-database gap.
+        - Signing secret is generated fresh per process, in memory
+          only — a restart or a second instance invalidates
+          outstanding challenges/cookies. Fine for the current
+          single-process v1; needs the planned Redis store to share
+          across instances.
+- [x] **5. Scoring engine v1** (`proxy/score.go`, `proxy/guard.go`) —
+      this is the first thing in the codebase that actually acts on a
+      signal instead of just labeling it. `Score(ja4, ua)` combines
+      the JA4-fragmentation signal (item 2) and the UA-mismatch signal
+      (item 3) — two different layers, even though a fragmented
+      handshake is one of UAMismatch's own inputs, see
+      `docs/DECISIONS.md` for why that's not double-counting.
+      `Decide(score)` maps the score to allow/challenge/block with
+      fixed thresholds (50 for challenge, 100 for block) — a single
+      mid-strength signal only ever earns a challenge, never a block
+      on its own (`CLAUDE.md` Section 6). `Guard` wires this to a live
+      request: a visitor who already solved the JS challenge (item 4)
+      is forwarded straight through with no re-scoring; otherwise
+      Guard scores the request and either forwards it, serves the
+      challenge in its place, or returns 403 — never proxying an
+      unscored or blocked request to the origin. Wired into
+      `cmd/botshield` as the real handler for `/` (the standalone
+      `/__botshield/challenge` and `/__botshield/verify` routes stay
+      reachable directly for manual testing).
+      Tested: known-good browser traffic (no signal fires → allowed),
+      known-bad traffic (both signals fire → blocked before reaching
+      the origin), a single mid-strength signal (fragmented handshake,
+      non-browser UA → challenged, origin never reached), and a real
+      passed-cookie bypassing what would otherwise score a block — all
+      four as real end-to-end tests through actual TLS handshakes (the
+      same `fragmentingRelay`/`startCapture`-style harness items 2–4
+      already built), not just the pure `Score`/`Decide` functions in
+      isolation. Plus unit tests for every `Score`/`Decide` boundary
+      and `Decision.String()`. Mutation-checked: removed the
+      passed-cookie bypass in `Guard` (the block/challenge tests that
+      should have still worked stayed correct, and the bypass test
+      itself went red naming the wrong status code), and removed the
+      UA-mismatch weighting from `Score` (three tests — the pure score
+      test, the combined-signal score test, and the real end-to-end
+      block test — all went red), then reverted both and confirmed the
+      suite was back to green. Real compiled binary run: plain HTTP
+      (no TLS) passthrough still works unchanged (fail-open — no
+      fingerprint to score, so nothing is ever penalized for a
+      connection bot-shield can't examine).
+      Known gaps (not deferred without reason — `CLAUDE.md` Section
+      17):
+        - Thresholds (50/100) and weights (50/50) are a reasoned
+          starting point, not tuned against real traffic — there is no
+          real traffic yet. Revisit once this runs in front of an
+          actual client.
+        - No per-client configuration (`docs/ROADMAP.md` item 11) —
+          every deployment gets the same thresholds today.
+        - Item 6 (client-side automation-tool probe) isn't built, so
+          it isn't a scoring input yet — only items 2 and 3 are.
+      `proxy/stats.go` (added same day, same item): `Guard` counts
+      every decision, and `GET /api/v1/dashboard/stats` serves
+      `{total_requests, passed, challenged, blocked}` — the exact
+      contract Antigravity posted in `agentchat/chat.jsonl` for the
+      dashboard skeleton (ROADMAP item 12) to consume. In-memory
+      counters only (resets on restart — same class of gap as
+      Challenge's in-memory secret, see `docs/DECISIONS.md`); durable
+      analytics need the planned Postgres store. CORS is open
+      (`Access-Control-Allow-Origin: *`) on this one endpoint since it
+      only exposes aggregate counts, not per-visitor data, so the
+      dashboard's separate dev server can call it directly.
+      Tested: JSON shape and exact field names (not just that the Go
+      struct round-trips through itself — the contract is the raw JSON
+      keys), wrong-method rejection, CORS header present, and a real
+      end-to-end test proving `Guard` actually increments the counters
+      it claims to, not just that `Decide()` picked an outcome.
+      Mutation-checked: removed the allow-path counter increment →
+      the end-to-end stats test went red naming the wrong count.
+      Verified against the real compiled binary: two real plain-HTTP
+      requests through `Guard`, then `curl` the stats endpoint —
+      returned `{"total_requests":2,"passed":2,"challenged":0,"blocked":0}`,
+      exactly matching the contract.
+- [x] **6. Client-side automation-tool probe** (`proxy/challenge.go`) —
+      scoped narrower than the literal wording, deliberately: rather
+      than injecting a JS snippet into every proxied origin response
+      (a real HTML-rewriting feature this codebase doesn't have and
+      hasn't decided to build — no existing infra for it, and it's a
+      meaningfully large piece: charset handling, compressed
+      responses, CSP interaction), the automation check runs inside
+      the JS challenge page (item 4) — the one place bot-shield already
+      serves its own JS to a visitor's browser. The page's JS checks
+      `navigator.webdriver` and known Selenium/PhantomJS/Nightmare.js
+      globals; `handleVerify` fails the challenge (no passed cookie)
+      if any fire, even when the sha256/canvas checks passed. This
+      targets exactly the gap `docs/RESEARCH.md` already named: a
+      stock automation framework drives a real browser, so it passes
+      every fingerprint/render check, but leaves these markers behind.
+      Tested: a real end-to-end verify call with a correct answer and
+      valid canvas proof but `automation=true` must still fail and
+      must not set the passed cookie. Mutation-checked: removed the
+      automation check → the new test went red, confirmed, reverted.
+      Known gaps (documented, not silently accepted):
+        - Patchright (patched Playwright) specifically removes
+          `navigator.webdriver` and similar artifacts — this check
+          does not catch it, by design of the attacker tool, not an
+          oversight here. `docs/RESEARCH.md` already named
+          behavioral/timing signals (item 7) as what would catch that
+          tier; this is unchanged.
+        - Only runs when a visitor reaches the challenge page — traffic
+          scored `DecisionAllow` (score 0) never executes this check.
+          Extending it to all traffic needs the HTML-injection feature
+          this scope deliberately avoided; revisit if/when that's
+          actually decided as a roadmap item.
 
 ---
 
@@ -125,15 +271,16 @@ and fix), not as a reusable library for outside use.
 - [x] ~~**3. Basic header/UA consistency check**~~ — done (narrower
       than full HTTP2-family verification, no fingerprint database
       needed), see "Done" section above.
-- [ ] **4. JS challenge** — a lightweight challenge page (math + timing +
-      basic canvas check) served to unscored/ambiguous traffic. A
-      plain HTTP client without a JS engine fails immediately.
-- [ ] **5. Scoring engine v1** — combine signals 2–4 into one risk score
-      with configurable thresholds; three outcomes: allow, challenge,
-      block.
-- [ ] **6. Client-side automation-tool probe** — a small JS snippet
-      (inspired by/leveraging open-source detectors like `BotD`) that
-      flags obvious automation frameworks in-browser.
+- [x] ~~**4. JS challenge**~~ — done (mechanism only; not yet wired to
+      automatic triggering), see "Done" section above.
+- [x] ~~**5. Scoring engine v1**~~ — done (fixed thresholds, not yet
+      per-client configurable — that's item 11), see "Done" section
+      above.
+- [x] ~~**6. Client-side automation-tool probe**~~ — done, narrower
+      than the literal wording (checks known automation-framework
+      globals inside the existing JS challenge page, not a
+      site-wide-injected snippet — see "Done" section above and
+      `docs/DECISIONS.md` for the scope reasoning).
 
 ## P1 — makes it meaningfully harder to bypass
 
@@ -190,6 +337,13 @@ and fix), not as a reusable library for outside use.
 - [ ] **12. Dashboard** — requests scored, blocked, challenged over
       time; top offending fingerprints/IPs; false-positive report
       button for the client's ops team.
+      **Started, not done:** `dashboard/` (Next.js) shows a live
+      snapshot (total/passed/challenged/blocked) from the real
+      `/api/v1/dashboard/stats` endpoint — see item 5's Done entry and
+      `docs/PROGRESS.md` 2026-09-16. Missing: history over time (the
+      backend only keeps a running total, no time series), top
+      offending fingerprints/IPs, the false-positive report button,
+      and any auth on the dashboard itself.
 - [ ] **13. Real-time scoring API** — for clients who want to call
       bot-shield from their own app instead of routing all traffic
       through the proxy.

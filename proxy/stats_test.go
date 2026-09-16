@@ -1,0 +1,130 @@
+package proxy
+
+import (
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestStatsHandlerShape(t *testing.T) {
+	s := &Stats{}
+	s.recordAllow()
+	s.recordAllow()
+	s.recordChallenge()
+	s.recordBlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/stats", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var got statsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response wasn't valid JSON matching the contract: %v (body: %s)", err, rec.Body.String())
+	}
+	want := statsResponse{TotalRequests: 4, Passed: 2, Challenged: 1, Blocked: 1}
+	if got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+// Field names are the actual API contract with the dashboard
+// (agentchat/chat.jsonl, 2026-09-15) - assert the raw JSON keys, not
+// just that the Go struct round-trips through itself.
+func TestStatsHandlerFieldNamesMatchContract(t *testing.T) {
+	s := &Stats{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/stats", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	for _, field := range []string{"total_requests", "passed", "challenged", "blocked"} {
+		if _, ok := raw[field]; !ok {
+			t.Errorf("response is missing contract field %q, got %v", field, raw)
+		}
+	}
+}
+
+func TestStatsHandlerRejectsWrongMethod(t *testing.T) {
+	s := &Stats{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dashboard/stats", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}
+
+func TestStatsHandlerSetsCORSForDashboard(t *testing.T) {
+	s := &Stats{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/stats", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want \"*\"", got)
+	}
+}
+
+// Guard must actually count outcomes, not just decide them - this is
+// what the dashboard's numbers depend on being real.
+func TestGuardRecordsStats(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	}))
+	defer origin.Close()
+
+	gws, stats := startGuardWithStats(t, origin.URL)
+
+	// Allowed: plain HTTP, no signal possible.
+	resp, err := http.Get("http://" + gws.addr + "/")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp.Body.Close()
+
+	statsReq := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard/stats", nil)
+	statsRec := httptest.NewRecorder()
+	stats.Handler().ServeHTTP(statsRec, statsReq)
+	var got statsResponse
+	json.Unmarshal(statsRec.Body.Bytes(), &got)
+	if got.TotalRequests != 1 || got.Passed != 1 {
+		t.Fatalf("after one allowed plain-HTTP request, stats = %+v, want total=1 passed=1", got)
+	}
+}
+
+type guardWithStats struct {
+	addr  string
+	stats *Stats
+}
+
+func startGuardWithStats(t *testing.T, origin string) (guardWithStats, *Stats) {
+	t.Helper()
+	p, err := New(origin)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	challenge, err := NewChallenge()
+	if err != nil {
+		t.Fatalf("NewChallenge: %v", err)
+	}
+	stats := &Stats{}
+	guard := NewGuard(p, challenge, stats)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: guard, ErrorLog: quietLogger()}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+
+	return guardWithStats{addr: ln.Addr().String(), stats: stats}, stats
+}
