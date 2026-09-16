@@ -1722,3 +1722,123 @@ the soak test did to memory, a list of anything that looks dead with
 your reasoning, and — per Section 16 — every gap you found even if you
 couldn't fix it. If you found something genuinely fine after checking,
 say that too.
+
+---
+
+## 2026-09-16 — Pivot to hosted SaaS; self-hosting becomes Enterprise
+
+**Docs only.** No Go code changed. The product still builds and
+behaves exactly as it did at PR #4's merge.
+
+### What the owner decided
+
+bot-shield is sold as **a hosted service we run**. Customers point a
+CNAME at us and install nothing. Self-hosting is not deleted — it
+becomes a priced-up **Enterprise** option for customers who cannot
+send traffic to someone else's cloud.
+
+The reason was blunt and correct: a self-hosted-only product had no
+path to recurring revenue for someone starting with no capital.
+
+### What I made sure was understood before writing it down
+
+The owner had asked, twenty minutes earlier, *"kahi hamara cloud bill
+explode na kar jaye?"* — and this pivot is precisely what causes
+that. So the trade was stated plainly before the docs changed:
+
+- **Bandwidth is now our bill.** Their traffic crosses our
+  infrastructure. Hence the hard rule now written into item 17 and
+  item 22: **every plan carries a cap.**
+- **We are in the critical path.** Our downtime is their site down.
+  For a solo maintainer that is an operational burden, not a coding
+  one.
+- **We now compete with Cloudflare on their own ground**, and cannot
+  win on cost.
+- The "your traffic never leaves your infra" pitch — one of the two
+  buyer segments recorded that same morning — survives only as
+  Enterprise.
+
+The owner accepted all of it. Recorded here because a future session
+reading only the new docs would otherwise think hosting was the
+obvious choice rather than a priced trade.
+
+### The upside I had not seen at first
+
+Hosting every customer's traffic means we observe real browser
+fingerprints continuously — so **item 19's fingerprint database can
+substantially build itself** instead of being researched from
+scratch. A bad fingerprint seen on one customer can protect the rest.
+That cross-customer network effect was explicitly rejected as
+infeasible under self-hosting (2026-09-15 competitor scan); hosting
+makes it available. It still needs a data-handling policy in terms of
+service before switching on — Section 18 has not moved.
+
+JA4 is unaffected: we terminate TLS, so we still see the ClientHello.
+
+### Files changed
+
+- **`docs/DECISIONS.md`** — new top entry recording the pivot, its
+  costs, its gains, what "Enterprise" means, three rejected
+  alternatives (stay self-hosted; ship a decision API instead of
+  proxying, which would kill JA4; open-source the engine, which
+  Section 1 forbids), and an honest risk note: this reverses the
+  positioning entry written the same day, on zero customer evidence.
+- **`docs/ARCHITECTURE.md`** — new "How it's delivered" section with
+  the CNAME flow and the five things hosting forces into the design.
+  Stack table's single "Deployment" row replaced with six rows
+  covering deployment, onboarding, certificates, tenancy, billing and
+  Enterprise.
+- **`docs/ROADMAP.md`** — intro rewritten; new **P0-SaaS** block
+  (items 20–23: multi-tenancy, domain onboarding + ACME certs, usage
+  metering + caps, Stripe billing) placed ahead of P1 and P2; item 17
+  given the no-free-tier decision and the cap rule; priority note
+  updated.
+- **`CLAUDE.md`, `README.md`, `docs/AGENT.md`** — positioning lines
+  brought in line so no file still opens by calling the product
+  self-hosted.
+
+### The item worth reading twice
+
+**Item 20 (multi-tenancy) is the highest-risk item in the roadmap.**
+One query that crosses a tenant boundary shows customer A the
+fingerprints and traffic of customer B. Its roadmap entry says so and
+specifies the test that matters: prove a second tenant's data is
+*never* returned, not merely that the first tenant's is. Today
+`Stats`, `Trail` and the origin target are all global.
+
+### How this was checked
+
+No code, so no mutation check applies. Verified instead:
+
+- `go test ./...` still green (nothing touched it, but a docs session
+  that breaks the build is exactly the kind of thing nobody checks).
+- `grep -i "self-host"` across every doc. Remaining hits are all
+  correct: two describing free competitors, one the Enterprise line.
+  The stale claims ("a paid, self-hosted product", "a client stands
+  up in front of their site", "drop in the proxy container") were
+  found this way and fixed.
+
+### Honest gaps
+
+- **Nothing in P0-SaaS is built.** The product cannot today serve two
+  customers or take a payment. The gap between "docs describe a SaaS"
+  and "we have a SaaS" is items 20–23 in full.
+- Every price is still unvalidated, and now so is every cost — we
+  have no bandwidth figure because we have no traffic.
+- Item 19's cost estimate is now stale in the optimistic direction:
+  it should be re-scoped knowing the database can feed off our own
+  traffic.
+- **Two strategy reversals in one day, both on reasoning rather than
+  customer evidence.** That is a pattern worth naming. The next
+  direction change should be driven by something a customer said.
+
+**Status:** done for the current scope — the pivot and its costs are
+recorded where the next session will find them. Nothing about the
+running product changed.
+
+### Next session should
+
+Run the audit from the previous handoff entry first — it still
+stands, and item 20 will be built on top of whatever that audit
+finds. Then item 18 (shadow mode), which needs no multi-tenancy and
+is how a first customer gets won, alongside starting item 20.

@@ -5,25 +5,36 @@ production-safety rules — **how** we work.
 
 ## What you're building (30 seconds)
 
-> bot-shield is **the inline, self-hostable layer that decides which
-> automated clients reach a site — and proves why it decided that.**
-> Closed-source commercial software, one solo maintainer, sold at
-> roughly $200/mo.
+> bot-shield is **the inline layer that decides which automated
+> clients reach a site — and proves why it decided that.**
+> Closed-source commercial software, one solo maintainer, sold as a
+> **hosted service we run** at roughly $200/mo. Customers point DNS
+> at us and install nothing.
 
 Three things that are easy to get wrong, so they're here and not
 three files away:
 
 - **We are not "a cheaper DataDome."** The market's floor is $0
   (CrowdSec, Coraza, Cloudflare's free tier). Anything argued on
-  price loses to free software. We win on *where it runs* (inside the
-  client's own infra) and *what it can prove* (per-request evidence).
+  price loses to free software. We win on *what it can prove*
+  (per-request evidence) and on serving people Cloudflare serves
+  badly — never on being cheapest.
+- **We host it; their traffic is our bill.** Since 2026-09-16 this is
+  a SaaS, not software customers install (`docs/DECISIONS.md`). Two
+  consequences that change how you write code: anything per-customer
+  needs a **tenant boundary**, and anything that consumes bandwidth or
+  CPU per request is now a **cost line**, not just a latency line.
+  Self-hosting survives as a priced-up Enterprise option — so never
+  assume we are always the operator, and never delete the
+  single-tenant path as dead code.
 - **Inline TLS/JA4 scoring is our technical edge.** Free tools parse
   logs and react to IPs that already misbehaved. We score the first
   request. Protect that; don't dilute it with features that need a log
   pipeline. But it is code, and code gets rebuilt — the *commercial*
   moat is the maintained browser-fingerprint database (ROADMAP item
   19), because data goes stale and that decay is what a subscription
-  actually pays for.
+  actually pays for. Hosting makes that database cheaper to build —
+  we see real browser traffic continuously.
 - **The category is agent governance now, not bot blocking.** Allow /
   rate-limit / deceive / block *per agent*, with a record of why.
 
@@ -140,13 +151,13 @@ this up next.
 ## 1. Project Goal
 
 bot-shield is a **simple, production-grade bot detection and
-mitigation service** in Go that a company runs inside its own infra.
-The goal is NOT to out-feature Akamai/DataDome, and NOT to undercut
-them on price either — "affordable" is not a position when free,
-self-hosted competitors already exist. The goal is to be the one tool
-that scores traffic *inline*, runs *on the client's own hardware*,
-and can *show its work* afterwards. See the top of this file for the
-short version and `docs/ROADMAP.md` for product direction.
+mitigation service** in Go, sold as a hosted service the customer
+reaches by pointing DNS at us. The goal is NOT to out-feature
+Akamai/DataDome, and NOT to undercut them on price either —
+"affordable" is not a position when free competitors already exist.
+The goal is to score traffic *inline* and be able to *show its work*
+afterwards. See the top of this file for the short version and
+`docs/ROADMAP.md` for product direction.
 
 **This is closed-source, commercial software — a paid product the
 owner sells, not an open-source project.** It uses open-source

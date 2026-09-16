@@ -2,8 +2,9 @@
 
 # bot-shield
 
-The inline, self-hostable layer that decides which automated clients
-reach your site — and proves why it decided that.
+The inline layer that decides which automated clients reach your site
+— and proves why it decided that. Hosted: you point a CNAME at us and
+install nothing.
 
 > 🚧 **Early development.** What works today: a TLS-terminating reverse
 > proxy that fingerprints every connection (JA4), checks it against the
@@ -26,29 +27,36 @@ company:
 
 bot-shield is neither. It sits in the request path, reads the live TLS
 ClientHello, and scores the **first request** from a client it has
-never seen — inside your own infrastructure, on your own hardware. No
-self-hostable product does that today.
+never seen — then tells you exactly why it decided what it decided.
 
-That matters most if you either **can't** send traffic to a foreign
-SaaS (GDPR/DPDP, regulated sectors), or bots cost you money directly
-rather than just noise — scraped pricing, hoarded ticket inventory,
-copied listings, usage-billed API calls.
+That matters most when bots cost you money directly rather than just
+noise: scraped pricing, hoarded ticket inventory, copied listings,
+usage-billed API calls.
 
-bot-shield is closed-source, commercial software (a paid, self-hosted
-product — see License below). Internally it uses proven open-source
+**Enterprise:** if you can't send traffic to someone else's cloud
+(regulated sector, data-residency rules), the same product runs in
+your own infrastructure. That's a contract, not a signup — talk to
+us.
+
+bot-shield is closed-source, commercial software (a paid service —
+see License below). Internally it uses proven open-source
 *libraries* (TLS/JA4 fingerprinting, behavioral scoring, JS
 challenges) instead of reinventing hard, already-solved problems.
 
 ## What it is
 
-bot-shield is one deployable product: a reverse proxy + dashboard a
-client stands up in front of their site. No Go knowledge required to
-run it. Internally the code is split into small, focused packages
+bot-shield is one product: a reverse proxy + dashboard that sits in
+front of your site. We run it — you point DNS at us and there is
+nothing to install. (Enterprise customers run the same binary
+themselves.) Internally the code is split into small, focused packages
 (fingerprinting, scoring, challenge, etc.) for the usual reasons —
 easier to test, easier to read, easier to fix — not because it's
 meant to be reused elsewhere.
 
-## Try it
+## Try it locally
+
+The hosted service is how customers use bot-shield. The commands below
+run the same binary on your own machine for development.
 
 ```bash
 go build -o botshield ./cmd/botshield

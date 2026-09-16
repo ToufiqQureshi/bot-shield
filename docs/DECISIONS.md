@@ -10,6 +10,93 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Pivot: hosted SaaS is the product; self-hosting becomes Enterprise — 2026-09-16
+
+**Decision:** bot-shield is sold as a **hosted service we run**.
+Customers point DNS at us, their traffic flows through our
+infrastructure, they pay monthly. Self-hosting is not removed — it
+becomes a **priced-up Enterprise option**, not the default.
+
+**Why the owner asked for this:** the self-hosted-only framing had no
+path to recurring revenue for someone starting with no capital. A
+licence key for software that runs on someone else's server is a
+harder sell, a harder collection, and a harder product to keep people
+paying for. The owner wants a SaaS. That is a business call, and it
+is theirs to make.
+
+**What it costs us, stated plainly so nobody is surprised later:**
+- **Bandwidth becomes our bill.** Every byte of a customer's traffic
+  now crosses our infrastructure. A modest e-commerce site can mean
+  hundreds of GB a month. This is why DataDome and Cloudflare meter
+  per request — their costs scale with traffic, and now so do ours.
+  **Every plan must therefore carry a bandwidth/request cap**, or one
+  large customer erases the margin on ten small ones.
+- **We are now in the critical path.** Our downtime is the customer's
+  site being down. For a solo maintainer that is an operational
+  burden, not a coding one.
+- **We now compete with Cloudflare on their own ground**, and they
+  have hundreds of points of presence and near-zero marginal cost. We
+  cannot win that on price. The differentiators stay what they were:
+  evidence, agent governance, and a product aimed at people Cloudflare
+  does not serve well.
+- **The "your traffic never leaves your infra" pitch is gone** for the
+  default product. That was one of the two buyer segments in the
+  positioning entry below. It survives only as Enterprise.
+
+**What it gains us, and one gain is bigger than expected:**
+- Recurring revenue, self-serve signup, no licence enforcement to
+  build, and we control updates.
+- **The moat gets easier.** Item 19's fingerprint database was the
+  expensive research cost. Hosting every customer's traffic means we
+  observe real browser fingerprints continuously — the database can
+  largely build itself from our own traffic. A bad fingerprint seen
+  on one customer can protect the rest. That cross-customer network
+  effect was explicitly rejected as infeasible under self-hosting
+  (see the 2026-09-15 competitor scan in `RESEARCH.md`); hosting makes
+  it available. It still needs a clear data-handling policy in terms
+  of service before it is switched on — `CLAUDE.md` Section 18 has not
+  moved.
+- JA4 is unaffected: we terminate TLS, so we still see the
+  ClientHello. The technical edge survives the pivot intact.
+
+**What "Enterprise" means here** (recorded because it is easy to
+misread as a feature tier): it is a *deployment and contract* tier,
+not a feature list. Regulated or large customers who cannot send
+traffic to our cloud run bot-shield themselves, on a custom price
+**above** the hosted plans, invoiced rather than card-billed, with a
+contract and direct support. It is sales-led, not self-serve.
+**It is not to be built now** — there are zero customers. It exists
+in the docs so the option stays open and so a future session does not
+delete the self-hosting code path as dead.
+
+**Alternatives considered:**
+- *Stay self-hosted only.* Rejected by the owner: no viable recurring
+  revenue from a standing start.
+- *Ship a decision API instead of proxying traffic* (ROADMAP item 13)
+  to avoid bandwidth costs. Rejected as the primary model: without
+  terminating TLS we never see the ClientHello, so JA4 — the entire
+  technical edge — disappears. It stays a roadmap item for customers
+  who want it *in addition*, never as the main product.
+- *Open-source the engine and sell hosting, like Supabase or
+  Firecrawl.* Rejected: `CLAUDE.md` Section 1 forbids it. Noted here
+  only because the model came up in discussion and the pattern —
+  monetise the operations, not the bits — is the right instinct even
+  though the licensing is not.
+
+**Honest risk:** this reverses the positioning entry below, which was
+written the same day. That entry's reasoning about *what we sell*
+(evidence, agent governance, not price) still stands; what changed is
+*where it runs* and therefore who the second buyer segment is. Two
+reversals in one day on zero customer evidence is itself a warning:
+the next real signal should come from a customer, not another
+strategy session.
+
+**Revisit when:** the first month's real bandwidth bill lands, or a
+customer asks for Enterprise self-hosting and we find out what they
+will actually pay for it.
+
+---
+
 ## The moat is the fingerprint database, not the code — 2026-09-16
 
 **The question that forced this:** *"any competent dev could build
