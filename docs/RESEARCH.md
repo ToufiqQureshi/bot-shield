@@ -196,3 +196,79 @@ cover, so a future session doesn't re-research this from scratch.
   research-heavy signal; revisit after `RESEARCH.md`'s existing
   Patchright/Scrapling gap (see above) is a real, observed problem in
   client traffic, not before.
+
+---
+
+## Market & pricing scan — 2026-09-16
+
+The 2026-09-15 scan above asked "what features do vendors have?"
+This one asks the question that actually decides whether this product
+earns money: **who already sells to our buyer, at what price, and
+what is nobody selling them?**
+
+### What the market charges today
+
+| Tier | Products | Price |
+|---|---|---|
+| Enterprise | DataDome, HUMAN, Kasada, Arkose, Akamai | ~$1K–50K/mo, quote-only, weeks-long sales cycle |
+| Self-serve SaaS | Prosopo (~$39/mo to 100K), cside (~$99/mo), Moonito | $0–100/mo |
+| Free | Cloudflare free tier | $0 |
+| Free + self-hosted | CrowdSec, SafeLine WAF, Coraza, ModSecurity, ALTCHA | $0 |
+
+Forrester's Q2 2026 Wave for Bot and Agent Trust Management named
+DataDome, HUMAN and Kasada as Leaders — note the category name: it is
+no longer "bot management," it is **agent trust management**.
+
+### What this means for us (the uncomfortable part)
+
+The price floor is **$0**, not "cheaper than Akamai." A buyer told
+"affordable bot detection" answers with "CrowdSec is free." So
+competing on *price* against the enterprise tier is not a strategy —
+the ground below us is already given away.
+
+The competitor that actually matters to us is therefore **CrowdSec,
+not DataDome**. Where we genuinely differ:
+
+| | CrowdSec | bot-shield |
+|---|---|---|
+| Input | parses server **logs** | reads the **live request** (TLS ClientHello) |
+| Timing | reactive — after bad requests land | first request, before the origin sees it |
+| Basis | IP reputation, shared blocklists | per-connection JA4 + UA consistency + score |
+| Needs | a prior sighting of that IP | nothing prior |
+
+No self-hostable product does inline TLS/JA4 fingerprint scoring.
+That is the actual technical moat, and it is narrow but real.
+
+### The 2026 shift: bots → AI agents
+
+The question changed from *"is this a bot?"* to *"which agent is
+this, is it allowed, and can I prove what I decided?"*
+
+- Cloudflare launched **pay-per-crawl** (HTTP `402` on crawler
+  requests) and, from 2026-09-15, blocks "mixed-use" AI crawlers by
+  default on ad-bearing pages.
+- **RSL (Really Simple Licensing)** emerged as an open standard for
+  attaching licensing terms to content, not just an allow/deny flag.
+- **Web Bot Auth** is the in-flight proposal for crawlers to
+  cryptographically prove their identity.
+- Caveat worth remembering: OpenAI, Anthropic, Google DeepMind and
+  Meta have **not** announced support for pay-per-crawl or Web Bot
+  Auth. So "charge the crawler" does not work yet — but "identify,
+  govern and log the crawler" does, and that is the part we can
+  actually build.
+
+All of this is enterprise-only today. Mid-market sites have exactly
+two options for an AI crawler: allow, or block. Nobody sells them
+policy. **That gap is where items 11b and 12a come from.**
+
+### Not added from this scan
+
+- **Pay-per-crawl / HTTP 402 billing** — needs crawler-side adoption
+  that does not exist yet (see caveat above); we would ship a toll
+  booth nobody pays at. Revisit if a major lab adopts Web Bot Auth.
+- **Shared/crowdsourced blocklist** (CrowdSec's network effect) —
+  same consent problem already logged in the 2026-09-15 scan.
+
+Sources: cside and Prosopo vendor comparisons, Pi Stack's 2026
+self-hosted WAF comparison, Stack Overflow's pay-per-crawl writeup,
+TechCrunch on Cloudflare's crawler policy (all fetched 2026-09-16).

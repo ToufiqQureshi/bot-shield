@@ -3,6 +3,31 @@
 This file is engineering rules only: coding standards, workflow, and
 production-safety rules — **how** we work.
 
+## What you're building (30 seconds)
+
+> bot-shield is **the inline, self-hostable layer that decides which
+> automated clients reach a site — and proves why it decided that.**
+> Closed-source commercial software, one solo maintainer, sold at
+> roughly $200/mo.
+
+Three things that are easy to get wrong, so they're here and not
+three files away:
+
+- **We are not "a cheaper DataDome."** The market's floor is $0
+  (CrowdSec, Coraza, Cloudflare's free tier). Anything argued on
+  price loses to free software. We win on *where it runs* (inside the
+  client's own infra) and *what it can prove* (per-request evidence).
+- **Our moat is inline TLS/JA4 scoring.** Free tools parse logs and
+  react to IPs that already misbehaved. We score the first request.
+  Protect that; don't dilute it with features that need a log pipeline.
+- **The category is agent governance now, not bot blocking.** Allow /
+  rate-limit / deceive / block *per agent*, with a record of why.
+
+Full reasoning and the numbers behind it: `docs/ROADMAP.md` intro,
+`docs/DECISIONS.md` (2026-09-16 positioning entry), `docs/RESEARCH.md`
+(2026-09-16 market scan). Read those before proposing product
+direction — they already contain the rejected alternatives.
+
 ## The four rules that matter most
 
 If you read nothing else in this file, read these. Each one exists
@@ -26,6 +51,7 @@ because breaking it already cost this project something real.
 |---|---|
 | Which doc to read, and updating docs before you stop | 0 |
 | What this project is for, what not to build | 1, 14 |
+| Who pays for this and why — positioning | top of this file, `docs/ROADMAP.md` |
 | Short code, comments, naming, file names | 3, 3a, 4, 5 |
 | How detection signals must combine | 6 |
 | Testing: order, real tests, mutation checks | 7, 15a, 23 |
@@ -109,11 +135,14 @@ this up next.
 
 ## 1. Project Goal
 
-bot-shield is a **simple, affordable, production-grade bot detection
-and mitigation service** in Go. The goal is NOT to out-feature
-Akamai/DataDome — it's to give small/mid-size companies a "good
-enough" defense they can actually afford and self-host. See
-`docs/ROADMAP.md` for product direction and priorities.
+bot-shield is a **simple, production-grade bot detection and
+mitigation service** in Go that a company runs inside its own infra.
+The goal is NOT to out-feature Akamai/DataDome, and NOT to undercut
+them on price either — "affordable" is not a position when free,
+self-hosted competitors already exist. The goal is to be the one tool
+that scores traffic *inline*, runs *on the client's own hardware*,
+and can *show its work* afterwards. See the top of this file for the
+short version and `docs/ROADMAP.md` for product direction.
 
 **This is closed-source, commercial software — a paid product the
 owner sells, not an open-source project.** It uses open-source

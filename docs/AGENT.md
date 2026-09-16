@@ -17,19 +17,44 @@ well — Akamai Bot Manager, DataDome, PerimeterX — cost **$1,500 to
 $50,000+ per month** and are built for enterprises with big budgets
 and dedicated security teams.
 
-Most mid-size companies can't afford that. They're stuck choosing
-between nothing, or a weak free tier. That gap is the whole reason
-bot-shield exists.
+Most mid-size companies can't afford that. But "so we'll be the cheap
+one" is the wrong conclusion, and it's worth being precise about why
+— a 2026-09-16 market scan (`RESEARCH.md`) found the cheap slot is
+already taken by *free*: CrowdSec, SafeLine and Coraza are open-source
+and self-hosted, and Cloudflare has a free tier. Nobody wins a price
+argument against zero.
+
+What those free tools *don't* do is read the live TLS handshake. They
+parse **logs** — they react to an IP after it has already misbehaved
+somewhere. bot-shield sits in the request path and scores the **first
+request**, from the ClientHello, with no prior sighting of that
+client. No self-hostable product does that today.
 
 **bot-shield's job:** stop the 70–90% of bot traffic that is naive-to-
 intermediate automation (plain HTTP scripts, unconfigured libraries,
 basic headless browsers, and increasingly, stealth tools like patched
-browser-automation frameworks) — deployable in an afternoon, priced so
-a mid-size company can actually say yes.
+browser-automation frameworks) — running **inside the client's own
+infrastructure**, deployable in an afternoon, and able to show
+afterwards exactly why each request was allowed or stopped.
 
-We are not trying to beat Akamai on feature count. We are trying to be
-the thing that exists between "no protection" and "enterprise
-contract."
+We are not trying to beat Akamai on feature count, and we are not
+trying to undercut anyone. We are trying to be the only thing a
+company can run **on its own hardware** that decides which automated
+clients get in — and proves it.
+
+**Who that's actually for** (judge features against these two, not
+against a competitor's website):
+
+1. Teams who *cannot* route traffic through a foreign SaaS at all —
+   GDPR/DPDP constraints, regulated sectors. Their alternative to us
+   isn't DataDome; it's nothing.
+2. Sites where bots are a **revenue leak, not an annoyance**:
+   pricing-sensitive e-commerce, ticketing/booking inventory, job
+   boards and classifieds, usage-billed APIs.
+
+Reasoning, numbers and rejected alternatives live in
+`DECISIONS.md` (2026-09-16 positioning entry). Read it before
+proposing a change of direction — it likely already says why.
 
 ---
 

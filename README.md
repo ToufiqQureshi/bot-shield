@@ -2,29 +2,42 @@
 
 # bot-shield
 
-An affordable, self-hostable bot detection & mitigation service — a
-practical alternative to Akamai Bot Manager / DataDome / PerimeterX for
-companies that can't justify enterprise pricing.
+The inline, self-hostable layer that decides which automated clients
+reach your site — and proves why it decided that.
 
 > 🚧 **Early development.** What works today: a TLS-terminating reverse
 > proxy that fingerprints every connection (JA4), checks it against the
 > claimed browser, and scores each request — allowing it, serving a JS
-> challenge, or blocking it outright. Only 2 signals feed the score so
-> far, thresholds aren't per-client yet, and there's no dashboard — see
-> `docs/ROADMAP.md`.
+> challenge, or blocking it outright, with a live stats endpoint and a
+> dashboard skeleton reading it. Only 2 signals feed the score so far,
+> thresholds aren't per-client yet, and the dashboard shows a current
+> snapshot rather than history — see `docs/ROADMAP.md`.
 
 ## Why this exists
 
-Akamai, DataDome, and PerimeterX charge $1,500–$50,000+/month and target
-large enterprises. Most mid-size companies (e-commerce, ticketing, job
-portals, SaaS) get scraped and abused by bots too, but can't afford
-those tools — so they run with weak or no protection.
+Bot protection today comes in two shapes, and neither fits a mid-size
+company:
+
+- **Enterprise** (Akamai, DataDome, HUMAN, Kasada): $1,500–$50,000+/
+  month, quote-only, and your traffic runs through their cloud.
+- **Free and self-hosted** (CrowdSec, Coraza, ModSecurity): genuinely
+  free, but they parse **server logs** — they react to an IP *after*
+  it has already misbehaved somewhere, and lean on shared blocklists.
+
+bot-shield is neither. It sits in the request path, reads the live TLS
+ClientHello, and scores the **first request** from a client it has
+never seen — inside your own infrastructure, on your own hardware. No
+self-hostable product does that today.
+
+That matters most if you either **can't** send traffic to a foreign
+SaaS (GDPR/DPDP, regulated sectors), or bots cost you money directly
+rather than just noise — scraped pricing, hoarded ticket inventory,
+copied listings, usage-billed API calls.
 
 bot-shield is closed-source, commercial software (a paid, self-hosted
 product — see License below). Internally it uses proven open-source
 *libraries* (TLS/JA4 fingerprinting, behavioral scoring, JS
-challenges) so a small team can build and price it affordably,
-instead of reinventing hard, already-solved problems.
+challenges) instead of reinventing hard, already-solved problems.
 
 ## What it is
 

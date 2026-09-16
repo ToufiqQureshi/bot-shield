@@ -10,6 +10,107 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Positioning: self-hostable agent governance, not "cheap DataDome" — 2026-09-16
+
+**Decision:** bot-shield stops describing itself as an *affordable
+alternative to Akamai/DataDome* and starts describing itself as
+**the inline, self-hostable layer that decides which automated
+clients reach a site, and proves why.** `ROADMAP.md`'s intro and
+`AGENT.md`'s mission line are updated to match.
+
+**Why (this is the important part):** a market scan on 2026-09-16
+(numbers in `RESEARCH.md`) found the "affordable" slot is not an
+opening — it is the most crowded part of the market, and its floor is
+$0:
+
+- Below us: CrowdSec, SafeLine, Coraza — free and self-hosted.
+  Cloudflare's free tier. Prosopo at ~$39/mo.
+- Above us: DataDome/HUMAN/Kasada at ~$1K–50K/mo.
+
+Pitching "cheaper bot detection" invites exactly one reply: *"CrowdSec
+is free."* We cannot win a price argument against zero. Worse, the
+old framing made **price** our differentiator, which meant every
+roadmap item was implicitly judged as "does a big vendor have this?"
+— the precise habit `CLAUDE.md` Section 14 exists to stop.
+
+**What we actually have that the free tier does not:** CrowdSec and
+friends parse **logs** — they react to an IP *after* it has misbehaved
+somewhere. bot-shield reads the **live TLS ClientHello** and scores
+the first request, with no prior sighting of that client. No
+self-hostable product does inline JA4 fingerprint scoring today. That
+is a narrow but real moat, and it is worth money to two buyers the
+free tier cannot serve:
+
+1. Teams under GDPR/DPDP-style constraints who **cannot** route
+   traffic through a foreign SaaS. Their alternative to us is not
+   DataDome — it is nothing.
+2. Sites where bot traffic is a **direct revenue leak**, not an
+   annoyance: pricing-sensitive e-commerce, ticketing/booking
+   inventory, job boards and classifieds, usage-billed APIs. For
+   them this is a margin tool, not a security line item — which is
+   the difference between a $200/mo yes and a "we'll think about it."
+
+**The second half of the decision — build for agents, not just bots.**
+Forrester renamed the category in Q2 2026 to *Bot and Agent Trust
+Management*. Cloudflare shipped pay-per-crawl; RSL and Web Bot Auth
+appeared. The buyer's question moved from "is this a bot?" to "which
+agent is this, is it allowed, and can I prove what I decided?"
+Mid-market sites get exactly two answers today: allow or block.
+Nobody sells them policy. Our JA4 + UA-consistency signals already
+answer "which client is this, really" — that is the raw material for
+governance, and it is a feature we can ship, not a market we have to
+create.
+
+**Roadmap consequences** (all reuse existing machinery, per Section
+14 — no new detection layer):
+- Item 11b: verified agent policy — per-agent allow / rate-limit /
+  deceive rules, so "GPTBot is fine, a scraper wearing its User-Agent
+  is not" is expressible. Extends item 11, not a new package.
+- Item 12a: decision evidence trail — per-request record of score and
+  which signals fired. Blocking is commodity; *proving why* is not,
+  and it is what settles a false-positive dispute (Section 8).
+- Item 18: shadow mode — score and report without enforcing. This is
+  primarily a **sales and trust** instrument, and it is listed as a
+  roadmap item so it does not get treated as optional polish.
+- Item 17 (pricing) now has a stated anchor: ~$200/mo, justified by
+  self-hostability and governance, never by a discount.
+
+**Alternatives considered and rejected:**
+- *Compete on price (~$49/mo, undercut Prosopo).* Rejected: the floor
+  is $0 and we would be arguing against free software with a worse
+  brand. Also caps revenue below what one support conversation costs
+  a solo maintainer.
+- *Go enterprise, chase DataDome's buyer.* Rejected: that buyer
+  requires SOC2, a sales team, 24/7 support and a mobile SDK. A solo
+  maintainer cannot serve it, and pretending otherwise is how the
+  product dies mid-deal.
+- *Build pay-per-crawl / HTTP 402 billing now.* Rejected: no major AI
+  lab has adopted pay-per-crawl or Web Bot Auth, so we would ship a
+  toll booth nobody pays at. Identify-and-govern works today; charging
+  does not.
+- *Ship an open-source community edition for reach.* Rejected on the
+  spot — `CLAUDE.md` Section 1: this is commercial software. Noted
+  here only so a future session does not re-propose it as a growth
+  idea.
+
+**What this does NOT change:** the detection architecture. Multi-layer
+scoring (Section 6), the fail-open/fail-closed choice, latency budget,
+and the false-positive bar all stand exactly as they are. This is a
+decision about *who we sell to and what we say*, and about which
+roadmap items earn priority — not a rewrite of the product.
+
+**Honest risk:** all of this is desk research. Zero paying clients
+have confirmed any of it, and the $200/mo anchor is reasoned, not
+observed. The two buyer segments above are hypotheses. Treat the
+first real client conversation as the test — and if it contradicts
+this entry, write the correction here rather than quietly drifting.
+
+**Revisit when:** a real client's traffic and budget contradict the
+segments above, or a major AI lab adopts Web Bot Auth / pay-per-crawl
+(which would move billing from "no" to "worth scoping").
+
+---
+
 ## Automation probe lives inside the JS challenge, not injected site-wide — 2026-09-16
 **Decision:** ROADMAP item 6's "client-side automation-tool probe"
 runs inside the existing JS challenge page (`proxy/challenge.go`),

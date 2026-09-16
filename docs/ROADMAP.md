@@ -1,19 +1,48 @@
 # bot-shield Roadmap
 
-Plain-English list of what's built, what's next, and the plan to make
-bot-shield a genuinely useful, affordable alternative to
-Akamai/DataDome/PerimeterX for companies that can't afford them.
+What's built, what's next, and why — in that order. Not a wishlist:
+every item targets a real evasion technique seen in the field
+(Patchright, Scrapling, curl_cffi impersonation clients, plain
+scripted HTTP clients). `CLAUDE.md` has the engineering rules every
+item must meet before it counts as done.
 
-Not a wishlist — every item here targets a real bot-evasion technique
-seen in the field (from tools like Patchright, Scrapling, curl_cffi-based
-impersonation clients, and plain scripted HTTP clients). See `CLAUDE.md`
-for the engineering rules every item must follow before it counts as done.
+## What bot-shield is
 
-**Competitive position.** Not "more features than Akamai." The target
-is: **good enough detection, deployed in an afternoon, at a price a
-mid-size company can actually pay.** Multi-layer scoring beats any
-single clever check, because any single check is exactly what
-stealth-automation tools are built to defeat.
+> **The inline, self-hostable layer that decides which automated
+> clients reach a site — and proves why it decided that.**
+
+Read that twice before adding anything to this list, because the
+obvious alternative framing is wrong and was tried:
+
+| ❌ What we are NOT | ✅ What we are |
+|---|---|
+| "A cheaper DataDome" | The only self-hostable thing doing **inline TLS/JA4 scoring** |
+| Competing on price | Competing on **where it runs** and **what it can prove** |
+| Blocking bots | Governing **agents** — allow, rate-limit, deceive, log |
+| Reacting to bad IPs | Scoring the **first request**, no prior sighting needed |
+
+**Why this matters more than it looks.** The market's price floor is
+$0 — CrowdSec, SafeLine and Coraza are free and self-hosted, and
+Cloudflare has a free tier. "Affordable bot detection" is answered
+with "CrowdSec is free," and that argument cannot be won. What
+*cannot* be answered that way: CrowdSec parses **logs** (reactive,
+needs a prior sighting); bot-shield reads the **live ClientHello**
+and scores the first request. Full numbers and sources:
+`docs/RESEARCH.md`, market scan 2026-09-16. Reasoning and rejected
+alternatives: `docs/DECISIONS.md`, 2026-09-16 positioning entry.
+
+**Who pays for this** (so a feature can be judged against a buyer,
+not against a competitor's feature list):
+
+- Teams who **cannot** send traffic to a foreign SaaS (GDPR/DPDP).
+  Their alternative to us is not DataDome — it's nothing.
+- Sites where bots are a **revenue leak, not an annoyance**:
+  pricing-sensitive e-commerce, ticketing/booking inventory, job
+  boards and classifieds, usage-billed APIs.
+
+**Still true, and unchanged:** multi-layer scoring beats any single
+clever check, because a single check is exactly what stealth tools
+are built to defeat (`CLAUDE.md` Section 6).
 
 **Out of scope, on purpose:** anything whose real purpose is helping
 automation evade detection, or collecting more user data than a
@@ -331,6 +360,27 @@ and fix), not as a reusable library for outside use.
       its own false-positive tracking in the dashboard (item 12),
       separate from block/challenge counts, before any client turns it
       on for real traffic.
+- [ ] **11b. Verified agent policy** — extends item 11's allowlist from
+      a yes/no list into a per-agent rule: allow, rate-limit, deceive
+      (item 11a), or block, per declared agent. The point is to make
+      *"GPTBot is welcome; a scraper wearing GPTBot's User-Agent is
+      not"* something a client can actually express — today a
+      mid-market site's only options are allow-all or block-all.
+      Reuses item 11's config and item 5's decision output; the
+      matching evidence (does the TLS/JA4 handshake agree with the
+      claimed agent?) is item 3's `UAMismatch` logic, already built.
+      **Why now:** Forrester renamed the category to *Bot and Agent
+      Trust Management* in 2026; Cloudflare ships pay-per-crawl, RSL
+      and Web Bot Auth exist. This is the one part of that shift we
+      can build without waiting on anyone else's adoption — see
+      `docs/RESEARCH.md` 2026-09-16.
+      **Explicitly not in scope:** pay-per-crawl / HTTP 402 billing.
+      No major AI lab has adopted it, so it would be a toll booth
+      nobody pays at (`docs/DECISIONS.md` 2026-09-16).
+      **Risk:** an over-broad allow rule is a bypass with a config
+      file. A rule that allows an agent by User-Agent alone must still
+      run the fingerprint check, never skip scoring entirely —
+      otherwise `CLAUDE.md` Section 6 is defeated by our own feature.
 
 ## P2 — product-grade
 
@@ -344,6 +394,21 @@ and fix), not as a reusable library for outside use.
       backend only keeps a running total, no time series), top
       offending fingerprints/IPs, the false-positive report button,
       and any auth on the dashboard itself.
+- [ ] **12a. Decision evidence trail** — a per-request record of what
+      was decided and on what basis: score, which signals fired, the
+      JA4, the decision. Queryable from the dashboard.
+      **Why this earns its place:** blocking is commodity — every
+      product in the market blocks. *Proving why* is not, and it is
+      the only thing that settles a false-positive dispute with a
+      client's ops team (`CLAUDE.md` Section 8: a false positive is an
+      incident, and "trust our score" is not an incident response).
+      It is also what makes item 18's shadow-mode report credible
+      rather than a number with no story behind it.
+      **Risk:** this is a log of visitor traffic — it must stay within
+      `CLAUDE.md` Section 18 (only what a detection decision needs, no
+      broader user data) and needs a retention limit and bounded
+      storage from day one (Section 9: no unbounded storage), not
+      added later once it has eaten a client's disk.
 - [ ] **13. Real-time scoring API** — for clients who want to call
       bot-shield from their own app instead of routing all traffic
       through the proxy.
@@ -354,8 +419,31 @@ and fix), not as a reusable library for outside use.
       breakdown, exportable to Prometheus.
 - [ ] **16. Long-running soak test** — sustained adversarial traffic
       simulation proving memory/latency stay stable over hours.
-- [ ] **17. Pricing/tiering model** — defined once the MVP is proven
-      against real client traffic, not before.
+- [ ] **17. Pricing/tiering model** — finalised once the MVP is proven
+      against real client traffic, not before. What is decided: the
+      anchor is roughly **$200/mo**, justified by self-hostability and
+      governance, never offered as "cheaper than DataDome." A discount
+      pitch loses to free software (`docs/DECISIONS.md` 2026-09-16).
+      What is not decided: tier boundaries, metering unit, overages.
+- [ ] **18. Shadow mode + traffic report** — a mode that scores every
+      request and records the decision it *would* have made, while
+      forwarding everything to the origin untouched. Ends with a
+      report: how much traffic scored as automated, which fingerprints
+      and which endpoints.
+      **Why it's a roadmap item and not polish:** this is how a
+      client's trust is earned before enforcement is ever switched on,
+      and it is the honest way to measure our own false-positive rate
+      against real traffic instead of guessing (`CLAUDE.md` Section 8).
+      It doubles as the thing that makes a buyer say yes — a number
+      from their own site beats any claim we make about ours.
+      **Depends on:** item 12a (evidence trail) for the per-request
+      detail; item 12 (dashboard) for the report.
+      **Risk:** shadow mode must be impossible to leave on by
+      accident and impossible to confuse with enforcement. A client
+      who believes they are protected while running in shadow mode is
+      in a worse position than one with no bot-shield at all — the
+      mode must be visible in the dashboard, in the logs, and at
+      startup, not buried in a config file.
 
 ---
 
@@ -369,3 +457,21 @@ The MVP goal is items 1–6: a working proxy that meaningfully reduces
 naive-to-intermediate bot traffic (plain scripts, unconfigured
 libraries, basic headless browsers) for a real client, deployable
 cheaply. Advanced-automation resistance (P1) comes after that's proven.
+Items 1–6 are now done — see the "Done" section.
+
+**Before adding an item, answer both:**
+
+1. Which real evasion technique or buyer need does this close?
+   ("A big vendor has it" is not an answer — `CLAUDE.md` Section 14.)
+2. Does it make us *more* the thing at the top of this file
+   (self-hostable, inline, provable), or just more feature-equal with
+   someone else? Only the first kind earns a slot.
+
+**Priority note, 2026-09-16.** Detection depth (items 7–10) is no
+longer automatically ahead of items 12a, 18 and 11b. What is built
+already catches naive-to-intermediate bots; what is missing is the
+ability to *show a client what it caught* and *let them set policy on
+it*. A signal nobody can see the output of does not sell, and cannot
+be checked for false positives against real traffic. Re-order once a
+real client's traffic says otherwise — but don't default to "more
+signals" just because signals are the fun part.

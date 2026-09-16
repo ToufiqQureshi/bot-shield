@@ -1265,3 +1265,147 @@ detection, honeypot fields, per-client rules) and the rest of P2 item
 button — today's work is a live-snapshot skeleton, not the full item).
 Read `docs/ROADMAP.md`'s "How to read this list" section before
 picking the next item — P1 comes after P0 is proven, not before.
+
+---
+
+## 2026-09-16 — Market scan; repositioned the product away from "affordable alternative"
+
+**Docs only. No Go code, no behaviour, no tests changed.** Everything
+below is `.md`. Named up front so nobody looks for a code change that
+isn't there, and so the absence of new tests in this entry isn't read
+as a gap (`CLAUDE.md` Section 23a applies to code under test — there
+is none in this diff).
+
+### Why this session happened
+
+The project owner asked the question that no test suite answers:
+*will anyone actually pay $200/month for this, and what would make
+them?* Answering it properly meant doing real market research rather
+than reasoning from the founding assumption, and the research
+contradicted the founding assumption.
+
+### What the research found
+
+Full notes and sources: `docs/RESEARCH.md`, new section **"Market &
+pricing scan — 2026-09-16"**. The short version:
+
+- The market's price floor is **$0**, not "cheaper than Akamai."
+  CrowdSec, SafeLine and Coraza are free and self-hosted; Cloudflare
+  has a free tier; Prosopo is ~$39/mo. Above that, DataDome/HUMAN/
+  Kasada sit at ~$1K–50K/mo.
+- So "affordable bot detection" — the framing every doc in this repo
+  opened with — walks straight into *"CrowdSec is free."* That is not
+  an argument we can win.
+- What the free tools **don't** do: they parse server **logs**, so
+  they react to an IP after it has already misbehaved somewhere.
+  bot-shield reads the live ClientHello and scores the first request
+  with no prior sighting. No self-hostable product does inline
+  TLS/JA4 scoring today. **That**, not price, is the moat.
+- Forrester renamed the category in Q2 2026 to *Bot and Agent Trust
+  Management*. Cloudflare shipped pay-per-crawl (HTTP 402); RSL and
+  Web Bot Auth appeared. The buyer's question moved from "is this a
+  bot?" to "which agent is this, is it allowed, can I prove what I
+  decided?" — and mid-market sites have no tool for it.
+
+### What changed, file by file
+
+- **`docs/RESEARCH.md`** — added the market & pricing scan: what the
+  market charges (table), why CrowdSec rather than DataDome is our
+  real competitor (table), the 2026 agent-governance shift, and what
+  was deliberately *not* taken from the scan (pay-per-crawl billing,
+  shared blocklists) with reasons.
+- **`docs/DECISIONS.md`** — new top entry, *"Positioning:
+  self-hostable agent governance, not 'cheap DataDome'."* Records the
+  decision, the numbers behind it, the two buyer segments, four
+  rejected alternatives (compete on price / chase enterprise / build
+  402 billing now / open-source a community edition), and an explicit
+  note on what this does **not** change.
+- **`docs/ROADMAP.md`** — rewrote the intro as a scannable
+  "what bot-shield is" block with a NOT/IS table and a who-pays list.
+  Added items **11b** (verified agent policy), **12a** (decision
+  evidence trail) and **18** (shadow mode + traffic report). Gave item
+  17 an actual pricing anchor. Added a two-question test to "How to
+  read this list" and a dated priority note.
+- **`CLAUDE.md`** — new 30-second "What you're building" block at the
+  very top, plus a positioning row in the lookup table. Section 1
+  rewritten: it previously said "affordable," which now contradicts
+  everything else.
+- **`docs/AGENT.md`** — the "why are we building this" section said
+  mid-size companies can't afford enterprise tools, therefore be
+  cheap. Corrected to state why cheap is the wrong conclusion, and
+  who the two real buyer segments are.
+- **`README.md`** — headline and "why this exists" rewritten to match.
+  Also fixed a stale line claiming there is no dashboard — PR #4 adds
+  one, so that sentence was already wrong before this session.
+
+### Why every doc, not just one
+
+`CLAUDE.md` Section 0's last checklist item: no doc may contradict
+another. Changing the positioning in `DECISIONS.md` alone would have
+left five files still opening with "affordable alternative" — the
+exact stale-doc failure that section exists to prevent. A future
+session reading `AGENT.md` first (as instructed) would have got the
+old framing and never reached the correction.
+
+### New roadmap items — what they are and the risk on each
+
+- **11b, verified agent policy** — per-agent allow / rate-limit /
+  deceive / block, so "GPTBot is fine, a scraper wearing its
+  User-Agent is not" becomes expressible. Reuses item 11's config,
+  item 5's decision output, item 3's `UAMismatch`. *Risk logged:* an
+  over-broad allow rule is a bypass with a config file; an allowed
+  agent must still be fingerprint-checked, or `CLAUDE.md` Section 6
+  is defeated by our own feature.
+- **12a, decision evidence trail** — per-request score, signals fired,
+  JA4, decision. *Risk logged:* it's a log of visitor traffic, so it
+  needs a retention limit and bounded storage from day one (Sections
+  9 and 18), not bolted on after it fills a client's disk.
+- **18, shadow mode** — score and record without enforcing. *Risk
+  logged:* a client who thinks they're protected while in shadow mode
+  is worse off than one with no bot-shield at all, so the mode has to
+  be loud in the dashboard, the logs and at startup.
+
+### How this was checked
+
+No code, so no mutation check applies. What was verified instead:
+
+- `grep` for the old framing across every tracked doc
+  ("affordable", "can't afford", "cheaper than") — hits in
+  `README.md` remained after the first pass and were fixed; that's
+  how the stale README dashboard line was caught too.
+- Read each edited file's surrounding section to confirm the new text
+  doesn't contradict a rule stated elsewhere in the same file —
+  specifically that the new `CLAUDE.md` block doesn't restate
+  Section 1 differently, and that `ROADMAP.md`'s new items don't
+  reverse the "no feature because a vendor has it" rule they sit next
+  to.
+
+### What is NOT covered / honest gaps
+
+- **This is desk research with zero paying clients.** The two buyer
+  segments and the ~$200/mo anchor are reasoned, not observed. The
+  first real client conversation is the test; if it contradicts this,
+  the correction belongs in `DECISIONS.md`, not a quiet drift.
+- **Item 18 (shadow mode) is the highest-value item here and it isn't
+  built.** It's also what would validate the false-positive rate
+  against real traffic instead of assumptions — so the product's
+  biggest unknown stays unknown until it ships.
+- Items 11b, 12a and 18 are written as roadmap entries only. No
+  interfaces sketched, no config schema decided.
+- The pricing anchor has an anchor but no tiers, metering unit or
+  overage model (item 17 says so explicitly).
+
+**Status, stated plainly (Section 22's last checkbox):** this is
+*done for the current scope* — the scope being "get the positioning
+and its reasoning written down so the next session builds toward it."
+It is **not** "the product is repositioned," because nothing about
+the running product changed. Docs now point at the target; the code
+still has to get there.
+
+### Next session should
+
+Pick from items 12a → 18 → 11b in that order (evidence trail first,
+because shadow mode's report needs it and it's also what makes a
+false-positive dispute answerable). Do **not** default to P1 items
+7–10 just because more detection signals feel like the real work —
+see `ROADMAP.md`'s dated priority note for why.
