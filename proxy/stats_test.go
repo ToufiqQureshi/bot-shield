@@ -116,7 +116,7 @@ func startGuardWithStats(t *testing.T, origin string) (guardWithStats, *Stats) {
 		t.Fatalf("NewChallenge: %v", err)
 	}
 	stats := &Stats{}
-	guard := NewGuard(p, challenge, stats)
+	guard := NewGuard(p, challenge, stats, NewTrail())
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

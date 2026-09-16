@@ -10,6 +10,74 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Evidence trail: token-gated, in-memory, one shared signal table — 2026-09-16
+
+**Decision:** ROADMAP item 12a ships as `proxy/evidence.go`: a fixed
+1000-entry ring buffer with a 24h retention window, served from
+`GET /api/v1/dashboard/evidence` behind a bearer token that must be
+set with `-evidence-token` or the endpoint isn't mounted at all.
+
+**Why token-gated when `/stats` is wide open.** `/stats` returns four
+counters — aggregate, nothing about any individual. This endpoint
+returns per-visitor JA4 fingerprints *and* the decision each one got,
+which makes it two different problems at once: it discloses visitor
+data, and it is an **evasion oracle** — a bot can query it to learn
+whether its own fingerprint is being flagged and iterate until it
+isn't. That second one is the reason this is not merely "add auth
+later"; an open version of this endpoint actively helps the attacker
+bot-shield exists to stop. So: token required, `crypto/subtle`
+comparison, an empty configured token denies everyone (a deployment
+that forgot to set one fails closed), and deliberately **no wildcard
+CORS**, unlike `/stats`.
+
+**Why off by default rather than on with a generated token.** A
+generated token has to be printed or stored somewhere, and the
+operator who never wanted the endpoint now has a live one they aren't
+watching. Unset flag → unmounted route → no attack surface at all.
+
+**Why one `checks` table in `score.go`.** `Score` and the signal names
+shown in the evidence were originally going to be two separate lists.
+That is a bug with a fuse on it: add a signal to the scorer, forget
+the name list, and the trail now confidently explains a block with the
+wrong reason. `CLAUDE.md` Section 23b's "a wrong fingerprint is worse
+than a missing one" applies exactly here — a wrong *explanation* is
+worse than none, because an ops engineer will act on it. One table,
+read by both, removes the drift class instead of documenting it.
+
+**Why `challenge_solved` is recorded as its own reason.** A request
+let through on a solved-challenge cookie skips scoring entirely.
+Recording it as a score-0 allow would have the trail assert the
+visitor looked clean, when in fact they may have carried both bad
+signals and were let through on proof they'd already given. The trail
+is only worth having if it never says something untrue.
+
+**Why in-memory, not the planned store.** Same reasoning already
+logged for `Stats` and the challenge secret: a durable store is its
+own roadmap item, and shipping a half-wired Postgres dependency to
+get history would be worse than an honest 1000-entry window. Both
+caps exist from day one rather than "later" because this runs against
+adversarial traffic (`CLAUDE.md` Section 9).
+
+**Alternatives considered:**
+- *Write evidence to the normal log stream instead of a queryable
+  endpoint.* Rejected: it puts us back where CrowdSec already is —
+  parsing logs — and the whole point of item 12a is that a client's
+  ops engineer can answer "why was my customer blocked?" without a log
+  pipeline.
+- *Store the request path and IP too.* Rejected for now under Section
+  18 (only what the decision used). It is the obvious next gap — see
+  the honest-gaps note in `PROGRESS.md` — but widening visitor data
+  collection is a decision to make deliberately, not a convenience.
+- *Reuse `/stats`'s open CORS for dashboard convenience.* Rejected on
+  the spot; see above.
+
+**Revisit when:** the dashboard needs to read this endpoint
+cross-origin (needs a real allowed-origin config, not a wildcard), or
+per-client configuration (item 11) arrives and the size/retention caps
+should become per-deployment settings.
+
+---
+
 ## Positioning: self-hostable agent governance, not "cheap DataDome" — 2026-09-16
 
 **Decision:** bot-shield stops describing itself as an *affordable

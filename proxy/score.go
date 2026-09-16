@@ -42,18 +42,42 @@ const (
 	challengeThreshold = 50
 )
 
+// checks is the single list every scoring check lives in, so a score
+// and the explanation shown for it can never disagree — adding a check
+// in one place and forgetting the other would make the evidence trail
+// lie about why a request was stopped.
+var checks = []struct {
+	name   string
+	weight int
+	fired  func(ja4, ua string) bool
+}{
+	{"fragmented_handshake", fragmentedWeight, func(ja4, ua string) bool { return ja4 == JA4Unreadable }},
+	{"ua_mismatch", uaMismatchWeight, func(ja4, ua string) bool { return UAMismatch(ua, ja4) }},
+}
+
 // Score combines a request's known signals into one risk score. ja4
 // and ua are read the same way proxy.go already reads them to set the
 // label headers.
 func Score(ja4, ua string) int {
-	score := 0
-	if ja4 == JA4Unreadable {
-		score += fragmentedWeight
+	total := 0
+	for _, c := range checks {
+		if c.fired(ja4, ua) {
+			total += c.weight
+		}
 	}
-	if UAMismatch(ua, ja4) {
-		score += uaMismatchWeight
+	return total
+}
+
+// signals names the checks that fired for a request, so the evidence
+// trail can answer "why was this stopped?" and not just "how much."
+func signals(ja4, ua string) []string {
+	var fired []string
+	for _, c := range checks {
+		if c.fired(ja4, ua) {
+			fired = append(fired, c.name)
+		}
 	}
-	return score
+	return fired
 }
 
 // Decide turns a score into the three-way outcome using the fixed

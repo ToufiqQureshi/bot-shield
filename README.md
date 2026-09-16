@@ -66,6 +66,19 @@ go build -o botshield ./cmd/botshield
 | `-addr` | Address to listen on (default `:8080`) |
 | `-target` | The origin server to protect, e.g. `http://127.0.0.1:9000` |
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — bot-shield has to terminate TLS to see the handshake. |
+| `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
+
+Two read-only endpoints are served alongside your traffic:
+
+| Endpoint | What it gives you |
+|---|---|
+| `GET /api/v1/dashboard/stats` | Running totals: requests seen, passed, challenged, blocked. No per-visitor data, so it needs no token. |
+| `GET /api/v1/dashboard/evidence` | The last 1000 decisions (24h max), newest first: timestamp, JA4, which signals fired, score, decision. Accepts `?limit=N`. **Requires `Authorization: Bearer <-evidence-token>`.** |
+
+The evidence endpoint is off unless you set a token, and it never gets
+wildcard CORS — it returns visitor fingerprints, and left open it would
+also tell a bot whether its own fingerprint is being flagged. Run it
+over TLS; on a plain-HTTP deployment the token travels in the clear.
 
 Your origin then receives each request with:
 

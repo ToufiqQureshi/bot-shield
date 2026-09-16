@@ -1409,3 +1409,127 @@ because shadow mode's report needs it and it's also what makes a
 false-positive dispute answerable). Do **not** default to P1 items
 7–10 just because more detection signals feel like the real work —
 see `ROADMAP.md`'s dated priority note for why.
+
+---
+
+## 2026-09-16 — Decision evidence trail (ROADMAP item 12a, done)
+
+Built the thing the previous session's priority note said to build
+first: bot-shield can now answer *"why was this request stopped?"*
+instead of only *"how many were."*
+
+### What was built
+
+- **`proxy/evidence.go`** (new) — `Evidence` (time, JA4, signal names,
+  score, decision) and `Trail`, a fixed 1000-entry ring buffer with a
+  24h retention window. `Trail.Handler(token)` serves
+  `GET /api/v1/dashboard/evidence`, newest-first, `?limit=N`.
+- **`proxy/score.go`** — `Score`'s two hardcoded `if`s replaced by one
+  `checks` table that both `Score` and the new `signals()` read.
+- **`proxy/guard.go`** — `NewGuard` now takes a `*Trail`; every branch
+  records what it decided and why.
+- **`cmd/botshield/main.go`** — `-evidence-token` flag; the route is
+  only mounted when it's set, and startup logs when it isn't.
+
+### The decision that shaped it
+
+`/stats` is aggregate and needs no auth. This endpoint is not: it
+returns per-visitor fingerprints, and worse, it is an **evasion
+oracle** — a bot could query it to find out whether its own
+fingerprint is flagged and iterate until it isn't. So it requires a
+bearer token (`crypto/subtle` compare), an empty configured token
+denies everyone, the route doesn't exist without the flag, and it
+never sets wildcard CORS. Full reasoning in `docs/DECISIONS.md`.
+
+The `checks` table matters for the same reason. Score and explanation
+started as two lists; that is a bug with a fuse on it — add a signal
+to one, forget the other, and the trail explains a block with the
+wrong reason. Section 23b's "a wrong value is worse than a missing
+one" applies to explanations too, so there is now one list.
+
+### Tested how — nine mutations, all caught
+
+Per Section 23a, each test was proved by breaking the code it guards
+and watching it go red, then reverting:
+
+| # | What I broke | Test that went RED |
+|---|---|---|
+| 1 | `authorized()` returns true unconditionally | `TestEvidenceHandlerRefuses*` |
+| 2 | `record()` stops stamping `e.Time` | `TestTrailRecordsWhatDecidedTheRequest`, `TestTrailDropsRecordsPastMaxAge` |
+| 3 | retention cutoff ignored (`if false`) | `TestTrailDropsRecordsPastMaxAge` |
+| 4 | ring buffer `append`s instead of overwriting | `TestTrailNeverGrowsPastCapacity` |
+| 5 | `Recent` returns oldest-first | `TestTrailReturnsNewestFirst` |
+| 6 | `signals()` returns nil | `TestGuardBlocksCombinedSignals`, `TestGuardChallengesSingleSignal` |
+| 7 | `challenge_solved` recorded as a plain allow | `TestGuardPassedCookieBypassesBadSignals` |
+| 8 | wildcard CORS added to the endpoint | `TestEvidenceHandlerSendsNoWildcardCORS` |
+| 9 | Guard stops recording evidence entirely | `TestGuardBlocksCombinedSignals` |
+| 10 | zero-size guard removed from `newTrail` | `TestNewTrailRejectsZeroSize` |
+
+Also: full suite under `-race` (concurrent-write test included),
+`go vet` and `gofmt` clean, and a real compiled binary checked by
+hand — 200 for a normal request, 401 without the token, 401 with a
+wrong one, real JSON with the right one, 404 for the endpoint when
+`-evidence-token` is unset, and `/stats` unchanged.
+
+Existing tests touched: `guard_test.go` (all four now assert the
+evidence record too, not just the response) and `stats_test.go`
+(constructor arity). Both re-read against current behaviour per
+Section 23c.
+
+### Section 24 check
+
+Caught myself hand-writing a `contains`/`indexOf` pair in the test
+file when `strings.Contains` exists — deleted before it was ever
+committed. `crypto/subtle`, `strconv`, `encoding/json` and
+`sync.Mutex` are all stdlib; nothing here needed a dependency.
+
+Also fixed in the same pass rather than logged for later (Section 17):
+writing up the gaps below surfaced that `newTrail(0, …)` would divide
+by zero on its first `record` — a panic in the request path. It isn't
+reachable from today's callers, but "not reachable yet" is how that
+kind of bug waits. `newTrail` now clamps to a minimum size, with its
+own test and mutation check (#10 above).
+
+Ran `/security-review` on the diff (Section 24b): no HIGH or MEDIUM
+findings. It confirmed `Recent` clamps `limit` to the buffer size
+*before* allocating, so the query parameter can't drive allocation,
+and that the more-specific mux pattern means the evidence path is
+never forwarded to the origin.
+
+### What NO test covers right now
+
+- **Retention is only enforced on read, not on write.** An old record
+  stays in memory until something calls `Recent` — it's invisible to
+  callers, but it is still resident. Bounded by the ring buffer, so
+  it can't grow, but "deleted after 24h" is not literally true.
+- The 24h window is never exercised with real elapsed time, only with
+  an injected clock.
+- Nothing tests two `Trail`s or a `Trail` shared across two Guards.
+
+### Honest gaps (Section 16)
+
+- **The dashboard does not read this endpoint yet.** The API exists;
+  the UI half is Antigravity's side of the split (Section 25), and
+  needs the token handled somewhere that isn't the browser bundle.
+- **No request path in the record**, so correlating a specific
+  customer complaint still means matching on time plus fingerprint.
+  Left out deliberately under Section 18 rather than by oversight —
+  widening what we store about visitors is a decision to take
+  explicitly, and it is the first thing I'd add next.
+- No filtering, search, or pagination beyond `limit`.
+- 1000 entries is minutes of history on a busy site, not days.
+- On a plain-HTTP deployment the bearer token travels in the clear.
+  Documented in `README.md`; the real fix is that fingerprinting
+  already requires TLS anyway.
+
+**Status:** done for the current scope — the backend evidence trail
+is production-shaped and tested. It is *not* "clients can see why a
+request was blocked," because nothing renders it yet.
+
+### Next session should
+
+Item 18 (shadow mode) now has its dependency met and is the highest
+value item left: it's what measures the false-positive rate against
+real traffic instead of assumptions. Alternatively wire the dashboard
+to this endpoint — but decide where the token lives first, because it
+must not end up in client-side JS.

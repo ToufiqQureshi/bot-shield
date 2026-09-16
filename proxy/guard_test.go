@@ -15,7 +15,7 @@ import (
 // Guard deciding, and (when allowed) the reverse proxy reaching a real
 // origin — same shape as capture_test.go's startCapture, but through
 // Guard instead of the bare proxy.
-func startGuard(t *testing.T, origin string) (addr string, challenge *Challenge) {
+func startGuard(t *testing.T, origin string) (addr string, challenge *Challenge, trail *Trail) {
 	t.Helper()
 
 	p, err := New(origin)
@@ -26,7 +26,8 @@ func startGuard(t *testing.T, origin string) (addr string, challenge *Challenge)
 	if err != nil {
 		t.Fatalf("NewChallenge: %v", err)
 	}
-	guard := NewGuard(p, challenge, &Stats{})
+	trail = NewTrail()
+	guard := NewGuard(p, challenge, &Stats{}, trail)
 
 	rawLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -44,7 +45,7 @@ func startGuard(t *testing.T, origin string) (addr string, challenge *Challenge)
 	go srv.Serve(NewCaptureListener(rawLn, cfg))
 	t.Cleanup(func() { srv.Close() })
 
-	return addr, challenge
+	return addr, challenge, trail
 }
 
 func tlsClient() *http.Client {
@@ -64,7 +65,7 @@ func TestGuardAllowsNormalBrowser(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	addr, _ := startGuard(t, origin.URL)
+	addr, _, trail := startGuard(t, origin.URL)
 
 	req, _ := http.NewRequest(http.MethodGet, "https://"+addr+"/", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36")
@@ -82,6 +83,10 @@ func TestGuardAllowsNormalBrowser(t *testing.T) {
 	default:
 		t.Fatal("origin was never reached")
 	}
+
+	if e := lastEvidence(t, trail); e.Decision != "allow" || e.Score != 0 || len(e.Signals) != 0 {
+		t.Errorf("evidence = %+v, want an allow at score 0 with no signals", e)
+	}
 }
 
 // Fragmented handshake + a claimed browser UA is both signals firing
@@ -94,7 +99,7 @@ func TestGuardBlocksCombinedSignals(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	guardAddr, _ := startGuard(t, origin.URL)
+	guardAddr, _, trail := startGuard(t, origin.URL)
 	addr := fragmentingRelay(t, guardAddr)
 
 	req, _ := http.NewRequest(http.MethodGet, "https://"+addr+"/", nil)
@@ -113,6 +118,14 @@ func TestGuardBlocksCombinedSignals(t *testing.T) {
 		t.Fatal("origin was reached, want the request blocked before it got there")
 	default:
 	}
+
+	e := lastEvidence(t, trail)
+	if e.Decision != "block" || e.Score != 100 {
+		t.Errorf("evidence = %+v, want a block at score 100", e)
+	}
+	if !hasSignal(e, "fragmented_handshake") || !hasSignal(e, "ua_mismatch") {
+		t.Errorf("evidence signals = %v, want both signals named as the reason", e.Signals)
+	}
 }
 
 // A single mid-strength signal (fragmented handshake, but a UA that
@@ -127,7 +140,7 @@ func TestGuardChallengesSingleSignal(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	guardAddr, _ := startGuard(t, origin.URL)
+	guardAddr, _, trail := startGuard(t, origin.URL)
 	addr := fragmentingRelay(t, guardAddr)
 
 	req, _ := http.NewRequest(http.MethodGet, "https://"+addr+"/some-page", nil)
@@ -150,6 +163,17 @@ func TestGuardChallengesSingleSignal(t *testing.T) {
 		t.Fatal("origin was reached, want it challenged instead")
 	default:
 	}
+
+	e := lastEvidence(t, trail)
+	if e.Decision != "challenge" || e.Score != 50 {
+		t.Errorf("evidence = %+v, want a challenge at score 50", e)
+	}
+	if !hasSignal(e, "fragmented_handshake") {
+		t.Errorf("evidence signals = %v, want fragmented_handshake named", e.Signals)
+	}
+	if hasSignal(e, "ua_mismatch") {
+		t.Errorf("evidence signals = %v, want ua_mismatch absent - curl never claimed to be a browser", e.Signals)
+	}
 }
 
 func containsChallengeMarker(body string) bool {
@@ -168,7 +192,7 @@ func TestGuardPassedCookieBypassesBadSignals(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	guardAddr, challenge := startGuard(t, origin.URL)
+	guardAddr, challenge, trail := startGuard(t, origin.URL)
 
 	// Get a real passed cookie the way a real visitor would: solve the
 	// challenge for real through its own handler.
@@ -204,6 +228,34 @@ func TestGuardPassedCookieBypassesBadSignals(t *testing.T) {
 	default:
 		t.Fatal("origin was never reached")
 	}
+
+	// The trail must say why this was allowed. Recording it as a plain
+	// score-0 allow would claim the visitor looked clean, when in fact
+	// they carried both bad signals and were let through on the cookie.
+	if e := lastEvidence(t, trail); !hasSignal(e, "challenge_solved") {
+		t.Errorf("evidence = %+v, want challenge_solved as the recorded reason", e)
+	}
+}
+
+// lastEvidence is the record Guard wrote for the request just made -
+// the trail is only useful if it matches what actually happened to a
+// real request, not just what the unit tests hand it directly.
+func lastEvidence(t *testing.T, trail *Trail) Evidence {
+	t.Helper()
+	got := trail.Recent(1)
+	if len(got) != 1 {
+		t.Fatalf("no evidence was recorded for the request")
+	}
+	return got[0]
+}
+
+func hasSignal(e Evidence, name string) bool {
+	for _, s := range e.Signals {
+		if s == name {
+			return true
+		}
+	}
+	return false
 }
 
 func extractTokenAndNonce(t *testing.T, body string) (token, nonce string) {

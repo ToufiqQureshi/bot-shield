@@ -290,6 +290,44 @@ and fix), not as a reusable library for outside use.
           this scope deliberately avoided; revisit if/when that's
           actually decided as a roadmap item.
 
+- [x] **12a. Decision evidence trail** (`proxy/evidence.go`,
+      `proxy/guard.go`, `proxy/score.go`) — every Guard decision is
+      recorded with the time, the JA4, the names of the signals that
+      fired, the score and the outcome, and served newest-first from
+      `GET /api/v1/dashboard/evidence` (`?limit=N`).
+      Storage is a fixed 1000-entry ring buffer with a 24h retention
+      window, so memory can't grow with request volume and visitor
+      records don't outlive answering a complaint (`CLAUDE.md`
+      Sections 9 and 18). In-memory only — resets on restart, same
+      limitation as `Stats`.
+      `Score` and the signal names now come from one shared `checks`
+      table, so a score and the explanation shown for it can't
+      disagree; adding a signal to one and forgetting the other used
+      to be a live bug waiting to happen.
+      A request let through on a solved-challenge cookie is recorded
+      as `challenge_solved`, not as a clean score-0 allow — recording
+      it the other way would have made the trail claim a visitor
+      looked clean when they actually carried both bad signals.
+      **Security:** the endpoint returns per-visitor fingerprints and
+      would tell a caller whether their own fingerprint is being
+      flagged, so it requires `Authorization: Bearer` against
+      `-evidence-token`, is not mounted at all when that flag is
+      unset, and (unlike `/stats`) never sets wildcard CORS. An empty
+      configured token denies everyone rather than disabling the check.
+      Tested: record/order/capacity/retention/limit, token missing,
+      token wrong, token unset, non-GET, CORS header absent,
+      concurrent writes under `-race`, plus end-to-end assertions that
+      the record Guard writes matches what really happened to a real
+      allowed/challenged/blocked/cookie-bearing request. Nine
+      mutations were run against these tests and all nine went red —
+      listed in `docs/PROGRESS.md` 2026-09-16. Verified against a real
+      compiled binary (401 without token, 404 when disabled, real JSON
+      with it).
+      Known gaps: no history beyond the 1000-entry window, no
+      filtering or search, the dashboard doesn't read this endpoint
+      yet, and the record carries no request path — so correlating a
+      specific complaint still means matching on time and fingerprint.
+
 ---
 
 ## P0 — MVP (prove the core idea works)
@@ -394,21 +432,7 @@ and fix), not as a reusable library for outside use.
       backend only keeps a running total, no time series), top
       offending fingerprints/IPs, the false-positive report button,
       and any auth on the dashboard itself.
-- [ ] **12a. Decision evidence trail** — a per-request record of what
-      was decided and on what basis: score, which signals fired, the
-      JA4, the decision. Queryable from the dashboard.
-      **Why this earns its place:** blocking is commodity — every
-      product in the market blocks. *Proving why* is not, and it is
-      the only thing that settles a false-positive dispute with a
-      client's ops team (`CLAUDE.md` Section 8: a false positive is an
-      incident, and "trust our score" is not an incident response).
-      It is also what makes item 18's shadow-mode report credible
-      rather than a number with no story behind it.
-      **Risk:** this is a log of visitor traffic — it must stay within
-      `CLAUDE.md` Section 18 (only what a detection decision needs, no
-      broader user data) and needs a retention limit and bounded
-      storage from day one (Section 9: no unbounded storage), not
-      added later once it has eaten a client's disk.
+- [x] ~~**12a. Decision evidence trail**~~ — done, see "Done" section.
 - [ ] **13. Real-time scoring API** — for clients who want to call
       bot-shield from their own app instead of routing all traffic
       through the proxy.
