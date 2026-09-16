@@ -10,6 +10,84 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## The moat is the fingerprint database, not the code — 2026-09-16
+
+**The question that forced this:** *"any competent dev could build
+this with Redis and a few checks — why would a company pay us?"*
+
+**The honest first half:** they're right about today's code. Two
+signals, fixed thresholds, `fingerproxy` is open source. A good
+engineer rebuilds the current bot-shield in a couple of weeks. There
+is no answer to that objection in what is built so far, and pretending
+otherwise would just mean discovering it in a sales call instead.
+
+**The second half, which is the actual answer:** building it once and
+*keeping it working* are different products. Bot detection is not a
+feature, it's a standing fight with someone who updates:
+
+- Chrome ships roughly every 4 weeks and its TLS fingerprint moves
+  with it. `curl_cffi`, Patchright and friends update specifically to
+  break detection.
+- An in-house system therefore **decays silently**. It doesn't crash
+  or alert — it just drifts toward allowing everything, and nobody
+  notices for months. There is no error log for "your detection
+  stopped detecting."
+- In-house systems also don't get tuned. The first time one blocks a
+  real customer, a support ticket lands and the team switches it off.
+  Writing detection is the easy part; spending months on false
+  positives is the part nobody volunteers for.
+- And it sits in front of checkout. The engineer who wrote it leaves
+  in eight months and nobody wants to touch it after that.
+
+**Decision:** a maintained **known-browser fingerprint database** is
+bot-shield's commercial moat, and gets treated as a first-class
+roadmap item (new item 19) rather than as a research cost to avoid.
+
+**Why it, specifically.** `ROADMAP.md` item 3 already identified this
+and deliberately deferred it: *"that needs a maintained database of
+known-browser fingerprints, which is a real ongoing research cost."*
+That framing was right as engineering and backwards as business — the
+ongoing cost **is** the defensible asset. It isn't code, so it can't
+be copied in a weekend; it's continuously refreshed data, so its decay
+becomes our problem instead of the client's. That is what a
+subscription actually buys, and it is why CrowdSec can give its engine
+away free and still sell tiers: the engine is free, the intelligence
+is not.
+
+**Consequence for prioritisation:** adding detection signals #3 and #4
+does not make anyone pay. Being able to say *"we track N known browser
+builds and refresh them weekly"* does. Items 7–10 are no longer
+automatically ahead of item 19.
+
+**Consequence for sales:** a prospect who says "we'll just build it"
+is not a customer — don't argue with them. In this category the buyer
+has almost always been hurt first (scraped pricing, scalped
+inventory, credential stuffing). Pain precedes purchase, which is also
+why cold outreach doesn't work here.
+
+**Alternatives considered:**
+- *Compete on breadth of signals.* Rejected: signals are the copyable
+  part, and `CLAUDE.md` Section 14 already forbids adding them for
+  their own sake.
+- *Lean on convenience/ease of deployment as the moat.* Rejected as a
+  moat (it's a real advantage, but a competitor matches it in one
+  release); it stays a selling point, not a defence.
+- *Accept "they'll build it themselves" and target only enterprises
+  who won't.* Rejected: that's the buyer a solo maintainer can't serve
+  — see the positioning entry below.
+
+**Honest risk:** building and maintaining this database is a genuine,
+recurring cost and nobody has scoped it yet. It could turn out to be
+more work than one maintainer can carry, which would be a real
+strategic problem rather than a missing feature. Scope it before
+committing to it, and record what that scoping finds here.
+
+**Revisit when:** item 19's scoping says how much work refreshing the
+database actually is, or a real client tells us they'd have built it
+themselves (which would mean the moat argument isn't landing).
+
+---
+
 ## Evidence trail: token-gated, in-memory, one shared signal table — 2026-09-16
 
 **Decision:** ROADMAP item 12a ships as `proxy/evidence.go`: a fixed

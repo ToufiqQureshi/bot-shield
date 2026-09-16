@@ -138,7 +138,10 @@ and fix), not as a reusable library for outside use.
       ("real client family"): this does not classify JA4 into "this
       is really Chrome 120" — that needs a maintained database of
       known-browser fingerprints, which is a real ongoing research
-      cost (see `DECISIONS.md`), not a one-line addition. What's built
+      cost (see `DECISIONS.md`), not a one-line addition. That
+      database is now item 19, and the 2026-09-16 decision entry
+      reframes its cost as the product's moat rather than a reason to
+      defer it. What's built
       catches the concrete, well-defined lie (claims modern browser,
       handshake proves otherwise) without that database.
       This is a **signal only** — nothing blocks yet (`CLAUDE.md`
@@ -351,6 +354,36 @@ and fix), not as a reusable library for outside use.
 
 ## P1 — makes it meaningfully harder to bypass
 
+- [ ] **19. Known-browser fingerprint database** — a maintained set of
+      JA4 fingerprints for real browser builds, refreshed on a
+      schedule, so `UAMismatch` can answer *"is this actually Chrome
+      120?"* instead of only *"did the handshake look broken?"*
+      **This is the commercial moat, not just a signal.** Everything
+      else on this list is code, and code gets rebuilt in a fortnight
+      by a competent engineer — which is the honest answer to "why
+      wouldn't a client just build this themselves?" A database isn't
+      code: it's data that goes stale, and a client paying us is
+      buying *our* problem of keeping it fresh. Chrome ships roughly
+      every 4 weeks and its fingerprint moves with it, so an in-house
+      system decays silently — it never errors, it just drifts toward
+      allowing everything. Full reasoning and rejected alternatives:
+      `docs/DECISIONS.md`, 2026-09-16 "the moat is the fingerprint
+      database" entry.
+      Item 3 already identified this and deferred it as "a real
+      ongoing research cost" — correct as engineering, backwards as
+      business. The recurring cost is the asset.
+      **Scope this before building it.** The open question is how much
+      work a refresh cycle actually is (where fingerprints come from,
+      how often, how they're validated). If that turns out bigger than
+      one maintainer can carry, that's a strategic problem worth
+      knowing early — not a reason to start and stall.
+      **False-positive risk, and it's the serious kind:** a stale or
+      incomplete database makes every *unlisted* browser look like a
+      liar. Niche browsers, older mobile builds and privacy browsers
+      are exactly the real users who'd get wrongly flagged, so an
+      unknown fingerprint must mean "no opinion", never "suspicious"
+      (`CLAUDE.md` Section 8).
+
 - [ ] **7. Behavioral scoring** — mouse movement entropy, click timing,
       scroll velocity, collected client-side. Targets tools that use a
       real browser (defeats fingerprint-only checks) but drive it with
@@ -492,10 +525,17 @@ Items 1–6 are now done — see the "Done" section.
    someone else? Only the first kind earns a slot.
 
 **Priority note, 2026-09-16.** Detection depth (items 7–10) is no
-longer automatically ahead of items 12a, 18 and 11b. What is built
+longer automatically ahead of items 12a, 18, 11b and 19. What is built
 already catches naive-to-intermediate bots; what is missing is the
 ability to *show a client what it caught* and *let them set policy on
 it*. A signal nobody can see the output of does not sell, and cannot
 be checked for false positives against real traffic. Re-order once a
 real client's traffic says otherwise — but don't default to "more
 signals" just because signals are the fun part.
+
+Item 19 sits above them all on *defensibility*, below them on
+*readiness*: it is the only item a competitor can't copy in a
+fortnight, and also the only one whose real cost is still unknown.
+Scope it early even if it's built late. (12a is done; 18 is the
+next build, since it's what measures the false-positive rate against
+real traffic instead of assumptions.)

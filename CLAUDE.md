@@ -17,9 +17,13 @@ three files away:
   (CrowdSec, Coraza, Cloudflare's free tier). Anything argued on
   price loses to free software. We win on *where it runs* (inside the
   client's own infra) and *what it can prove* (per-request evidence).
-- **Our moat is inline TLS/JA4 scoring.** Free tools parse logs and
-  react to IPs that already misbehaved. We score the first request.
-  Protect that; don't dilute it with features that need a log pipeline.
+- **Inline TLS/JA4 scoring is our technical edge.** Free tools parse
+  logs and react to IPs that already misbehaved. We score the first
+  request. Protect that; don't dilute it with features that need a log
+  pipeline. But it is code, and code gets rebuilt — the *commercial*
+  moat is the maintained browser-fingerprint database (ROADMAP item
+  19), because data goes stale and that decay is what a subscription
+  actually pays for.
 - **The category is agent governance now, not bot blocking.** Allow /
   rate-limit / deceive / block *per agent*, with a record of why.
 

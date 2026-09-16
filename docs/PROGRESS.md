@@ -1533,3 +1533,88 @@ value item left: it's what measures the false-positive rate against
 real traffic instead of assumptions. Alternatively wire the dashboard
 to this endpoint — but decide where the token lives first, because it
 must not end up in client-side JS.
+
+---
+
+## 2026-09-16 — Answered "why not just build it yourself?"; named the moat
+
+**Docs only.** No Go code changed in this entry.
+
+### What prompted it
+
+The project owner asked the objection every sales conversation in this
+category ends at: *"any dev could build this with Redis and some
+checks — why would a company pay us?"*
+
+The first half of the honest answer is that they're right about
+today's code: two signals, fixed thresholds, `fingerproxy` already
+open source. A good engineer rebuilds current bot-shield in a
+fortnight. There was no answer to that in what's built, and finding
+that out in a real sales call would be worse than finding it out now.
+
+The second half is that building it once and keeping it working are
+different products — Chrome ships every ~4 weeks and moves its
+fingerprint with it, evasion tools update specifically to break
+detection, and an in-house system decays **silently**: it never
+errors, it just drifts toward allowing everything while nobody looks.
+
+### What changed
+
+- **`docs/DECISIONS.md`** — new top entry, *"the moat is the
+  fingerprint database, not the code."* Records the objection, why
+  it's half-right, the decay argument, three rejected alternatives
+  (compete on signal count / lean on ease-of-deployment as the moat /
+  concede and chase enterprises), and the honest risk that nobody has
+  scoped the database's real cost yet.
+- **`docs/ROADMAP.md`** — new **item 19, known-browser fingerprint
+  database**, at the top of P1 and marked as the commercial moat.
+  Carries a "scope it before building it" instruction and a
+  false-positive warning: a stale or partial database makes every
+  *unlisted* browser look like a liar, which lands on exactly the real
+  users (niche, older mobile, privacy browsers) Section 8 protects —
+  so an unknown fingerprint must mean "no opinion", never
+  "suspicious". Item 3's deferral note now points at it, and the dated
+  priority note explains it ranks first on defensibility and last on
+  readiness.
+- **`CLAUDE.md`** — the 30-second block said "our moat is inline
+  TLS/JA4 scoring," which now contradicts the above. Reworded: inline
+  scoring is the *technical* edge, the database is the *commercial*
+  moat.
+
+### The reframe worth remembering
+
+Item 3 already identified this database and deferred it as "a real
+ongoing research cost." That was correct as engineering and backwards
+as business — the recurring cost **is** the defensible asset, because
+it isn't code and can't be copied in a weekend. Same shape as CrowdSec
+giving its engine away free while selling intelligence.
+
+### How this was checked
+
+No code, so no mutation check applies. Verified instead that the four
+touched files agree with each other (Section 0's last checklist item):
+`CLAUDE.md`'s summary, `ROADMAP.md` item 19, item 3's deferral note
+and the priority note all now tell the same story, and the older
+"moat is inline scoring" wording is gone rather than left sitting
+alongside the new one.
+
+### Honest gaps
+
+- **Item 19 is a decision, not a plan.** Where fingerprints come from,
+  how often they refresh, how they're validated — all open. The
+  DECISIONS entry says so explicitly rather than implying the moat is
+  in hand.
+- The whole argument is still reasoning, not evidence. No prospect has
+  actually said "we'd build it ourselves" to us yet.
+- Nothing about item 19 is built, so today the "why not build it
+  yourself?" objection remains genuinely unanswered in the product.
+
+**Status:** done for the current scope — the reasoning is written down
+where the next session will find it. Nothing about the product changed.
+
+### Next session should
+
+Still item 18 (shadow mode) to build. But scope item 19 early —
+cheaply, on paper — because if refreshing that database turns out
+bigger than one maintainer can carry, that's a strategy problem worth
+hitting now rather than after more features ship.
