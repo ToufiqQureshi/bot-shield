@@ -1,780 +1,1192 @@
-# CLAUDE.md — bot-shield Development Rules
+# CLAUDE.md — bot-shield Engineering Operating System
 
-This file is engineering rules only: coding standards, workflow, and
-production-safety rules — **how** we work.
+> **This file defines how engineering work is performed.**
+>
+> Claude Code is expected to operate autonomously: investigate, decide, implement,
+> test, review, secure, simplify, document, and report work without needing the
+> owner to repeatedly instruct it to perform each step.
+>
+> Do not wait for the owner to say "run tests", "check security", "read the docs",
+> "update PROGRESS", or "review your diff". Those are part of the job.
 
-## What you're building (30 seconds)
+---
 
-> bot-shield is **the inline layer that decides which automated
-> clients reach a site — and proves why it decided that.**
-> Closed-source commercial software, one solo maintainer, sold as a
-> **hosted service we run** at roughly $200/mo. Customers point DNS
-> at us and install nothing.
+# 0. Mission
 
-Three things that are easy to get wrong, so they're here and not
-three files away:
+bot-shield is a **hosted inline traffic intelligence and governance system**.
 
-- **We are not "a cheaper DataDome."** The market's floor is $0
-  (CrowdSec, Coraza, Cloudflare's free tier). Anything argued on
-  price loses to free software. We win on *what it can prove*
-  (per-request evidence) and on serving people Cloudflare serves
-  badly — never on being cheapest.
-- **We host it; their traffic is our bill.** Since 2026-09-16 this is
-  a SaaS, not software customers install (`docs/DECISIONS.md`). Two
-  consequences that change how you write code: anything per-customer
-  needs a **tenant boundary**, and anything that consumes bandwidth or
-  CPU per request is now a **cost line**, not just a latency line.
-  Self-hosting survives as a priced-up Enterprise option — so never
-  assume we are always the operator, and never delete the
-  single-tenant path as dead code.
-- **Inline TLS/JA4 scoring is our technical edge.** Free tools parse
-  logs and react to IPs that already misbehaved. We score the first
-  request. Protect that; don't dilute it with features that need a log
-  pipeline. But it is code, and code gets rebuilt — the *commercial*
-  moat is the maintained browser-fingerprint database (ROADMAP item
-  19), because data goes stale and that decay is what a subscription
-  actually pays for. Hosting makes that database cheaper to build —
-  we see real browser traffic continuously.
-- **The category is agent governance now, not bot blocking.** Allow /
-  rate-limit / deceive / block *per agent*, with a record of why.
+It sits in front of customer websites and evaluates automated traffic using
+request-level evidence. It can then apply policy such as:
 
-Full reasoning and the numbers behind it: `docs/ROADMAP.md` intro,
-`docs/DECISIONS.md` (2026-09-16 positioning entry), `docs/RESEARCH.md`
-(2026-09-16 market scan). Read those before proposing product
-direction — they already contain the rejected alternatives.
+- allow
+- rate-limit
+- challenge
+- deceive
+- block
 
-## The four rules that matter most
+The important output is not only the action. The system must be able to explain
+**why** the action was taken using useful, defensible evidence.
 
-If you read nothing else in this file, read these. Each one exists
-because breaking it already cost this project something real.
+bot-shield is:
 
-1. **Section 24 — check the standard library first.** Four things
-   here were hand-written that net/http already did better. Reading
-   `$GOROOT/src` deleted ~60 lines and closed a security hole.
-2. **Section 23a — mutation-check every test.** Break the code, watch
-   the test go red. Two tests here passed while the feature they
-   "tested" was deleted.
-3. **Section 22 — run the pre-push checklist.** It has found a
-   spoofable header, a silently dying listener, and a fingerprint
-   bypass, all in code already called done.
-4. **Section 17 — fix it, don't just report it.** A known bug that
-   isn't fixed in the same pass is a bug shipped.
+- closed-source
+- commercial
+- primarily a multi-tenant hosted SaaS
+- operated as infrastructure in the request path
+- capable of a priced Enterprise/self-hosted deployment
 
-## Where to find things
+## Product principle
 
-| Need | Section |
+Do not think of bot-shield as simply "a bot blocker".
+
+Think:
+
+> **Identify automated traffic, collect defensible evidence, make a safe policy
+> decision, and give the customer control over that traffic.**
+
+The long-term product value includes maintained browser/fingerprint intelligence
+and continuously improved detection knowledge.
+
+Do not add features merely because Akamai, DataDome, Cloudflare, or another large
+vendor has them. Every feature must solve a real threat, customer problem,
+operational problem, or roadmap requirement.
+
+## Product positioning
+
+bot-shield is **not "a cheaper DataDome."** The market floor includes free
+alternatives. Do not compete primarily on being the cheapest product.
+
+The product differentiates through:
+
+- request-level evidence
+- explainable decisions
+- inline TLS/JA4 and other defensible signals
+- practical traffic governance
+- maintained browser/fingerprint intelligence
+- serving use cases where existing providers are a poor fit
+
+Hosting means customer traffic is also our infrastructure cost. Any per-request
+CPU, memory, bandwidth, network, storage, browser-rendering, or external API
+operation is a cost consideration, not merely a latency consideration.
+
+---
+
+# 1. Autonomous Engineering Rule
+
+Claude owns the engineering lifecycle of the requested change.
+
+When given a meaningful task, automatically perform:
+
+```text
+Understand
+  ↓
+Read relevant documentation
+  ↓
+Investigate repository
+  ↓
+Find existing implementation
+  ↓
+Identify requirements / threat / impact
+  ↓
+Plan
+  ↓
+Write or update tests
+  ↓
+Implement smallest correct solution
+  ↓
+Run verification
+  ↓
+Adversarial review
+  ↓
+Security review
+  ↓
+Performance / resource / cost review
+  ↓
+Simplify
+  ↓
+Review final diff
+  ↓
+Update documentation
+  ↓
+Final verification
+  ↓
+Report truthfully
+```
+
+Do not wait for the owner to request individual steps.
+
+If a step is genuinely irrelevant to a trivial change, skip it deliberately and
+say so when reporting the work.
+
+---
+
+# 2. Decision Rules — When to Act and When to Ask
+
+Claude should make normal technical decisions autonomously.
+
+## Act without asking when:
+
+- the requirement is clear
+- the choice is reversible
+- the choice follows existing architecture
+- existing project decisions already answer it
+- standard Go practice clearly applies
+- the change is internal and low-risk
+
+## Research first when:
+
+- the implementation is non-trivial
+- the behavior involves security-sensitive protocol details
+- a mature open-source implementation may already solve the problem
+- current standards or library behavior matter
+
+## Ask the owner when:
+
+- two valid choices materially change product behavior
+- a security posture must be chosen
+- a customer-facing policy/default is unclear
+- the change conflicts with an existing documented decision
+- the task materially changes architecture
+- a destructive migration or irreversible operation is required
+- credentials, infrastructure, or access are required and unavailable
+- requirements genuinely cannot be inferred from project documentation
+
+Do not ask questions merely because a decision exists.
+
+**Resolve ordinary engineering decisions yourself. Escalate only decisions that
+belong to the product owner.**
+
+---
+
+# 3. Documentation Is Project Memory
+
+Before non-trivial work, read:
+
+1. `docs/AGENT.md`
+2. `docs/ARCHITECTURE.md`
+3. `docs/ROADMAP.md`
+4. `docs/DECISIONS.md`
+5. `docs/RESEARCH.md`
+6. `docs/PROGRESS.md`
+7. this `CLAUDE.md`
+
+Then inspect relevant source files, tests, callers, configuration, and interfaces.
+
+Do not blindly implement from the task description if the repository already
+contains the answer.
+
+## Document responsibilities
+
+| Document | Purpose |
 |---|---|
-| Which doc to read, and updating docs before you stop | 0 |
-| What this project is for, what not to build | 1, 14 |
-| Who pays for this and why — positioning | top of this file, `docs/ROADMAP.md` |
-| Short code, comments, naming, file names | 3, 3a, 4, 5 |
-| How detection signals must combine | 6 |
-| Testing: order, real tests, mutation checks | 7, 15a, 23 |
-| False positives, production safety, latency | 8, 9 |
-| Respecting and deleting existing code | 12, 13, 24a |
-| Standards for shipped work; reporting gaps honestly | 15, 15a, 16, 17 |
-| Legal and ethical limits | 18 |
-| Checklists: before coding / before pushing | 19, 22 |
-| Threat-driven design | 20 |
-| Standard library first; using the review tools | 24, 24b |
-| Who owns what (all of it, including the dashboard) | 25 |
+| `AGENT.md` | Product purpose and engineering standard |
+| `ARCHITECTURE.md` | Current architecture and system behavior |
+| `ROADMAP.md` | What should be built and current status |
+| `DECISIONS.md` | Why important choices were made |
+| `RESEARCH.md` | Threats, techniques, vendors, libraries, research |
+| `PROGRESS.md` | What actually happened in previous work |
+| `CLAUDE.md` | How engineering work must be performed |
 
-## 0. Documentation Map — Read In This Order
+If documentation conflicts, do not silently invent an answer. Identify the
+conflict, determine which source reflects the current intended state when
+possible, and update affected documentation after resolving it.
 
-Before writing any code, read these files in order. Each answers a
-different question; do not skip ahead.
+## Mandatory documentation before stopping
 
-1. **`docs/AGENT.md`** — *why* this project exists, what success looks
-   like, and the standard to hold every change to. Read this first,
-   always.
-2. **`docs/ARCHITECTURE.md`** — *what* tech is used (proxy, storage,
-   dashboard, deployment) and why each choice was made.
-3. **`docs/ROADMAP.md`** — *what* to build and in what order (P0/P1/P2
-   feature list, current status — check the "Done" section to know
-   what already exists before building it again).
-4. **`docs/DECISIONS.md`** — *why we chose what we chose*: a dated log
-   of real decisions and rejected alternatives, so you don't re-derive
-   or accidentally reverse reasoning that already happened.
-5. **`docs/RESEARCH.md`** — background research this project is built
-   on (how real bot-management vendors detect bots, what stealth
-   tools defeat by default, open-source pieces already identified).
-   Read before proposing a "new" detection idea — check it isn't
-   already researched here.
-6. **`docs/PROGRESS.md`** — chronological work log: what changed, in
-   which file/function, why, and how it was tested — for every
-   session, even a small change. Read the most recent entries to know
-   exactly where the last session left off, in detail `ROADMAP.md`'s
-   checklist doesn't carry.
-7. **`CLAUDE.md`** (this file) — *how* to write the code: standards,
-   naming, testing, safety rules, workflow.
+For meaningful work:
 
-If any of these is unclear or missing something you need, resolve
-that before coding — do not guess and proceed.
+- update `ROADMAP.md` when roadmap status changes
+- update `DECISIONS.md` for meaningful technical/product decisions
+- update `RESEARCH.md` for new threat/technique/tool research
+- update `ARCHITECTURE.md` or `README.md` when behavior/API/architecture changes
+- append to `PROGRESS.md` with what changed, why, files affected, tests,
+  meaningful mutation checks, security/performance verification, and remaining gaps
+- check that documentation does not contradict the implementation
 
-### Mandatory: leave the docs current before you stop
-
-A future session — yours or a different agent's — starts from these
-files with zero memory of this conversation. Before ending any work
-session (not just when a feature is "done"):
-
-- [ ] Update `docs/ROADMAP.md`'s "Done" checklist for anything you
-      finished, so nobody re-builds it.
-- [ ] Add an entry to `docs/DECISIONS.md` for any real decision you
-      made (tech choice, scope cut, rejected alternative, priority
-      change) — see that file's format.
-- [ ] Add to `docs/RESEARCH.md` if you researched a new threat,
-      technique, or open-source tool — even if you didn't act on it
-      yet, so the next session doesn't re-research it from scratch.
-- [ ] If you changed the product's behavior/API, update
-      `docs/ARCHITECTURE.md` or `README.md` to match.
-- [ ] Append an entry to `docs/PROGRESS.md` — every change, even a
-      single function or a small fix, with what changed, why, and how
-      it was tested. "Tested how" means naming what you broke and
-      which test caught it (Section 23a), not "tests pass".
-- [ ] Run the Section 22 pre-push checklist, and `/security-review`
-      if the change touches anything a visitor controls (Section 24b).
-- [ ] Check no doc now contradicts another. If you changed behaviour,
-      `README.md` and `docs/ARCHITECTURE.md` describe the *current*
-      product, not the one you started the session with — a stale doc
-      misleads exactly the person who trusted it.
-
-Skipping this is the same failure mode as Section 16 (Self-Report
-Gaps): work that isn't written down doesn't exist for whoever picks
-this up next.
+A future session starts from these files with zero memory of this conversation.
 
 ---
 
-## 1. Project Goal
+# 4. Repository Investigation Before Coding
 
-bot-shield is a **simple, production-grade bot detection and
-mitigation service** in Go, sold as a hosted service the customer
-reaches by pointing DNS at us. The goal is NOT to out-feature
-Akamai/DataDome, and NOT to undercut them on price either —
-"affordable" is not a position when free competitors already exist.
-The goal is to score traffic *inline* and be able to *show its work*
-afterwards. See the top of this file for the short version and
-`docs/ROADMAP.md` for product direction.
+Before creating new code, search the repository.
 
-**This is closed-source, commercial software — a paid product the
-owner sells, not an open-source project.** It uses open-source
-*libraries* internally where that's the sound engineering choice
-(`fingerproxy`, `BotD`, see Section 24 and `docs/DECISIONS.md`), the
-same way any commercial product depends on open-source components
-without itself being open source. Never suggest an MIT/Apache/GPL
-license, a public GitHub release, or "let's open-source this part" —
-that is the opposite of the business this code exists to run.
+Check:
 
-Do not add a feature just because a big vendor has it. Every feature
-must earn its place against real bot traffic patterns (see Section
-20, Threat-Driven Development).
+```text
+Does this already exist?
+Is there already a helper?
+Is there already an abstraction?
+Is there already a test?
+Is the behavior implemented elsewhere?
+Who calls this?
+What configuration controls it?
+What assumptions do callers make?
+Is there an open roadmap item?
+Was this previously rejected?
+Is there a known threat/research entry?
+```
 
----
+Prefer extending correct existing code over creating duplicate code.
 
-## 2. Read Docs First — Always
-
-Before writing a line of code: read `docs/ROADMAP.md`, the relevant
-package's existing code and tests, and any related docs. Do not
-blindly add or change code.
+Do not rewrite working detection logic merely because another design looks cleaner.
+Detection behavior that works against real traffic is hard-won.
 
 ---
 
-## 3. Code Must Stay Short and Simple
+# 5. Threat-Driven Development
+
+Every non-trivial detection/security feature must have a real reason.
+
+Before implementation determine:
+
+```text
+Threat:
+What behavior/tool/attack are we addressing?
+
+Current coverage:
+What already catches it?
+
+Gap:
+What gets through today?
+
+New value:
+What does this change catch or improve?
+
+Cost:
+CPU / memory / latency / network / operational cost
+
+False-positive risk:
+Which legitimate clients could be affected?
+
+Test plan:
+How will we prove it works?
+```
+
+Do not add signals merely to increase the signal count.
+
+A new signal must provide meaningful coverage that existing signals do not already
+provide.
+
+---
+
+# 6. Planning
+
+For non-trivial work, create a concise internal plan:
+
+```text
+Goal
+Affected components
+Current behavior
+Required behavior
+Implementation approach
+Tests
+Security risks
+Performance/cost risks
+Documentation changes
+```
+
+Keep the plan proportional to the task.
+
+Do not create architecture, abstractions, queues, caches, or configuration
+frameworks for problems that do not require them.
+
+---
+
+# 7. Implementation Standard
+
+Primary rule:
+
+> **Simple, readable, production-grade code beats clever code.**
 
 Prefer:
 
-**simple code > clever code**
-
-**short code > unnecessary abstraction**
-
-**readable code > technically fancy code**
-
-If something can be done correctly in 10 lines, do NOT make it 20.
-Do not add unnecessary helper functions, interfaces, structs,
-wrappers, error layers, comments, or configuration. Every line must
-have a reason to exist. Do not build a scoring engine, cache, or queue
-more complex than the current, real need — measure before optimizing.
-
-### 3a. Comments: Beginner-Friendly, What/Why/Need — Not How
-
-This is a solo-dev project — the code has to explain itself to
-whoever (or whichever future agent) opens the file next, with zero
-memory of this conversation. Every non-trivial function (detection
-logic, fingerprint/TLS parsing, scoring, anything not a one-line
-getter) gets **one short comment**, max 2-3 lines, right above it.
-
-**How to write it:**
-
-- Plain, everyday words. Write it like you're explaining it to a
-  junior dev or the client's ops engineer, not another engineer who
-  already knows TLS/JA4/scoring internals.
-- One line for **what** it does, one line for **why** (what it
-  catches / what problem it solves), if a "why" isn't obvious skip
-  it rather than stretch for one.
-- No jargon dump, no citing three doc files in one comment, no
-  restating the code line by line. If you can't say it in 2-3 short
-  lines, the explanation is too long — cut it, don't wrap it.
-- One comment per function, not one comment per test case / per
-  struct field / per line inside the function.
-
-Example — good:
-```go
-// checkUserAgent flags a request when its claimed browser doesn't
-// match how it actually behaves. Bots often lie about this.
-```
-Example — bad (too long, too technical, restates the code):
-```go
-// checkUserAgent implements a User-Agent consistency check by
-// parsing the UA string, comparing it against the TLS/HTTP2
-// fingerprint's inferred client family per RFC..., iterating over
-// known browser signatures, and returning a mismatch score based on
-// docs/RESEARCH.md section 3 combined with docs/DECISIONS.md's
-// scoring-weight rationale from 2026-09-14...
+```text
+correctness
+clarity
+small surface area
+existing primitives
+measurable behavior
 ```
 
-This does not contradict Section 3's "no unnecessary comments" rule:
-a comment that just restates the code ("// loop over items") is
-still banned. A short, plain comment that explains why the code
-exists is not decoration — it earns its place the same way a line of
-code does.
+Avoid unnecessary:
+
+- interfaces
+- wrappers
+- factories
+- generic frameworks
+- configuration layers
+- helper layers
+- queues
+- caches
+- state machines
+- abstractions
+
+Every line must have a reason to exist.
+
+If something can be done correctly in 10 lines, do not make it 20 without a reason.
+
+Do not optimize without evidence.
 
 ---
 
-## 4. Function Names Must Be Simple
+# 8. Go Standards
 
-Function names must be extremely easy to understand. A junior
-developer should know what a function does just by reading its name.
+Use normal Go conventions.
 
-Prefer:
+## Naming
+
+Prefer names that explain behavior immediately:
 
 ```go
 score()
-fingerprint()
-challenge()
-classify()
-block()
-allow()
 detect()
+classify()
+allow()
+block()
+challenge()
 verify()
+fingerprint()
 ```
 
-Avoid:
+Avoid unnecessarily long orchestration names.
 
-```go
-executeMultiSignalBotClassificationPipeline()
-initializeAdaptiveRiskAssessmentOrchestrator()
-processInboundTrafficFingerprintCorrelationEngine()
-```
+Use:
 
-When a name needs more than one word, use Go's camelCase — never
-snake_case, which `gofmt` culture and every Go reviewer will read as
-foreign. Real examples from this repo:
+- `camelCase` for unexported identifiers
+- `PascalCase` for exported identifiers
+- standard Go acronym conventions such as `HTTP`, `TLS`, `JA4`
 
-```go
-ja4Fingerprint()   // unexported: lowercase first letter
-JA4FromContext()   // exported: uppercase first letter
-NewCaptureListener()
-```
+## Files
 
----
-
-## 5. File Names Must Be Simple
-
-File names should immediately tell a developer what's inside.
-
-Prefer:
+Prefer focused filenames:
 
 ```text
 score.go
 fingerprint.go
-challenge.go
 proxy.go
 session.go
 ratelimit.go
-honeypot.go
-dashboard.go
+challenge.go
 metrics.go
 errors.go
+dashboard.go
 ```
 
-Avoid:
+One file should have one obvious responsibility.
+
+---
+
+# 9. Comments
+
+Comments explain **what/why**, not obvious implementation details.
+
+Every non-trivial function should have one short comment when its purpose or
+reason is not obvious.
+
+Good:
+
+```go
+// checkUserAgent compares the claimed browser with observed request traits.
+// Bots often imitate a browser but fail to reproduce its other signals.
+```
+
+Bad:
+
+```go
+// Loop through headers and check the value.
+```
+
+Use plain language suitable for a junior developer or client's ops engineer.
+
+Do not put architecture documents inside source comments.
+
+Do not add comments that merely restate code.
+
+---
+
+# 10. Detection Architecture
+
+Detection signals are independent evidence sources.
+
+Prefer:
 
 ```text
-multi_signal_scoring_orchestration.go
-traffic_classification_pipeline_manager.go
+request
+  ↓
+signal
+  ↓
+evidence / score
+  ↓
+combined decision
+  ↓
+policy
+  ↓
+ALLOW / RATE-LIMIT / CHALLENGE / DECEIVE / BLOCK
 ```
 
-One file, one clear responsibility.
-
----
-
-## 6. Detection Signals Must Be Independent Layers
-
-This is bot-shield's core correctness rule, not just a style
-preference:
-
-> **No single signal may be the only thing standing between "allow"
-> and "block."**
-
-Advanced automation tools (e.g. patched browser automation frameworks)
-are specifically built to defeat one or two common checks
-(`navigator.webdriver`, basic CDP detection). A single boolean check
-is a single point of failure.
-
-- Every detection layer (TLS/JA4, HTTP/2 fingerprint, behavioral
-  timing, session consistency, rate pattern) contributes a **score**,
-  not a verdict.
-- The final allow/challenge/block decision is threshold-based across
-  combined signals, never a single `if isBot { block() }` on one
-  signal.
-- When adding a new signal, document what it catches that existing
-  signals miss — duplicate signals add cost without adding coverage.
-
----
-
-## 7. Tests Before Implementation
-
-Every feature follows this process: understand the requirement →
-write the test → watch it fail for the right reason → implement the
-smallest correct version → make it pass → keep the test in the repo.
-
-Every detection signal needs tests against:
-
-- known-good traffic (a real browser's actual fingerprint/behavior)
-- known-bot traffic (a scripted client's fingerprint/behavior)
-- borderline/ambiguous cases (should not hard-crash the pipeline)
-
-Do not merge a detection feature backed only by "it looked right in
-manual testing."
-
----
-
-## 8. False Positives Are a Production Incident, Not a Bug Report
-
-Blocking a real human/customer is often worse for the client's
-business than letting a bot through. Every scoring change must be
-evaluated for both:
-
-- **false negative rate** (bots getting through)
-- **false positive rate** (real users getting blocked)
-
-Never ship a stricter rule to "catch more bots" without checking what
-it does to legitimate traffic patterns (mobile browsers, corporate
-proxies/VPNs, accessibility tools, privacy-focused browsers).
-
----
-
-## 9. Production Safety Rules
-
-- **Latency**: this service sits in the request path. A slow decision
-  is a slow site for every visitor. Budget and measure p50/p99 latency
-  per signal; anything expensive (ML scoring, external lookups) must
-  have a timeout and a safe fallback.
-- **Fail open vs fail closed**: decide deliberately, per deployment,
-  whether an internal error in bot-shield lets the request through
-  (fail open — protects uptime) or blocks it (fail closed — protects
-  security). Never let this default silently; make the client choose.
-- **Concurrency**: never create unlimited goroutines or connections.
-  Every worker pool, queue, and cache **you write** needs a bounded
-  size. Handing the work to a battle-tested runtime instead — as the
-  capture listener does by letting net/http manage connections — is
-  the better answer where it exists, and satisfies this rule (see
-  Section 24). What is banned is an unbounded pool of our own making.
-- **Cancellation**: every blocking call takes a `context.Context`.
-- **No unbounded storage**: fingerprint/session stores need eviction
-  and size limits — this runs against live, adversarial traffic.
-
----
-
-## 10. Error Messages
-
-Errors should say what failed, where, and why. Prefer structured
-errors. Do not build a giant custom error framework for simple
-failures.
-
----
-
-## 11. Documentation
-
-Every detection signal and every scoring change needs a short doc
-explaining: what it detects, what it costs (latency/complexity), and
-its known false-positive risk. Keep it beginner-friendly — the person
-reading it may be the client's ops engineer, not a security expert.
-
----
-
-## 12. Existing Code Must Be Respected
-
-Read a file, understand why it exists, check its tests and callers
-before changing it. Do not rewrite working detection logic just
-because you'd write it differently — bot detection code that works
-against real traffic is hard-won; treat it carefully.
-
----
-
-## 13. Dead / Unused Code Alert
-
-If you find unused, duplicated, or unreachable code: **stop and alert
-the project owner** before deleting it. Explain what it is and why it
-looks unused. Do not silently remove it.
-
----
-
-## 14. No Unnecessary Code
-
-Do not add configuration, abstractions, or signals "in case a client
-needs it later." Build for the threats the roadmap has already
-identified as real (see `docs/ROADMAP.md`).
-
----
-
-## 15. Solo/Small-Team Maintainer Mandate
-
-Treat every merged feature as production code the day it ships, not a
-draft. It must handle its own errors, timeouts, and cancellation; be
-safe under sustained adversarial traffic (not just a clean demo); and
-have tests that prove the failure cases, not just that it compiles.
-
-Research before implementing anything nontrivial (TLS fingerprinting
-internals, HTTP/2 frame parsing, scoring/ML approaches): check how
-mature open-source projects (fingerproxy, BotD, open-appsec) solved
-the same problem before writing a naive version.
-
-### 15a. Write Every Line Like a Real Company Will Run It Tomorrow
-
-This is not a demo, a portfolio piece, or a "make it work once"
-script. bot-shield is going to sit directly in front of a paying
-client's live website. Before writing or merging anything, hold it to
-this bar:
-
-- **Every file, every function, every feature needs a real test** —
-  not "it compiled" or "it looked right when I ran it once." Test the
-  normal case, the bad/attacker-controlled input case, and the
-  timeout/failure case. If a function has no test, it is not done.
-- **Fix bugs the moment you find them, in the same pass** — don't
-  write "known issue, fix later" for something you already know how
-  to fix. "Later" doesn't exist for a solo-dev project (see Section
-  17); a bug found and not fixed is a bug shipped.
-- **Neither over-engineered nor under-engineered:**
-  - Under-engineered = missing something a real attacker or real
-    production load would hit on day one: no timeout on a blocking
-    call, no panic recovery on code that parses untrusted input, no
-    cap on a resource a flood of connections could exhaust. This is
-    not "polish for later" — it's the difference between "bot-shield
-    protects the site" and "bot-shield *is* the outage."
-  - Over-engineered = configuration, abstraction layers, or signals
-    for a threat that isn't real yet (this duplicates Section 14 —
-    the same discipline applies in both directions).
-  - When in doubt, ask: "if this exact code ran in front of a real
-    client's checkout page right now, what's the first way a bored
-    attacker or a bad network breaks it?" If you can answer that and
-    haven't handled it, it's not done yet.
-- Before calling any feature finished, re-read this bar and the
-  Section 19 checklist against it — not just "does it pass go test."
-
----
-
-## 16. Self-Report Gaps Without Being Asked
-
-The project owner is trusting this implementation. After finishing
-any feature (not just when asked to review it), proactively state, in
-the same message that reports the feature done:
-
-1. What was built and why.
-2. Any known gap, shortcut, or untested edge case in it — even small
-   ones, even ones that seem minor.
-3. What you'd fix next if given the choice.
-
-Do not wait to be asked "is this really done?" Silence about a known
-weakness is the same as hiding it.
-
----
-
-## 17. Fix It, Don't Just Report It
-
-Reporting a gap is not the same as handling it.
-
-> **If you found it and you can fix it, fix it in the same pass. Only
-> report-and-defer when fixing is genuinely blocked.**
-
-"Genuinely blocked" means one of these, and you must say which:
-
-- It needs a decision only the owner can make (a product/threat-model
-  trade-off, not a technical one).
-- It depends on something unavailable right now (missing credential,
-  an environment that can't run it, an upstream bug).
-- It is a large feature of its own, already on the roadmap, and
-  fixing it now would mean shipping it half-done.
-
-"It's an edge case", "it's rare in practice", "it's hard to test
-here", and "I already documented it" are never valid reasons to defer.
-
----
-
-## 18. Ethical / Legal Boundary
-
-bot-shield **detects and mitigates** automated traffic. It must never
-include, on either side:
-
-- techniques whose purpose is to help automation defeat other
-  companies' anti-bot systems — that is a different kind of project
-  entirely and does not belong here.
-- fingerprinting or data collection beyond what's needed to score a
-  request (no scraping/selling of end-user personal data).
-- dark-pattern blocking that harms accessibility tools, screen
-  readers, or legitimate monitoring/uptime bots without a documented
-  allowlist mechanism.
-
-When in doubt about whether a signal or feature crosses this line,
-stop and ask the project owner before building it.
-
----
-
-## 19. Before Every Coding Task
+Relevant layers may include:
 
 ```text
-[ ] Read docs/ROADMAP.md and related docs
-[ ] Read target files and related code
-[ ] Read existing tests
-[ ] Identify the real threat/gap this solves
-[ ] Check whether it already exists
-[ ] Write the test (good traffic + bot traffic + borderline cases)
-[ ] Implement the smallest solution
-[ ] Run tests, check false-positive impact
-[ ] Add production/failure tests
-[ ] Mutation-check every test: break the code, watch the test go RED,
-    undo the break (Section 23a — a test that passes while the
-    feature is broken is not a test)
-[ ] Update docs
-[ ] Check for unnecessary code
+TLS / JA4
+HTTP / HTTP2
+Browser fingerprint
+Behavior
+Session consistency
+Rate pattern
+Known automation intelligence
+Other researched signals
 ```
+
+**No single weak signal may be the only reason for a hard block.**
+
+Each layer contributes evidence or score. The final decision is based on combined
+signals according to the documented architecture and policy.
+
+When adding a signal, document what it catches that existing signals miss.
+Duplicate signals add cost without meaningful coverage.
 
 ---
 
-## 20. Threat-Driven Development
+# 11. Testing Is Part of Implementation
 
-Before building a detection feature, document:
+A feature is not complete when code is written.
+
+A feature is complete when its important behavior is proven.
+
+For meaningful changes, test:
+
+- normal behavior
+- invalid input
+- attacker-controlled input
+- failure paths
+- timeout behavior
+- boundary conditions
+
+For detection signals also test:
+
+- known-good traffic
+- known-bot traffic
+- ambiguous/borderline traffic
+
+Do not rely on manual testing alone.
+
+## Required development sequence
 
 ```text
-Threat: what bot behavior/tool does this target?
-Current signals: what do we already catch, and what slips through?
-Gap: what specifically gets past existing layers?
-Cost: latency/complexity this adds?
-False-positive risk: what real traffic could this wrongly flag?
-Test plan:
+Understand requirement
+→ write/update test
+→ watch the test fail for the right reason
+→ implement smallest correct version
+→ make it pass
+→ keep the test
 ```
 
-Do not add detection signals just to increase signal count — every
-signal must close a real gap (see `docs/ROADMAP.md`).
-
 ---
 
-## 21. Final Rule
+# 12. Mutation Verification
 
-Keep bot-shield **boring internally and effective externally**: short,
-readable, testable, predictable. Impress with how little code is
-needed to catch real bot traffic reliably — not with clever tricks.
+A passing test suite is not automatically evidence that tests are useful.
 
-**Every signal, every layer, every line must earn its place.**
-
----
-
-## 22. Pre-Push Production Verification
-
-Run this before calling any feature "done," even one you already
-tested. It has caught real bugs before (a spoofable header, a
-listener that died silently on one bad Accept) that the first round
-of tests missed — this is not paperwork, it's a second, adversarial
-pass over your own work.
+For every important new or modified test:
 
 ```text
-[ ] Re-read your own diff like an attacker, not the author: what's
-    the cheapest way to break this, crash it, or fool it?
-[ ] Any value that comes from outside bot-shield (a header, a query
-    param, a cookie) and gets trusted or forwarded downstream — is it
-    stripped/validated first, or could a visitor just set it
-    themselves?
-[ ] Every error path, not just the happy path: does it get logged or
-    handled, or does it fail silently? (a swallowed error is a bug
-    hiding, not a bug handled)
-[ ] Every blocking call: does it have a timeout? What happens if 1000
-    clients trigger the slow/worst case at once?
-[ ] Did you fix the exact bug you were looking for, or did you also
-    check the rest of the file for the same class of mistake?
-[ ] What, concretely, does NO test cover right now? Say it out loud
-    (or in `docs/PROGRESS.md`) — don't let "probably fine" stand in
-    for a real answer.
-[ ] Did you mutation-check the tests (Section 23a), including the
-    ones that already existed before this change? A green suite is
-    not evidence until you've seen it go red on purpose.
-[ ] Did you change a function whose test you didn't re-read? If so,
-    that test is now untrusted (Section 23c).
-[ ] Did you check the standard library actually has no built-in for
-    what you hand-wrote, by reading its source rather than assuming
-    (Section 24)? Is there dead code or one-use indirection to delete
-    before this ships?
-[ ] Say plainly, in your own report of the work: is this "done", or
-    is it "done for the current scope, here's what's still missing"?
-    Those are different claims — never let the first one cover for
-    the second.
+1. Run correct implementation → PASS
+2. Identify exact behavior being protected
+3. Temporarily break/remove/change that behavior
+4. Run relevant test → MUST FAIL
+5. Restore implementation
+6. Run again → PASS
 ```
 
-This is Section 15a's bar made checkable — a checklist you actually
-run, not just a mindset you hold.
+If the test still passes after the protected behavior is removed, the test is not
+trustworthy. Fix or delete it before declaring the change complete.
 
----
-
-## 23. A Green Test Suite Proves Nothing By Itself
-
-The most dangerous state this project can be in is **a passing test
-suite that isn't actually testing anything.** It reads as safety, so
-nobody looks again — and the bug ships anyway.
-
-This is not hypothetical. Tests written for this repo have already
-been caught doing exactly this: a handshake-timeout test that passed
-with the timeout deleted from the code (it was measuring its own read
-deadline, not the server's behaviour), and a fingerprint test that
-passed when the fingerprint was replaced with the literal string
-`GARBAGE-NOT-A-FINGERPRINT`.
-
-### 23a. The mutation check — mandatory, every test, no exceptions
-
-> **Before a test counts as written: break the code it is supposed to
-> protect, run the test, and watch it go RED. Then undo the break.**
-
-If the test still passes while the feature is broken, it is not a
-test. Delete it or fix it — never keep it, because a fake test is
-worse than no test at all (no test is an honest gap; a fake test is a
-lie that stops anyone from looking).
-
-State in `docs/PROGRESS.md` what you broke and that the test caught
-it. "Tests pass" is not a test report — "I removed X and the test
-failed with Y" is.
-
-### 23b. Ways a test lies (check for each of these)
-
-- **Vacuous assertion** — the check lives inside a handler/callback
-  that never ran. If the request never arrives, nothing is asserted
-  and the test passes. Always assert *separately* that the callback
-  actually ran.
-- **Assertion satisfiable another way** — `err != nil` passes whether
-  the server closed the connection or your own deadline expired.
-  Assert the *specific* cause, not any-failure-will-do.
-- **"Not empty" instead of "correct"** — a garbage value is not empty
-  either. Check the real shape or the real expected value. A wrong
-  fingerprint is worse than a missing one, because the scoring layer
-  will trust it.
-- **Only the easy input** — one obviously-invalid input doesn't prove
-  robustness. Malformed, truncated, empty, nil, and
-  lying-about-its-own-length inputs are the *normal* case for a
-  bot-detection product, not edge cases.
-- **Testing the mock, not the code** — if the test would pass against
-  an empty implementation, it's testing scaffolding.
-
-### 23c. Stale tests are a bug, not leftover clutter
-
-When you change what a function does, its old test is now guarding
-behaviour that no longer exists — and it will keep passing while
-doing it. Every time you touch a function: open its test, and either
-confirm it still checks the *current* behaviour, or update it. A test
-you didn't re-read after changing the code is untrusted.
-
-### 23d. Never write a test to make the suite green
-
-The purpose of a test is to *fail* when the product is broken. If
-you're shaping an assertion so it passes, stop — you're building the
-exact trap described at the top of this section. Write the assertion
-the product owner would want, then make the *code* satisfy it.
-
-### 23e. Do this without being asked
-
-The project owner is solo. There is no QA, no second reviewer, and no
-one else who will catch a fake test. If this audit only happens when
-they think to ask for it, the process has already failed. Run it
-yourself, every time, and report what you found — including "I
-re-checked X and it was genuinely fine."
-
----
-
-## 24. Check the Standard Library Before Writing the Code
-
-The best code in this repo is the code we didn't write. Before
-writing any non-trivial function, and again before calling it done,
-answer these five questions — **by reading the actual source or
-current docs, never from memory**:
+Record meaningful mutation checks in `docs/PROGRESS.md`, for example:
 
 ```text
-[ ] Could this function be shorter, or does it do more than one thing?
-[ ] Does Go's standard library already do this? (read $(go env GOROOT)/src,
-    or the current package docs — do not guess)
-[ ] Is that built-in production grade? (stdlib and golang.org/x: yes.
-    A random GitHub package: check maintenance, tests, real users)
-[ ] Is it a whole library, or one function/hook we can call?
-[ ] If it exists and it's sound — use it, and delete ours.
+Mutation check:
+Removed request timeout → timeout test failed as expected.
+Restored timeout → test passed.
 ```
 
-**Why this is not optional.** On 2026-09-14, an audit against these
-questions found that hand-written code in `proxy/capture.go` had
-reimplemented four things net/http already does, worse:
-
-| We hand-wrote | Standard library already had | Ours was worse because |
-|---|---|---|
-| TLS handshake timeout (atomic + init + context) | `Server.tlsHandshakeTimeout()`, from `ReadHeaderTimeout` | silently dropped failed handshakes instead of logging them or replying to a plain-HTTP client |
-| Accept retry with backoff | `Server.Serve()`'s `tempDelay` loop | ours was a near-copy of stdlib code, untested against real transient errors |
-| Per-connection panic recovery | `conn.serve()`'s `defer recover()` | duplicated |
-| Goroutine-per-connection + semaphore | net/http's own connection handling | extra machinery, extra bugs |
-
-Deleting all four removed about 60 lines and left the product
-**safer**, because the stdlib's versions handle cases ours didn't.
-
-The same audit found `httputil.ReverseProxy.Director` (what we used)
-does **not** strip a visitor's `X-Forwarded-*` headers, while the
-newer `Rewrite` does — meaning any visitor could forge their own IP,
-defeating per-IP rate limiting before it was even built. One question
-from the list above ("is there a newer built-in?") caught a real
-security hole.
-
-### 24a. Delete dead code before you add to it
-
-Unused variables, one-use indirection, a helper with a single caller,
-a constant nobody reads, a wrapper that wraps nothing — clear these
-out *first*, so the next person reads only code that matters. A
-junior dev opening any file in this repo should be able to tell what
-it does without a guide.
-
-Section 13 still applies: if something looks unused but you're not
-certain, **ask the project owner before deleting it** — say what it
-is and why it looks dead. Certainty deletes; doubt asks.
-
-### 24b. Use the tools instead of eyeballing it
-
-The Claude Code skills `/code-review`, `/security-review` and
-`/simplify` exist and are cheap. Run them on your own work before
-declaring it done — especially `/security-review` on anything that
-touches visitor-controlled input. An independent pass does not share
-your blind spots, which is the entire point on a solo project.
+Do not manufacture meaningless mutations for trivial getters or generated code.
 
 ---
 
-## 25. You own the whole stack
+# 13. Test Quality — Do Not Let Tests Lie
 
-As of 2026-09-16 this is a one-agent project again (`docs/DECISIONS.md`).
-There is no second agent to hand the frontend to: `proxy/`,
-`cmd/botshield/` **and** `dashboard/` are all yours.
+Automatically look for:
 
-What that changes in practice:
+### Vacuous assertions
 
-- **No "not my area."** A bug in `dashboard/` is the same as a bug in
-  `proxy/` — yours to find and fix. Section 13's rule about alerting
-  before deleting still applies to code you didn't write.
-- **The dashboard is held to this file's bar too**, not a lower one
-  because it's UI. Real tests, no silent failures, and it must handle
-  the backend being slow, down, or returning an error — a dashboard
-  that renders a blank card when the API is down is a lie about the
-  customer's traffic.
-- **The dashboard is what the customer actually sees.** They will
-  never read `proxy/score.go`. They will judge the product entirely by
-  whether the numbers on the screen make sense and are believable.
+A callback/handler may never run while the test still passes.
 
-`dashboard/` is a Next.js app and predates this rule — read it before
-changing it (Section 12), and don't rewrite working parts just to
-match your own style.
+Assert that the expected operation actually occurred.
+
+### Weak error assertions
+
+`err != nil` can hide the wrong failure.
+
+When the exact failure matters, assert the specific behavior.
+
+### Garbage accepted as valid
+
+"Not empty" is not equivalent to "correct".
+
+For fingerprints, IDs, parsed values, and classifications, validate their actual
+expected shape/value.
+
+### Only happy-path input
+
+Adversarial systems must test malformed, truncated, empty, nil, oversized, and
+inconsistent input where relevant.
+
+### Tests of mocks instead of production code
+
+A test should fail if the real implementation is removed or broken.
+
+### Stale tests
+
+Whenever a function changes, re-read its tests. Update tests when behavior changes.
+
+A test not re-read after a behavior change is untrusted.
+
+### Never write a test merely to make the suite green
+
+Write the assertion the product owner would want, then make the code satisfy it.
+
+---
+
+# 14. False Positives Are a Production Problem
+
+Blocking legitimate traffic can directly harm a customer's website.
+
+Every detection change must consider:
+
+- false negatives
+- false positives
+
+Pay particular attention to:
+
+- mobile browsers
+- corporate proxies
+- VPNs
+- privacy-focused browsers
+- accessibility tools
+- legitimate crawlers
+- uptime monitors
+- unusual but valid clients
+
+Never make a rule stricter merely because it catches more bots.
+
+---
+
+# 15. Production Safety
+
+bot-shield runs in the request path.
+
+## Latency
+
+Measure p50/p95/p99 latency for relevant stages.
+
+Expensive work must have:
+
+- timeout
+- cancellation
+- bounded resource use
+- explicit fallback behavior
+
+A slow decision is a slow customer website.
+
+## Failure behavior
+
+Fail-open vs fail-closed is a deliberate security/product decision.
+
+Never allow accidental failure behavior to silently define the product.
+
+## Concurrency
+
+Never create unlimited:
+
+- goroutines
+- connections
+- workers
+- queues
+- memory growth
+
+All custom pools must be bounded.
+
+Prefer the standard library/runtime when it already solves the problem.
+
+## Storage
+
+Traffic-derived state must have limits and eviction/expiration.
+
+Examples:
+
+- fingerprints
+- sessions
+- rate-limit state
+- temporary request data
+
+## Cancellation
+
+Blocking operations must have a cancellation path where applicable.
+
+Use `context.Context`.
+
+---
+
+# 16. Multi-Tenant Security
+
+bot-shield is a multi-tenant SaaS.
+
+Treat tenant isolation as a security boundary.
+
+Customer-specific data includes:
+
+- configuration
+- policies
+- credentials
+- traffic data
+- metrics
+- logs
+- sessions
+- fingerprints
+- usage/billing information
+
+Every customer-owned operation must have an explicit tenant scope.
+
+Never trust a tenant identifier supplied by a visitor.
+
+Tenant identity must come from a trusted, validated boundary.
+
+For new storage/APIs ask:
+
+```text
+Can tenant A access tenant B's data?
+Can a visitor forge tenant identity?
+Can cached state cross tenants?
+Can metrics/logs leak another tenant?
+Can one tenant exhaust a shared resource?
+```
+
+---
+
+# 17. Visitor-Controlled Input
+
+Treat all visitor-controlled values as hostile.
+
+Examples:
+
+- headers
+- cookies
+- query parameters
+- request bodies
+- user-agent
+- forwarded headers
+- IP-related headers
+- connection metadata
+- TLS-derived input
+
+Before trusting or forwarding a value:
+
+```text
+Who supplied it?
+Can it be forged?
+Was it validated?
+Was it normalized?
+Can it affect security decisions?
+Can it reach the origin?
+```
+
+Never trust client-provided infrastructure headers merely because their names look
+authoritative.
+
+---
+
+# 18. Security Review
+
+After implementation, perform an attacker-oriented review.
+
+Ask:
+
+```text
+Can this be spoofed?
+Can it be bypassed?
+Can malformed input crash it?
+Can a visitor exhaust memory?
+Can a visitor exhaust CPU?
+Can a visitor create unlimited state?
+Can a visitor create unlimited connections?
+Can a visitor bypass rate limiting?
+Can a visitor forge IP/tenant identity?
+Can this cause origin abuse?
+Can this cause unexpected fail-open behavior?
+Can this trigger expensive work repeatedly?
+Can this leak customer data?
+```
+
+For changes involving visitor-controlled input, run available security review
+tooling when relevant.
+
+Do not claim "secure" merely because tests pass.
+
+---
+
+# 19. Resource and Cost Awareness
+
+bot-shield is hosted infrastructure.
+
+A request is both a latency event **and potentially a cost event**.
+
+For every new per-request operation consider:
+
+```text
+CPU cost
+Memory cost
+Bandwidth cost
+External API cost
+Storage cost
+Connection cost
+Worst-case attacker amplification
+```
+
+Especially scrutinize:
+
+- browser rendering
+- external network calls
+- ML inference
+- large request bodies
+- expensive parsing
+- repeated lookups
+- unbounded logging
+- unbounded telemetry
+
+A feature that allows one request to trigger many expensive operations is not
+production-ready.
+
+---
+
+# 20. Standard Library First
+
+Before implementing non-trivial infrastructure, check the Go standard library
+and established `golang.org/x` packages.
+
+Do not rely on memory.
+
+Check current source/docs and ask:
+
+```text
+Does Go already solve this?
+Does net/http already solve this?
+Does the runtime already provide this?
+Is there a standard primitive?
+Is there a maintained library that is clearly appropriate?
+Can our implementation be deleted?
+```
+
+Prefer a battle-tested standard implementation over maintaining a custom copy.
+
+### Important bot-shield lesson
+
+A previous audit found hand-written infrastructure in `proxy/capture.go` that
+duplicated behavior already handled by `net/http`, including:
+
+- TLS handshake timeout behavior
+- Accept retry/backoff
+- per-connection panic recovery
+- goroutine/connection handling
+
+The cleanup removed roughly 60 lines and reduced risk.
+
+Another audit found that `httputil.ReverseProxy.Director` did not strip visitor
+supplied `X-Forwarded-*` headers, while the newer `Rewrite` path does. That exposed
+a security issue around forged client IP information.
+
+**Before writing infrastructure code, read the actual standard-library source or
+current docs. Never assume.**
+
+---
+
+# 21. Existing Code and Dead Code
+
+Respect existing working code.
+
+Before changing it:
+
+- understand why it exists
+- inspect callers
+- inspect tests
+- inspect related docs
+
+Do not rewrite working detection logic merely for style.
+
+## Dead/unused code
+
+If code appears unused:
+
+1. determine whether it is genuinely dead
+2. inspect callers, build tags, generated code, interfaces, tests, and entry points
+3. if clearly dead and safe to remove, clean it up
+4. if certainty is impossible, identify it and ask the owner before deletion
+
+Do not silently delete code merely because it looks unused.
+
+Do not build new code on top of obvious dead code when it can safely be removed.
+
+---
+
+# 22. Documentation Maintenance
+
+Do not wait for the owner to remind you.
+
+Update `ROADMAP.md` when:
+
+- a roadmap item is completed
+- status materially changes
+- scope/priority changes
+
+Update `DECISIONS.md` when:
+
+- a meaningful technical decision is made
+- architecture changes
+- scope is deliberately cut
+- an alternative is rejected
+- a product/technical trade-off is resolved
+
+Update `RESEARCH.md` when:
+
+- a new threat is researched
+- a detection technique is researched
+- an important library/vendor/tool is evaluated
+- new security knowledge affects implementation
+
+Update `ARCHITECTURE.md` or `README.md` when:
+
+- externally visible behavior changes
+- APIs change
+- architecture changes
+- deployment behavior changes
+- customer-visible configuration changes
+
+Update `PROGRESS.md` for every meaningful work session with:
+
+- what changed
+- why
+- affected files/components
+- tests executed
+- meaningful mutation checks
+- security/performance verification
+- known remaining gaps
+
+Never write only:
+
+```text
+Tests pass.
+```
+
+Write what was actually verified.
+
+---
+
+# 23. Documentation Consistency
+
+Before finishing, check:
+
+```text
+README
+ARCHITECTURE
+ROADMAP
+DECISIONS
+RESEARCH
+PROGRESS
+CLAUDE
+```
+
+They must not contradict the current implementation.
+
+Stale documentation is a correctness problem because the next engineer/agent uses
+it as project memory.
+
+---
+
+# 24. Pre-Push Production Verification
+
+Run this before calling any meaningful feature "done":
+
+```text
+[ ] Re-read the final diff like an attacker, not the author.
+[ ] What's the cheapest way to break, crash, or fool this?
+[ ] Is every visitor-controlled value validated before trust/forwarding?
+[ ] Can a visitor forge IP or tenant identity?
+[ ] Are all error paths handled or logged?
+[ ] Does every blocking call have an appropriate timeout/cancellation path?
+[ ] What happens if many clients trigger the worst case simultaneously?
+[ ] Is resource growth bounded?
+[ ] Did the exact bug get fixed, not merely documented?
+[ ] Did I inspect the rest of the relevant file for the same class of mistake?
+[ ] What does NO test cover right now?
+[ ] Did I mutation-check important tests?
+[ ] Did I re-read tests for every changed function?
+[ ] Did I check the standard library before keeping custom infrastructure?
+[ ] Is there dead code or one-use indirection to remove?
+[ ] Did I check false-positive impact?
+[ ] Did I check p50/p95/p99 or relevant performance impact?
+[ ] Did I check bandwidth/CPU/memory/external-cost impact?
+[ ] Did I run /code-review when useful?
+[ ] Did I run /security-review when relevant?
+[ ] Did I run /simplify when useful?
+[ ] Are docs current?
+[ ] Is this truly DONE or only done for the current scope?
+```
+
+This checklist is a second adversarial pass, not paperwork.
+
+---
+
+# 25. Claude Code Review Tools
+
+Use available review tools automatically when relevant:
+
+```text
+/code-review
+/security-review
+/simplify
+```
+
+Use them especially when:
+
+- security-sensitive code changed
+- visitor-controlled input changed
+- proxy behavior changed
+- authentication/tenant logic changed
+- detection logic changed
+- concurrency/resource handling changed
+
+Do not run tools mechanically when they add no value to a trivial change.
+
+Review tools supplement reasoning; they do not replace it.
+
+---
+
+# 26. Product Boundary — Defensive Only
+
+bot-shield detects and governs automated traffic.
+
+Never turn it into a tool for defeating other companies' anti-bot systems.
+
+Do not implement:
+
+- anti-detection techniques intended to evade third-party defenses
+- CAPTCHA bypass
+- stealth automation
+- scraping evasion
+- personal-data collection unrelated to documented product needs
+
+Legitimate automated traffic must have a documented way to be recognized and
+governed where appropriate.
+
+Accessibility is not an enemy signal.
+
+---
+
+# 27. Dashboard Is Production Code
+
+`dashboard/` is part of the product.
+
+It is not "just frontend".
+
+The dashboard must:
+
+- handle API errors
+- handle slow backend responses
+- avoid misleading empty states
+- display believable data
+- respect tenant boundaries
+- have meaningful tests
+- handle loading/error states
+- avoid silently hiding backend failures
+
+The customer judges the product by what the dashboard tells them.
+
+A blank or false-looking dashboard is a product correctness failure.
+
+---
+
+# 28. Fix It, Don't Just Report It
+
+If you find a problem and can fix it safely in the current scope, **fix it in the
+same pass**.
+
+Only report-and-defer when fixing is genuinely blocked by:
+
+- an owner decision
+- an unavailable dependency/environment/credential/upstream issue
+- a large separate feature already on the roadmap where fixing now would mean
+  shipping it half-done
+
+These are not valid reasons to defer a fix:
+
+- "it's an edge case"
+- "it's rare"
+- "it's hard to test"
+- "I documented it"
+
+If you found a fixable bug, fix it.
+
+---
+
+# 29. Solo/Small-Team Maintainer Mandate
+
+Treat every merged feature as production code the day it ships.
+
+It must:
+
+- handle its own errors
+- have timeouts/cancellation where applicable
+- be safe under sustained adversarial traffic
+- have tests proving important failure cases
+- avoid unnecessary complexity
+- be documented enough for the next session
+
+This is not a demo, portfolio piece, or "make it work once" script.
+
+Ask:
+
+> **If this exact code ran in front of a real client's checkout page right now,
+> what is the first way a bored attacker or bad network could break it?**
+
+If you can answer that and haven't handled it, it is not done yet.
+
+---
+
+# 30. Definition of Done
+
+Do not use "done" as a synonym for "code exists".
+
+A meaningful change should reach:
+
+```text
+IMPLEMENTED
+    ↓
+TESTED
+    ↓
+MUTATION-VERIFIED (when applicable)
+    ↓
+SECURITY-REVIEWED
+    ↓
+RESOURCE/PERFORMANCE/COST-CHECKED
+    ↓
+SIMPLIFIED
+    ↓
+DOCUMENTED
+    ↓
+FINAL DIFF REVIEWED
+    ↓
+DONE
+```
+
+If something is genuinely blocked:
+
+```text
+Status: Done for current scope
+
+Blocked / remaining:
+- ...
+
+Reason:
+- owner decision / unavailable dependency / separate substantial feature
+```
+
+Never hide incomplete work behind "done".
+
+---
+
+# 31. Final Report
+
+When reporting completed work, automatically provide:
+
+```text
+## Completed
+What changed and why.
+
+## Verification
+Tests and meaningful checks actually executed.
+
+## Security
+Important security checks performed and findings.
+
+## Performance / Cost
+Relevant latency, resource, load, or cost checks performed.
+
+## Bugs Found / Fixed
+Problems discovered during implementation or review.
+
+## Documentation
+Which docs were updated.
+
+## Remaining Gaps
+Anything genuinely incomplete or blocked.
+
+## Production Status
+READY
+or
+READY FOR CURRENT SCOPE — remaining gap: ...
+```
+
+Do not claim a check was performed if it was not.
+
+Do not claim production readiness if important verification was skipped.
+
+---
+
+# 32. Operating Principle
+
+The owner should be able to give Claude a task such as:
+
+```text
+"Implement roadmap item X."
+```
+
+and Claude should understand that it means:
+
+```text
+read the project
+→ understand the product
+→ investigate existing code
+→ research when necessary
+→ make normal technical decisions
+→ implement
+→ test
+→ try to break it
+→ review security
+→ review performance/cost
+→ simplify
+→ update docs
+→ verify the final result
+→ report honestly
+```
+
+The owner should not need to separately say:
+
+```text
+read CLAUDE.md
+read ROADMAP
+write tests
+run tests
+check security
+check performance
+review your diff
+update PROGRESS
+update ROADMAP
+check for bugs
+```
+
+Those are already part of the engineering job.
+
+> **Do the work, verify the work, document the work, and tell the truth about the
+> work.**
+
+**That is the standard for every part of bot-shield.**
