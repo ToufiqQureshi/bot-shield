@@ -1,0 +1,32 @@
+🔍 Dead / Unused Code
+deadcode — unreachable functions
+golangci-lint unused — unused functions, types, vars, constants
+gopls unusedfunc — unused unexported functions/methods
+unparam — unused function parameters
+ineffassign — useless assignments
+🧠 Static Analysis
+staticcheck — deeper Go correctness/code-quality analysis
+go vet — suspicious constructs and common bugs
+errcheck — unchecked errors
+nilerr — suspicious nil/error handling
+govulncheck — known vulnerable dependencies/code paths
+🧹 Code Quality
+dupl — duplicate code
+gocyclo — cyclomatic complexity
+gocognit — cognitive complexity
+revive — general linting
+gofumpt — stricter formatting
+gosec — security issues
+📦 Dependencies / Project Cleanup
+go mod tidy — unused module dependencies
+go mod graph — dependency graph
+depguard — restrict unwanted dependencies
+modguard — dependency/module policy checks
+🧪 Testing / Coverage
+go test ./...
+go test -race ./...
+go test -cover ./...
+tarp — identify functions/methods without direct unit tests
+🚀 One big tool
+
+golangci-lint is the main one I'd use because it can run many of these analyzers together.

@@ -3,3 +3,5 @@
 .env
 /agentchat/
 /.agents/
+/playwright-test/
+/scripts/
