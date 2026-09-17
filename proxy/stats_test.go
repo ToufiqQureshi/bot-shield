@@ -34,7 +34,7 @@ func TestStatsHandlerShape(t *testing.T) {
 }
 
 // Field names are the actual API contract with the dashboard
-// (agentchat/chat.jsonl, 2026-09-15) - assert the raw JSON keys, not
+// - assert the raw JSON keys, not
 // just that the Go struct round-trips through itself.
 func TestStatsHandlerFieldNamesMatchContract(t *testing.T) {
 	s := &Stats{}
@@ -161,5 +161,27 @@ func TestStatsHandlerReportsMode(t *testing.T) {
 		if got.Blocked != 1 {
 			t.Errorf("blocked = %d, want 1 — shadow mode still counts what it would have done", got.Blocked)
 		}
+	}
+}
+
+// Stats.Mode and Guard.mode were two sources of truth for the same
+// fact: a Guard built in shadow mode with a default Stats reported
+// "enforcing" while enforcing nothing. Guard now sets it, so the
+// number a client reads and the behaviour they get cannot disagree.
+func TestNewGuardSetsStatsMode(t *testing.T) {
+	p, err := New("http://127.0.0.1:1")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	challenge, err := NewChallenge()
+	if err != nil {
+		t.Fatalf("NewChallenge: %v", err)
+	}
+
+	stats := &Stats{}
+	NewGuard(p, challenge, stats, NewTrail(), ModeShadow)
+
+	if stats.Mode != ModeShadow {
+		t.Fatalf("stats.Mode = %v after NewGuard(..., ModeShadow), want shadow — the dashboard would claim enforcement that isn't happening", stats.Mode)
 	}
 }

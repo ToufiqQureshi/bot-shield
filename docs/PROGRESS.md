@@ -1962,3 +1962,92 @@ Build the traffic report — that is what a prospect is actually shown,
 and item 18 is not finished without it. It needs durable storage
 rather than the ring buffer. Before that, the audit from the earlier
 handoff entry still stands and still hasn't been run.
+
+---
+
+## 2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed
+
+I declared shadow mode done without running `/code-review` on it.
+`CLAUDE.md` Section 24b says to run these tools on your own work
+*before* declaring it done, so that was my process gap, not an
+optional extra. Ran it once the owner marked PR #5 ready for review.
+It found four things. Two were real bugs.
+
+### Bug 1 — the shadow-mode lie, inverted (`dashboard/src/lib/stats.ts`)
+
+`const shadow = !stats.enforcing` read an unvalidated `res.json()`
+cast. A response **missing** `enforcing` — a dashboard deployed
+against a pre-upgrade proxy, a cached or stubbed body — gives
+`undefined`, and `!undefined` is `true`. The dashboard would announce
+**"Shadow mode — nothing is being blocked"** while the proxy was
+actually enforcing.
+
+That is precisely the lie the shadow banner exists to prevent, running
+backwards. A malformed body would also crash on
+`stats.total_requests.toLocaleString()`.
+
+Fixed by validating the response shape in `fetchStats`: every counter
+must be a finite number, `enforcing` must be a boolean, `mode` must be
+one of the two known values. Anything else throws, so the component
+shows its error state and **claims nothing at all** rather than
+guessing. Seven malformed bodies are now tested (missing `enforcing`,
+missing `mode`, unknown `mode`, counter as string, counter missing,
+empty object, null).
+
+### Bug 2 — two sources of truth for the mode (`proxy/stats.go`)
+
+`Stats.Mode` (what the dashboard reports) and `Guard.mode` (what is
+actually enforced) were set independently. `main.go` passed the same
+value, but nothing enforced that — `NewGuard(p, ch, &Stats{},
+NewTrail(), ModeShadow)` reported `enforcing: true` while enforcing
+nothing. That exact `&Stats{}` pattern was already in
+`proxy/stats_test.go`.
+
+`NewGuard` now sets `stats.Mode` itself, so the number a client reads
+and the behaviour they get cannot disagree.
+
+### Cleanups (Section 24a)
+
+- **Deleted dead CSS** in `dashboard/src/app/page.module.css`:
+  `.statusBadge`, `.pulseDot` and the `pulse-ring` keyframes. Their
+  only consumer was the header badge I removed yesterday, so I created
+  this deadness — `grep` across `dashboard/src/` confirms zero
+  references. Certainty deletes (24a); recorded here and reported to
+  the owner rather than removed silently (Section 13).
+- Removed `recordAllow`, a single-caller one-line wrapper over
+  `record(DecisionAllow)`.
+- Removed a stale `agentchat/chat.jsonl` reference from a comment in
+  `proxy/stats_test.go` — that file no longer exists.
+
+### Tested how — three more mutations, all caught
+
+| # | What I broke | Test that went RED |
+|---|---|---|
+| 9 | `NewGuard` stops syncing `stats.Mode` | `TestNewGuardSetsStatsMode` |
+| 10 | `enforcing` validation removed | malformed-body tests |
+| 11 | counter number validation removed | malformed-body tests |
+
+Go suite under `-race`, `go vet`, `gofmt`, dashboard 17 jest tests
+(up from 10), a real `next build`, and the dashboard re-checked in a
+real browser against a real shadow-mode backend after the CSS
+deletion — banner, badge and "WOULD BLOCK" labels all still correct.
+
+### What this says about the earlier session
+
+Yesterday's eight mutations all passed and the feature still shipped
+with a bug that inverted its whole purpose. The mutations tested the
+code I wrote; they could not test the assumption underneath it (that
+the API response always has the fields it claims). That is worth
+remembering: mutation checks prove a test bites, not that the design
+is right. An independent pass is what caught this — which is exactly
+why Section 24b exists.
+
+### What NO test covers
+
+- No test points the dashboard at a **real older backend** that omits
+  `enforcing`; the malformed-body tests mock `fetch`.
+- Still no test runs the real binary in shadow mode.
+- The dashboard still fetches once on mount and never refreshes.
+
+**Status:** done for this scope. The two bugs are fixed and proven by
+mutation; the traffic report half of item 18 is still not built.

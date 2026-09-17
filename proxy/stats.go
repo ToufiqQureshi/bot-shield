@@ -34,8 +34,6 @@ func (s *Stats) record(d Decision) {
 	}
 }
 
-func (s *Stats) recordAllow() { s.record(DecisionAllow) }
-
 type statsResponse struct {
 	TotalRequests int64 `json:"total_requests"`
 	Passed        int64 `json:"passed"`

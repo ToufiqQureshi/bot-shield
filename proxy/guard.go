@@ -20,6 +20,10 @@ type Guard struct {
 // was made in trail (item 12a). In ModeShadow it scores and records
 // exactly the same way but never acts (item 18).
 func NewGuard(origin http.Handler, challenge *Challenge, stats *Stats, trail *Trail, mode Mode) *Guard {
+	// Guard owns the mode; stats only reports it. Letting a caller set
+	// them separately once meant a shadow-mode Guard whose dashboard
+	// said "enforcing".
+	stats.Mode = mode
 	return &Guard{origin: origin, challenge: challenge, stats: stats, trail: trail, mode: mode}
 }
 
@@ -33,7 +37,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	enforced := g.mode == ModeEnforce
 
 	if g.challenge.Passed(r) {
-		g.stats.recordAllow()
+		g.stats.record(DecisionAllow)
 		// Recorded as its own reason, not as "scored zero" — otherwise
 		// the trail would claim this visitor looked clean when really
 		// they had already proven themselves.

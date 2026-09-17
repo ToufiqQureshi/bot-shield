@@ -166,3 +166,38 @@ describe('status badge honesty', () => {
     expect(screen.queryByText('Shadow mode — not enforcing')).not.toBeInTheDocument();
   });
 });
+
+// A response the dashboard can't fully understand must produce the
+// error state, never a guess. `enforcing` missing would read as false
+// and announce "nothing is being blocked" while the proxy enforces —
+// the shadow-mode lie, inverted.
+describe('malformed stats responses', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const badBodies: Array<[string, unknown]> = [
+    ['missing enforcing', { total_requests: 1, passed: 1, challenged: 0, blocked: 0, mode: 'enforce' }],
+    ['missing mode', { total_requests: 1, passed: 1, challenged: 0, blocked: 0, enforcing: true }],
+    ['unknown mode', { total_requests: 1, passed: 1, challenged: 0, blocked: 0, mode: 'observe', enforcing: true }],
+    ['counter is a string', { total_requests: '1', passed: 1, challenged: 0, blocked: 0, mode: 'enforce', enforcing: true }],
+    ['counter missing', { passed: 1, challenged: 0, blocked: 0, mode: 'enforce', enforcing: true }],
+    ['empty body', {}],
+    ['null body', null],
+  ];
+
+  it.each(badBodies)('shows the error state and claims nothing: %s', async (_name, body) => {
+    mockFetchOnce(200, body);
+    render(<DashboardStats />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connection Lost')).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText('Shadow mode — nothing is being blocked.')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Enforcing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shadow mode — not enforcing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Total Requests')).not.toBeInTheDocument();
+  });
+});
