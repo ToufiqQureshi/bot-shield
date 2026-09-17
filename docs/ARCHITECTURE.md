@@ -10,6 +10,45 @@ assume a box on a diagram is running code.
 
 ---
 
+## How it's delivered — hosted SaaS
+
+As of 2026-09-16 bot-shield is **a service we run**, not software the
+customer installs (`DECISIONS.md`, "Pivot: hosted SaaS is the
+product"). Everything below is **planned** — today's binary is
+single-tenant and knows nothing about customers.
+
+```text
+Customer points their DNS (CNAME) at bot-shield
+        │
+        ▼
+  our edge  →  terminates TLS for their domain (cert we issue)
+            →  scores the request
+            →  forwards clean traffic to their origin
+        │
+        ▼
+  their origin server (unchanged, no code to install)
+```
+
+What this delivery model forces into the design, none of it optional:
+
+| Requirement | Why |
+|---|---|
+| **Multi-tenancy everywhere** | Today `Stats`, `Trail` and the origin are global. Every one of them needs a tenant boundary, and no query may ever cross it |
+| **Automated certificates (ACME)** | We terminate TLS for domains we don't own; certs must issue and renew without us touching them |
+| **Bandwidth / request caps per plan** | Their traffic is now our bill. Without a cap, one large customer erases the margin on ten small ones |
+| **Usage metering** | Billing needs it, and so does knowing which customer is costing what |
+| **Uptime is now our problem** | Our outage is the customer's site being down. This is the single biggest operational change |
+
+**Enterprise (self-hosted) stays supported** as a priced-up option for
+customers who cannot send traffic to our cloud — regulated sectors,
+data-residency requirements. It is *not* a separate product: it is the
+same binary, run by them. Nothing in the codebase should assume we are
+always the operator. **Don't build Enterprise tooling yet** — there
+are no customers for it — but don't delete the single-tenant path as
+dead code either; it is what Enterprise ships.
+
+---
+
 ## System overview
 
 ```text
@@ -38,6 +77,12 @@ Internet (every visitor, hostile until scored)
 [Dashboard]  BUILT (skeleton)  Next.js app in dashboard/, wired to
              the real /api/v1/dashboard/stats endpoint (proxy/stats.go)
              — one stat card, no history/charts/auth yet
+
+[Mode]       BUILT  -mode enforce|shadow (proxy/mode.go) — shadow
+             scores and records every request but forwards all of it,
+             so a client can watch real traffic at zero risk. Surfaced
+             in the startup log, /stats, every evidence record, and the
+             dashboard (badge + banner + relabelled counters).
 
 [Evidence]   BUILT  /api/v1/dashboard/evidence (proxy/evidence.go) —
              per-request record of why each decision was made, in a
@@ -85,7 +130,12 @@ scoring layer would trust it (`CLAUDE.md` Section 6).
 | **Fast state** (rate limits, session cache) | Redis | planned | Sub-millisecond reads with TTL; must not add latency per request |
 | **Durable state** (configs, logs, analytics) | PostgreSQL | planned | Dashboard queries and per-client settings must survive restarts |
 | **Dashboard** | Next.js, separate app (`dashboard/`) | BUILT (skeleton) | Client-facing UI, no reason to share the proxy's release cycle. Wired to the real `/api/v1/dashboard/stats` endpoint (`proxy/stats.go`); one stat card, no history/charts/auth yet |
-| **Deployment** | Docker image + compose (proxy + Redis + Postgres) | planned | Running in under an hour is the actual edge over enterprise onboarding |
+| **Deployment** | Our own infrastructure, one region to start | planned | We run it now (`DECISIONS.md` 2026-09-16). One small VPS until real load says otherwise — no Kubernetes, no multi-region on zero customers |
+| **Onboarding** | Customer CNAMEs their domain to us | planned | Replaces "install a Docker image": nothing for them to run, which is the whole point of hosting it |
+| **Certificates** | ACME / Let's Encrypt, automated | planned | We terminate TLS for domains we don't own; manual certs don't scale past one customer |
+| **Tenancy** | Tenant ID on every record and every query | planned | Today's binary is single-tenant. One leak across tenants is a company-ending bug, not a defect |
+| **Billing** | Stripe subscription + usage metering | planned | Plans must carry bandwidth/request caps — their traffic is our bill |
+| **Enterprise (self-hosted)** | Same binary, customer runs it | supported, not built | For customers who cannot send traffic to our cloud. Priced above hosted, sales-led. Don't build tooling for it yet; don't delete the single-tenant path either |
 | **Metrics** | Prometheus client lib, off by default | planned | Optional; zero cost for clients who don't want it |
 
 ---

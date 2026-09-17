@@ -1722,3 +1722,332 @@ the soak test did to memory, a list of anything that looks dead with
 your reasoning, and — per Section 16 — every gap you found even if you
 couldn't fix it. If you found something genuinely fine after checking,
 say that too.
+
+---
+
+## 2026-09-16 — Pivot to hosted SaaS; self-hosting becomes Enterprise
+
+**Docs only.** No Go code changed. The product still builds and
+behaves exactly as it did at PR #4's merge.
+
+### What the owner decided
+
+bot-shield is sold as **a hosted service we run**. Customers point a
+CNAME at us and install nothing. Self-hosting is not deleted — it
+becomes a priced-up **Enterprise** option for customers who cannot
+send traffic to someone else's cloud.
+
+The reason was blunt and correct: a self-hosted-only product had no
+path to recurring revenue for someone starting with no capital.
+
+### What I made sure was understood before writing it down
+
+The owner had asked, twenty minutes earlier, *"kahi hamara cloud bill
+explode na kar jaye?"* — and this pivot is precisely what causes
+that. So the trade was stated plainly before the docs changed:
+
+- **Bandwidth is now our bill.** Their traffic crosses our
+  infrastructure. Hence the hard rule now written into item 17 and
+  item 22: **every plan carries a cap.**
+- **We are in the critical path.** Our downtime is their site down.
+  For a solo maintainer that is an operational burden, not a coding
+  one.
+- **We now compete with Cloudflare on their own ground**, and cannot
+  win on cost.
+- The "your traffic never leaves your infra" pitch — one of the two
+  buyer segments recorded that same morning — survives only as
+  Enterprise.
+
+The owner accepted all of it. Recorded here because a future session
+reading only the new docs would otherwise think hosting was the
+obvious choice rather than a priced trade.
+
+### The upside I had not seen at first
+
+Hosting every customer's traffic means we observe real browser
+fingerprints continuously — so **item 19's fingerprint database can
+substantially build itself** instead of being researched from
+scratch. A bad fingerprint seen on one customer can protect the rest.
+That cross-customer network effect was explicitly rejected as
+infeasible under self-hosting (2026-09-15 competitor scan); hosting
+makes it available. It still needs a data-handling policy in terms of
+service before switching on — Section 18 has not moved.
+
+JA4 is unaffected: we terminate TLS, so we still see the ClientHello.
+
+### Files changed
+
+- **`docs/DECISIONS.md`** — new top entry recording the pivot, its
+  costs, its gains, what "Enterprise" means, three rejected
+  alternatives (stay self-hosted; ship a decision API instead of
+  proxying, which would kill JA4; open-source the engine, which
+  Section 1 forbids), and an honest risk note: this reverses the
+  positioning entry written the same day, on zero customer evidence.
+- **`docs/ARCHITECTURE.md`** — new "How it's delivered" section with
+  the CNAME flow and the five things hosting forces into the design.
+  Stack table's single "Deployment" row replaced with six rows
+  covering deployment, onboarding, certificates, tenancy, billing and
+  Enterprise.
+- **`docs/ROADMAP.md`** — intro rewritten; new **P0-SaaS** block
+  (items 20–23: multi-tenancy, domain onboarding + ACME certs, usage
+  metering + caps, Stripe billing) placed ahead of P1 and P2; item 17
+  given the no-free-tier decision and the cap rule; priority note
+  updated.
+- **`CLAUDE.md`, `README.md`, `docs/AGENT.md`** — positioning lines
+  brought in line so no file still opens by calling the product
+  self-hosted.
+
+### The item worth reading twice
+
+**Item 20 (multi-tenancy) is the highest-risk item in the roadmap.**
+One query that crosses a tenant boundary shows customer A the
+fingerprints and traffic of customer B. Its roadmap entry says so and
+specifies the test that matters: prove a second tenant's data is
+*never* returned, not merely that the first tenant's is. Today
+`Stats`, `Trail` and the origin target are all global.
+
+### How this was checked
+
+No code, so no mutation check applies. Verified instead:
+
+- `go test ./...` still green (nothing touched it, but a docs session
+  that breaks the build is exactly the kind of thing nobody checks).
+- `grep -i "self-host"` across every doc. Remaining hits are all
+  correct: two describing free competitors, one the Enterprise line.
+  The stale claims ("a paid, self-hosted product", "a client stands
+  up in front of their site", "drop in the proxy container") were
+  found this way and fixed.
+
+### Honest gaps
+
+- **Nothing in P0-SaaS is built.** The product cannot today serve two
+  customers or take a payment. The gap between "docs describe a SaaS"
+  and "we have a SaaS" is items 20–23 in full.
+- Every price is still unvalidated, and now so is every cost — we
+  have no bandwidth figure because we have no traffic.
+- Item 19's cost estimate is now stale in the optimistic direction:
+  it should be re-scoped knowing the database can feed off our own
+  traffic.
+- **Two strategy reversals in one day, both on reasoning rather than
+  customer evidence.** That is a pattern worth naming. The next
+  direction change should be driven by something a customer said.
+
+**Status:** done for the current scope — the pivot and its costs are
+recorded where the next session will find them. Nothing about the
+running product changed.
+
+### Next session should
+
+Run the audit from the previous handoff entry first — it still
+stands, and item 20 will be built on top of whatever that audit
+finds. Then item 18 (shadow mode), which needs no multi-tenancy and
+is how a first customer gets won, alongside starting item 20.
+
+---
+
+## 2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now
+
+Two things this session: the two-agent arrangement ended, and shadow
+mode got built — backend **and** frontend, since there is no longer
+anyone else to hand the frontend to.
+
+### Antigravity ended
+
+The project owner ended the arrangement. `claude_and_agy.md` deleted,
+`CLAUDE.md` Section 25 replaced with a plain statement that `proxy/`,
+`cmd/botshield/` **and** `dashboard/` are all Claude Code's.
+Reasoning in `docs/DECISIONS.md`.
+
+**The dashboard code stays.** It works and it is wired to the real
+endpoint; Sections 12 and 13 apply to it like any other code. What
+changed is the bar it is held to — real tests, no silent failures,
+and it must behave when the backend is down.
+
+### Shadow mode — what was built
+
+- **`proxy/mode.go`** (new) — `Mode`, `ParseMode`. An unrecognised
+  `-mode` value is an **error, not a default**: silently running in
+  the wrong mode is the exact failure this feature must not have.
+- **`proxy/guard.go`** — in shadow mode Guard scores, records, counts,
+  and then forwards everything to the origin regardless.
+- **`proxy/evidence.go`** — `Evidence.Enforced`, so a reader can tell
+  a real block from one that never happened.
+- **`proxy/stats.go`** — `recordAllow`/`recordChallenge`/`recordBlock`
+  collapsed into one `record(Decision)` (three near-identical
+  functions, Section 24a), and `mode`/`enforcing` now travel with
+  every stats response.
+- **`cmd/botshield`** — `-mode enforce|shadow`, plus a startup log
+  line when shadow is on.
+- **`dashboard/`** — a status badge, a banner over the numbers, and
+  the counters relabelled **"Would block" / "Would challenge" /
+  "Would pass"**. `Blocked: 500` when nothing was blocked is the worst
+  thing this product could say, so the labels change rather than a
+  warning being bolted on beside them.
+
+### A pre-existing lie I found and fixed
+
+The dashboard header had a hardcoded green **"System Active"** badge.
+It rendered unconditionally — in shadow mode, *and* while the error
+state below it said "Connection Lost". A customer glancing at the page
+saw green and assumed they were protected.
+
+Replaced with a badge that renders only after real stats arrive and
+says either "Enforcing" or "Shadow mode — not enforcing", and nothing
+at all when the backend is unreachable. This was not in scope for item
+18; it directly contradicted the shadow banner, so it was fixed in the
+same pass (Section 17).
+
+### Tested how — eight mutations, all caught
+
+| # | What I broke | Test that went RED |
+|---|---|---|
+| 1 | shadow mode enforces anyway | `TestGuardShadowMode*` |
+| 2 | `Enforced` always true | `TestGuardShadowModeNeverBlocks` |
+| 3 | `ParseMode` defaults silently instead of erroring | `TestParseMode` |
+| 4 | `mode` dropped from the stats response | `TestStatsHandler*` |
+| 5 | shadow banner removed | dashboard shadow tests |
+| 6 | labels ignore shadow mode | dashboard label test |
+| 7 | banner shown while enforcing | dashboard enforce test |
+| 8 | badge always claims "Enforcing" | badge honesty tests |
+
+Also: Go suite under `-race`, `go vet`, `gofmt`, dashboard `npm test`
+(10 tests) and a real `next build`.
+
+**Verified against real things, not just tests:** the binary in shadow
+mode (request returned 200, stats showed `"mode":"shadow"`, evidence
+showed `"enforced":false`), the binary refusing to start on
+`-mode observe`, and **the dashboard in a real browser against a real
+backend in both modes** — shadow showed the banner and "WOULD BLOCK",
+enforce showed "Enforcing" and "BLOCKED". A CSS bug (the badge
+stretching full width) was only visible in the browser, not in tests,
+and was fixed.
+
+One thing worth recording for the next session: **`next dev` does not
+hydrate in this sandbox** — the HMR websocket fails, so `useEffect`
+never runs and the page sits on the loading state forever. It is not a
+product bug; `next start` on a production build works. Use the
+production build to verify UI here.
+
+### What NO test covers
+
+- **No test runs the real binary in shadow mode** — that was checked
+  by hand. The Go tests exercise `Guard` directly.
+- **Nothing tests the dashboard against a real backend**; the frontend
+  tests mock `fetch`.
+- The dashboard fetches once on mount and never refreshes. A stale
+  page could show "Enforcing" after someone restarted in shadow mode.
+- No test covers switching modes on a running instance (it can't be —
+  mode is read once at startup).
+
+### Honest gaps
+
+- **The traffic report does not exist.** Item 18 was "shadow mode +
+  traffic report"; only the mode is done. There is no two-week
+  summary, no history (the trail is a 1000-entry in-memory ring), no
+  top offenders, no export. **That is the part a client is actually
+  shown** — the mode is what makes it safe to collect, not what makes
+  it sellable.
+- `npm run lint` is broken in this repo (`next lint` was removed in
+  newer Next versions). Pre-existing, not touched — flagged rather
+  than fixed because changing build tooling is a separate decision.
+- `npx tsc --noEmit` alone reports a `LayoutProps` error; that type is
+  generated by `next build`, so typecheck must run via the build.
+
+**Status:** *done for the current scope.* Shadow mode works end to end
+and is hard to miss. "Shadow mode + traffic report" is not done.
+
+### Next session should
+
+Build the traffic report — that is what a prospect is actually shown,
+and item 18 is not finished without it. It needs durable storage
+rather than the ring buffer. Before that, the audit from the earlier
+handoff entry still stands and still hasn't been run.
+
+---
+
+## 2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed
+
+I declared shadow mode done without running `/code-review` on it.
+`CLAUDE.md` Section 24b says to run these tools on your own work
+*before* declaring it done, so that was my process gap, not an
+optional extra. Ran it once the owner marked PR #5 ready for review.
+It found four things. Two were real bugs.
+
+### Bug 1 — the shadow-mode lie, inverted (`dashboard/src/lib/stats.ts`)
+
+`const shadow = !stats.enforcing` read an unvalidated `res.json()`
+cast. A response **missing** `enforcing` — a dashboard deployed
+against a pre-upgrade proxy, a cached or stubbed body — gives
+`undefined`, and `!undefined` is `true`. The dashboard would announce
+**"Shadow mode — nothing is being blocked"** while the proxy was
+actually enforcing.
+
+That is precisely the lie the shadow banner exists to prevent, running
+backwards. A malformed body would also crash on
+`stats.total_requests.toLocaleString()`.
+
+Fixed by validating the response shape in `fetchStats`: every counter
+must be a finite number, `enforcing` must be a boolean, `mode` must be
+one of the two known values. Anything else throws, so the component
+shows its error state and **claims nothing at all** rather than
+guessing. Seven malformed bodies are now tested (missing `enforcing`,
+missing `mode`, unknown `mode`, counter as string, counter missing,
+empty object, null).
+
+### Bug 2 — two sources of truth for the mode (`proxy/stats.go`)
+
+`Stats.Mode` (what the dashboard reports) and `Guard.mode` (what is
+actually enforced) were set independently. `main.go` passed the same
+value, but nothing enforced that — `NewGuard(p, ch, &Stats{},
+NewTrail(), ModeShadow)` reported `enforcing: true` while enforcing
+nothing. That exact `&Stats{}` pattern was already in
+`proxy/stats_test.go`.
+
+`NewGuard` now sets `stats.Mode` itself, so the number a client reads
+and the behaviour they get cannot disagree.
+
+### Cleanups (Section 24a)
+
+- **Deleted dead CSS** in `dashboard/src/app/page.module.css`:
+  `.statusBadge`, `.pulseDot` and the `pulse-ring` keyframes. Their
+  only consumer was the header badge I removed yesterday, so I created
+  this deadness — `grep` across `dashboard/src/` confirms zero
+  references. Certainty deletes (24a); recorded here and reported to
+  the owner rather than removed silently (Section 13).
+- Removed `recordAllow`, a single-caller one-line wrapper over
+  `record(DecisionAllow)`.
+- Removed a stale `agentchat/chat.jsonl` reference from a comment in
+  `proxy/stats_test.go` — that file no longer exists.
+
+### Tested how — three more mutations, all caught
+
+| # | What I broke | Test that went RED |
+|---|---|---|
+| 9 | `NewGuard` stops syncing `stats.Mode` | `TestNewGuardSetsStatsMode` |
+| 10 | `enforcing` validation removed | malformed-body tests |
+| 11 | counter number validation removed | malformed-body tests |
+
+Go suite under `-race`, `go vet`, `gofmt`, dashboard 17 jest tests
+(up from 10), a real `next build`, and the dashboard re-checked in a
+real browser against a real shadow-mode backend after the CSS
+deletion — banner, badge and "WOULD BLOCK" labels all still correct.
+
+### What this says about the earlier session
+
+Yesterday's eight mutations all passed and the feature still shipped
+with a bug that inverted its whole purpose. The mutations tested the
+code I wrote; they could not test the assumption underneath it (that
+the API response always has the fields it claims). That is worth
+remembering: mutation checks prove a test bites, not that the design
+is right. An independent pass is what caught this — which is exactly
+why Section 24b exists.
+
+### What NO test covers
+
+- No test points the dashboard at a **real older backend** that omits
+  `enforcing`; the malformed-body tests mock `fetch`.
+- Still no test runs the real binary in shadow mode.
+- The dashboard still fetches once on mount and never refreshes.
+
+**Status:** done for this scope. The two bugs are fixed and proven by
+mutation; the traffic report half of item 18 is still not built.

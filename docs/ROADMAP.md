@@ -8,37 +8,49 @@ item must meet before it counts as done.
 
 ## What bot-shield is
 
-> **The inline, self-hostable layer that decides which automated
-> clients reach a site — and proves why it decided that.**
+> **The inline layer that decides which automated clients reach a
+> site — and proves why it decided that.**
 
 Read that twice before adding anything to this list, because the
 obvious alternative framing is wrong and was tried:
 
 | ❌ What we are NOT | ✅ What we are |
 |---|---|
-| "A cheaper DataDome" | The only self-hostable thing doing **inline TLS/JA4 scoring** |
-| Competing on price | Competing on **where it runs** and **what it can prove** |
+| "A cheaper DataDome" | A hosted service doing **inline TLS/JA4 scoring** |
+| Competing on price | Competing on **what it can prove** and **who it serves** |
 | Blocking bots | Governing **agents** — allow, rate-limit, deceive, log |
 | Reacting to bad IPs | Scoring the **first request**, no prior sighting needed |
+| Software you install | A **CNAME away** — nothing for the customer to run |
 
-**Why this matters more than it looks.** The market's price floor is
-$0 — CrowdSec, SafeLine and Coraza are free and self-hosted, and
-Cloudflare has a free tier. "Affordable bot detection" is answered
-with "CrowdSec is free," and that argument cannot be won. What
-*cannot* be answered that way: CrowdSec parses **logs** (reactive,
-needs a prior sighting); bot-shield reads the **live ClientHello**
-and scores the first request. Full numbers and sources:
-`docs/RESEARCH.md`, market scan 2026-09-16. Reasoning and rejected
-alternatives: `docs/DECISIONS.md`, 2026-09-16 positioning entry.
+**How it's sold (changed 2026-09-16).** bot-shield is a **hosted
+service we run**. The customer points a CNAME at us and installs
+nothing. Self-hosting still exists, but as a priced-up **Enterprise**
+option for customers who cannot send traffic to our cloud — it is not
+the default and is not to be built yet. See `docs/DECISIONS.md`,
+"Pivot: hosted SaaS is the product", for what that costs us
+(bandwidth is now our bill, and our downtime is their site down) and
+what it buys us.
+
+**Why we still don't compete on price.** The market floor is $0 —
+CrowdSec, SafeLine and Coraza are free, and Cloudflare has a free
+tier. "Cheaper bot detection" is answered with "CrowdSec is free,"
+and that argument cannot be won. What *cannot* be answered that way:
+CrowdSec parses **logs** (reactive, needs a prior sighting);
+bot-shield reads the **live ClientHello** and scores the first
+request. Full numbers and sources: `docs/RESEARCH.md`, market scan
+2026-09-16.
 
 **Who pays for this** (so a feature can be judged against a buyer,
 not against a competitor's feature list):
 
-- Teams who **cannot** send traffic to a foreign SaaS (GDPR/DPDP).
-  Their alternative to us is not DataDome — it's nothing.
 - Sites where bots are a **revenue leak, not an annoyance**:
   pricing-sensitive e-commerce, ticketing/booking inventory, job
-  boards and classifieds, usage-billed APIs.
+  boards and classifieds, usage-billed APIs. **This is now the
+  primary segment.**
+- Teams who **cannot** send traffic to someone else's cloud
+  (GDPR/DPDP, regulated sectors). Their alternative to us is not
+  DataDome — it's nothing. They are now the **Enterprise** tier, not
+  the default customer.
 
 **Still true, and unchanged:** multi-layer scoring beats any single
 clever check, because a single check is exactly what stealth tools
@@ -79,10 +91,13 @@ Client Request
 
 No single layer is the whole product — see `CLAUDE.md` Section 6.
 
-**Shape:** one product — a proxy binary + dashboard a client deploys
-directly, no code required on their end. Internally, each layer above
-is its own small Go package, purely for code clarity (easier to test
-and fix), not as a reusable library for outside use.
+**Shape:** one product — a proxy + dashboard **we operate**, that the
+customer reaches by pointing DNS at us. No code and nothing to install
+on their end. Internally, each layer above is its own small Go
+package, purely for code clarity (easier to test and fix), not as a
+reusable library for outside use. The same binary is what an
+Enterprise customer runs themselves, so no layer may assume we are
+always the operator.
 
 ---
 
@@ -242,7 +257,7 @@ and fix), not as a reusable library for outside use.
       `proxy/stats.go` (added same day, same item): `Guard` counts
       every decision, and `GET /api/v1/dashboard/stats` serves
       `{total_requests, passed, challenged, blocked}` — the exact
-      contract Antigravity posted in `agentchat/chat.jsonl` for the
+      contract agreed for the
       dashboard skeleton (ROADMAP item 12) to consume. In-memory
       counters only (resets on restart — same class of gap as
       Challenge's in-memory secret, see `docs/DECISIONS.md`); durable
@@ -330,6 +345,37 @@ and fix), not as a reusable library for outside use.
       filtering or search, the dashboard doesn't read this endpoint
       yet, and the record carries no request path — so correlating a
       specific complaint still means matching on time and fingerprint.
+
+- [x] **18. Shadow mode** (`proxy/mode.go`, `proxy/guard.go`,
+      `proxy/stats.go`, `dashboard/`) — `botshield -mode shadow` scores
+      and records every request exactly as enforce mode does, then
+      forwards all of it to the origin. Nothing is blocked or
+      challenged, so a client can point real traffic at bot-shield with
+      zero risk to their customers.
+      `-mode` accepts only `enforce` (default) or `shadow`; anything
+      else refuses to start rather than defaulting quietly.
+      **Visible in four places, because the one real danger here is a
+      client believing they are protected when they are not:** a
+      startup log line, `mode`/`enforcing` on every `/stats` response,
+      `enforced: false` on every evidence record, and in the dashboard
+      both a status badge ("Shadow mode — not enforcing") and a banner
+      over the numbers. In shadow mode the stat labels themselves
+      change to "Would block" / "Would challenge" / "Would pass" —
+      "Blocked: 500" when nothing was blocked is the worst thing this
+      product could say.
+      Tested: shadow never blocks, shadow never serves the challenge
+      page, enforce still stamps `Enforced: true`, `ParseMode` rejects
+      unknown values, `/stats` reports the mode, and the dashboard
+      shows the right labels and badge in each mode and claims nothing
+      when the backend is down. Eight mutations run across Go and the
+      frontend, all eight went red (`docs/PROGRESS.md` 2026-09-16).
+      Verified against a real binary in both modes and in a real
+      browser against a real backend.
+      **Not done — the traffic report.** There is no "here is your two
+      weeks of traffic" summary yet: no history (the trail is a
+      1000-entry in-memory ring), no top-offenders view, no export.
+      That is the part a client is actually shown, and it needs item
+      12's dashboard work plus durable storage.
 
 ---
 
@@ -476,31 +522,66 @@ and fix), not as a reusable library for outside use.
       breakdown, exportable to Prometheus.
 - [ ] **16. Long-running soak test** — sustained adversarial traffic
       simulation proving memory/latency stay stable over hours.
-- [ ] **17. Pricing/tiering model** — finalised once the MVP is proven
-      against real client traffic, not before. What is decided: the
-      anchor is roughly **$200/mo**, justified by self-hostability and
-      governance, never offered as "cheaper than DataDome." A discount
-      pitch loses to free software (`docs/DECISIONS.md` 2026-09-16).
-      What is not decided: tier boundaries, metering unit, overages.
-- [ ] **18. Shadow mode + traffic report** — a mode that scores every
-      request and records the decision it *would* have made, while
-      forwarding everything to the origin untouched. Ends with a
-      report: how much traffic scored as automated, which fingerprints
-      and which endpoints.
-      **Why it's a roadmap item and not polish:** this is how a
-      client's trust is earned before enforcement is ever switched on,
-      and it is the honest way to measure our own false-positive rate
-      against real traffic instead of guessing (`CLAUDE.md` Section 8).
-      It doubles as the thing that makes a buyer say yes — a number
-      from their own site beats any claim we make about ours.
-      **Depends on:** item 12a (evidence trail) for the per-request
-      detail; item 12 (dashboard) for the report.
-      **Risk:** shadow mode must be impossible to leave on by
-      accident and impossible to confuse with enforcement. A client
-      who believes they are protected while running in shadow mode is
-      in a worse position than one with no bot-shield at all — the
-      mode must be visible in the dashboard, in the logs, and at
-      startup, not buried in a config file.
+- [ ] **17. Pricing/tiering model** — finalised once real traffic and
+      a real bandwidth bill exist, not before. What is decided: no
+      free tier (owner's call), a 14-day trial without a card, and
+      **every plan carries a bandwidth/request cap** — without one,
+      a single large customer erases the margin on ten small ones now
+      that their traffic is our bill. Pricing is never argued as
+      "cheaper than DataDome"; a discount pitch loses to free software
+      (`docs/DECISIONS.md` 2026-09-16).
+      Working shape, all numbers unvalidated: a hosted plan around
+      **$200/mo** with a few domains, a larger hosted plan above it,
+      and **Enterprise** (self-hosted, sales-led, invoiced) priced
+      *above* both — never below. What is not decided: cap sizes,
+      metering unit, overage rates, and every price.
+- [x] ~~**18. Shadow mode + traffic report**~~ — the mode is done; the
+      report is not. See "Done" section.
+
+## P0-SaaS — required before anyone can pay us
+
+Added 2026-09-16 with the hosted-service pivot. None of this is
+detection work, and all of it blocks revenue: today's binary serves
+one origin from one config file and knows nothing about customers.
+
+- [ ] **20. Multi-tenancy** — a tenant boundary on every record and
+      every query. `Stats`, `Trail` and the origin target are global
+      today; each becomes per-customer, loaded from storage rather
+      than a flag.
+      **This is the highest-risk item in the entire roadmap.** One
+      query that crosses a tenant boundary shows customer A the
+      fingerprints and traffic of customer B. That is not a bug, it is
+      the end of the company. Every storage access needs the tenant in
+      the key, and a test that proves a second tenant's data is
+      *never* returned — not just that the first tenant's is.
+- [ ] **21. Domain onboarding + automatic certificates** — a customer
+      adds a domain, proves they own it, points a CNAME at us, and we
+      issue and renew its certificate over ACME with no human step.
+      Without this, JA4 doesn't work — we can't read a ClientHello we
+      don't terminate — so this gates the entire product, not just
+      convenience.
+      **Risk:** domain verification is an authorisation boundary. If
+      someone can add a domain they don't own, they get our cert and
+      our proxy pointed at a site they don't control.
+- [ ] **22. Usage metering + bandwidth caps** — count requests and
+      bytes per tenant, enforce the plan's cap, and make the number
+      visible to both the customer and us.
+      **Why it's P0 and not a billing nicety:** their traffic is now
+      our bill. An uncapped plan means an unbounded cost we discover
+      at the end of the month. The cap must degrade honestly (tell
+      the customer, keep serving or stop by a documented rule) —
+      never silently, and never by breaking their site without notice.
+- [ ] **23. Billing (Stripe) + signup** — subscription, plan changes,
+      failed-payment handling, and a signup that gets someone from
+      landing page to protected domain without us in the loop.
+      Self-serve is the point; a sales call for a $200/mo product
+      costs more than the product.
+
+**Enterprise (self-hosted) is deliberately absent from this list.**
+It stays supported and priced above the hosted plans, but there are
+zero customers for it — building tooling now is `CLAUDE.md` Section 14
+exactly. Keep the single-tenant path working (it is what Enterprise
+ships) and do not delete it as dead code.
 
 ---
 
@@ -539,3 +620,18 @@ fortnight, and also the only one whose real cost is still unknown.
 Scope it early even if it's built late. (12a is done; 18 is the
 next build, since it's what measures the false-positive rate against
 real traffic instead of assumptions.)
+
+**Priority note, 2026-09-16 (hosted pivot).** The P0-SaaS block
+(items 20–23) now sits ahead of everything in P1 and P2. Not because
+it is more interesting — it is the least interesting work in this
+file — but because no amount of detection quality produces revenue
+while the product cannot take a second customer or a payment. Item 18
+(shadow mode) is the one exception worth doing alongside it: it is
+how the first customer is won, and it needs no multi-tenancy to
+demonstrate on a single site.
+
+Note also what the pivot did to item 19: hosting every customer's
+traffic means we observe real browser fingerprints continuously, so
+the database can substantially build itself rather than being
+researched from scratch. Its cost estimate should be redone before
+anyone scopes it — see `docs/DECISIONS.md`, hosted-pivot entry.

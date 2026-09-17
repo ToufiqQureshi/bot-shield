@@ -64,31 +64,53 @@ export default function DashboardStats() {
 
   if (!stats) return null;
 
+  // Shadow mode changes the meaning of every number below, so the
+  // labels change with it. "Blocked: 500" when nothing was blocked
+  // would be the worst thing this dashboard could say.
+  const shadow = !stats.enforcing;
+
   return (
-    <div className={styles.statsGrid}>
-      <div className={`${styles.statCard} ${styles.totalCard}`}>
-        <h3 className={styles.statLabel}>Total Requests</h3>
-        <p className={styles.statValue}>{stats.total_requests.toLocaleString()}</p>
-        <div className={styles.glowEffect}></div>
+    <>
+      <div className={shadow ? styles.statusShadow : styles.statusEnforcing} role="status">
+        <span className={styles.statusDot}></span>
+        {shadow ? "Shadow mode — not enforcing" : "Enforcing"}
       </div>
-      
-      <div className={`${styles.statCard} ${styles.passedCard}`}>
-        <h3 className={styles.statLabel}>Passed</h3>
-        <p className={styles.statValue}>{stats.passed.toLocaleString()}</p>
-        <div className={styles.glowEffect}></div>
+
+      {shadow && (
+        <div className={styles.shadowBanner} role="status">
+          <strong>Shadow mode — nothing is being blocked.</strong>
+          <span>
+            Every number below is what bot-shield <em>would</em> have done to
+            your traffic. Your visitors are unaffected.
+          </span>
+        </div>
+      )}
+
+      <div className={styles.statsGrid}>
+        <div className={`${styles.statCard} ${styles.totalCard}`}>
+          <h3 className={styles.statLabel}>Total Requests</h3>
+          <p className={styles.statValue}>{stats.total_requests.toLocaleString()}</p>
+          <div className={styles.glowEffect}></div>
+        </div>
+
+        <div className={`${styles.statCard} ${styles.passedCard}`}>
+          <h3 className={styles.statLabel}>{shadow ? "Would pass" : "Passed"}</h3>
+          <p className={styles.statValue}>{stats.passed.toLocaleString()}</p>
+          <div className={styles.glowEffect}></div>
+        </div>
+
+        <div className={`${styles.statCard} ${styles.challengedCard}`}>
+          <h3 className={styles.statLabel}>{shadow ? "Would challenge" : "Challenged"}</h3>
+          <p className={styles.statValue}>{stats.challenged.toLocaleString()}</p>
+          <div className={styles.glowEffect}></div>
+        </div>
+
+        <div className={`${styles.statCard} ${styles.blockedCard}`}>
+          <h3 className={styles.statLabel}>{shadow ? "Would block" : "Blocked"}</h3>
+          <p className={styles.statValue}>{stats.blocked.toLocaleString()}</p>
+          <div className={styles.glowEffect}></div>
+        </div>
       </div>
-      
-      <div className={`${styles.statCard} ${styles.challengedCard}`}>
-        <h3 className={styles.statLabel}>Challenged</h3>
-        <p className={styles.statValue}>{stats.challenged.toLocaleString()}</p>
-        <div className={styles.glowEffect}></div>
-      </div>
-      
-      <div className={`${styles.statCard} ${styles.blockedCard}`}>
-        <h3 className={styles.statLabel}>Blocked</h3>
-        <p className={styles.statValue}>{stats.blocked.toLocaleString()}</p>
-        <div className={styles.glowEffect}></div>
-      </div>
-    </div>
+    </>
   );
 }

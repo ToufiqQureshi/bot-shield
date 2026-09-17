@@ -11,14 +11,20 @@ type Guard struct {
 	challenge *Challenge
 	stats     *Stats
 	trail     *Trail
+	mode      Mode
 }
 
 // NewGuard combines an already-built proxy with a Challenge instance
 // into the real allow/challenge/block decision, counting outcomes in
 // stats for the dashboard (ROADMAP item 12) and recording why each one
-// was made in trail (item 12a).
-func NewGuard(origin http.Handler, challenge *Challenge, stats *Stats, trail *Trail) *Guard {
-	return &Guard{origin: origin, challenge: challenge, stats: stats, trail: trail}
+// was made in trail (item 12a). In ModeShadow it scores and records
+// exactly the same way but never acts (item 18).
+func NewGuard(origin http.Handler, challenge *Challenge, stats *Stats, trail *Trail, mode Mode) *Guard {
+	// Guard owns the mode; stats only reports it. Letting a caller set
+	// them separately once meant a shadow-mode Guard whose dashboard
+	// said "enforcing".
+	stats.Mode = mode
+	return &Guard{origin: origin, challenge: challenge, stats: stats, trail: trail, mode: mode}
 }
 
 // ServeHTTP decides per request. A visitor who already solved a
@@ -28,12 +34,14 @@ func NewGuard(origin http.Handler, challenge *Challenge, stats *Stats, trail *Tr
 func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ja4 := JA4FromContext(r.Context())
 
+	enforced := g.mode == ModeEnforce
+
 	if g.challenge.Passed(r) {
-		g.stats.recordAllow()
+		g.stats.record(DecisionAllow)
 		// Recorded as its own reason, not as "scored zero" — otherwise
 		// the trail would claim this visitor looked clean when really
 		// they had already proven themselves.
-		g.trail.record(Evidence{JA4: ja4, Signals: []string{"challenge_solved"}, Decision: DecisionAllow.String()})
+		g.trail.record(Evidence{JA4: ja4, Signals: []string{"challenge_solved"}, Decision: DecisionAllow.String(), Enforced: enforced})
 		g.origin.ServeHTTP(w, r)
 		return
 	}
@@ -45,17 +53,25 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Signals:  signals(ja4, r.UserAgent()),
 		Score:    score,
 		Decision: decision.String(),
+		Enforced: enforced,
 	})
 
+	// Shadow mode: the decision is counted and recorded, but the
+	// visitor is forwarded regardless. Nothing a client's real customer
+	// does can be broken by a score while this is on.
+	if !enforced {
+		g.stats.record(decision)
+		g.origin.ServeHTTP(w, r)
+		return
+	}
+
+	g.stats.record(decision)
 	switch decision {
 	case DecisionBlock:
-		g.stats.recordBlock()
 		http.Error(w, "forbidden", http.StatusForbidden)
 	case DecisionChallenge:
-		g.stats.recordChallenge()
 		g.challenge.Serve(w, r)
 	default:
-		g.stats.recordAllow()
 		g.origin.ServeHTTP(w, r)
 	}
 }

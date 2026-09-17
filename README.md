@@ -2,8 +2,9 @@
 
 # bot-shield
 
-The inline, self-hostable layer that decides which automated clients
-reach your site — and proves why it decided that.
+The inline layer that decides which automated clients reach your site
+— and proves why it decided that. Hosted: you point a CNAME at us and
+install nothing.
 
 > 🚧 **Early development.** What works today: a TLS-terminating reverse
 > proxy that fingerprints every connection (JA4), checks it against the
@@ -26,29 +27,36 @@ company:
 
 bot-shield is neither. It sits in the request path, reads the live TLS
 ClientHello, and scores the **first request** from a client it has
-never seen — inside your own infrastructure, on your own hardware. No
-self-hostable product does that today.
+never seen — then tells you exactly why it decided what it decided.
 
-That matters most if you either **can't** send traffic to a foreign
-SaaS (GDPR/DPDP, regulated sectors), or bots cost you money directly
-rather than just noise — scraped pricing, hoarded ticket inventory,
-copied listings, usage-billed API calls.
+That matters most when bots cost you money directly rather than just
+noise: scraped pricing, hoarded ticket inventory, copied listings,
+usage-billed API calls.
 
-bot-shield is closed-source, commercial software (a paid, self-hosted
-product — see License below). Internally it uses proven open-source
+**Enterprise:** if you can't send traffic to someone else's cloud
+(regulated sector, data-residency rules), the same product runs in
+your own infrastructure. That's a contract, not a signup — talk to
+us.
+
+bot-shield is closed-source, commercial software (a paid service —
+see License below). Internally it uses proven open-source
 *libraries* (TLS/JA4 fingerprinting, behavioral scoring, JS
 challenges) instead of reinventing hard, already-solved problems.
 
 ## What it is
 
-bot-shield is one deployable product: a reverse proxy + dashboard a
-client stands up in front of their site. No Go knowledge required to
-run it. Internally the code is split into small, focused packages
+bot-shield is one product: a reverse proxy + dashboard that sits in
+front of your site. We run it — you point DNS at us and there is
+nothing to install. (Enterprise customers run the same binary
+themselves.) Internally the code is split into small, focused packages
 (fingerprinting, scoring, challenge, etc.) for the usual reasons —
 easier to test, easier to read, easier to fix — not because it's
 meant to be reused elsewhere.
 
-## Try it
+## Try it locally
+
+The hosted service is how customers use bot-shield. The commands below
+run the same binary on your own machine for development.
 
 ```bash
 go build -o botshield ./cmd/botshield
@@ -67,13 +75,28 @@ go build -o botshield ./cmd/botshield
 | `-target` | The origin server to protect, e.g. `http://127.0.0.1:9000` |
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — bot-shield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
+| `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
+
+### Shadow mode
+
+`-mode shadow` runs the full scoring pipeline and records what it
+*would* have done, while forwarding every request to your origin
+untouched. Nothing your visitors do can be broken by a score while it
+is on, which makes it the safe way to see what bot-shield finds in
+your real traffic before enforcing anything.
+
+It is deliberately hard to miss that it is on: a startup log line,
+`"mode":"shadow"` on every stats response, `"enforced":false` on every
+evidence record, and in the dashboard a status badge plus a banner —
+with the counters relabelled "Would block" / "Would challenge" /
+"Would pass".
 
 Two read-only endpoints are served alongside your traffic:
 
 | Endpoint | What it gives you |
 |---|---|
-| `GET /api/v1/dashboard/stats` | Running totals: requests seen, passed, challenged, blocked. No per-visitor data, so it needs no token. |
-| `GET /api/v1/dashboard/evidence` | The last 1000 decisions (24h max), newest first: timestamp, JA4, which signals fired, score, decision. Accepts `?limit=N`. **Requires `Authorization: Bearer <-evidence-token>`.** |
+| `GET /api/v1/dashboard/stats` | Running totals: requests seen, passed, challenged, blocked, plus `mode` and `enforcing` so the counts can't be read out of context. No per-visitor data, so it needs no token. |
+| `GET /api/v1/dashboard/evidence` | The last 1000 decisions (24h max), newest first: timestamp, JA4, which signals fired, score, decision, and whether it was `enforced`. Accepts `?limit=N`. **Requires `Authorization: Bearer <-evidence-token>`.** |
 
 The evidence endpoint is off unless you set a token, and it never gets
 wildcard CORS — it returns visitor fingerprints, and left open it would
