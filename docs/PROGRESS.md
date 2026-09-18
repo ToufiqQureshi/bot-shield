@@ -2157,3 +2157,70 @@ Tested how:
   - Full package test pass go test -v ./pkg/signals/....
 Known gaps / follow-up:
   - Final end-to-end test with a real python bot hitting the flask hotel app through the bot-shield proxy.
+
+---
+
+## 2026-09-18 — Code review of the headless/patchright commit found a critical false-positive regression; fixed
+Changed:
+  - `pkg/signals/score.go`: removed the `untrusted_session` check added in
+    commit 2eedf8d. Its `fired` function ignored all three arguments and
+    always returned `true`, adding `firstTouchWeight` (50 = challengeThreshold)
+    to *every* request that reaches `Score()`. Since `guard.go` only calls
+    `Score()` for visitors who have not already passed a challenge, this
+    meant every unverified first-time visitor — Googlebot, UptimeRobot,
+    screen readers, JS-disabled browsers, corporate proxies — was forced
+    into the JS challenge on every single visit, with zero discriminating
+    signal behind it. Non-JS clients can never solve that challenge, so in
+    practice this permanently blocked them. Directly contradicts
+    docs/DECISIONS.md ("a single signal firing alone can only ever reach
+    50") and CLAUDE.md Section 14/26 (crawlers, monitors, accessibility
+    tools must not be penalized).
+  - `pkg/signals/score_test.go`: reverted the baseline-score assertions
+    that had been bent to expect `firstTouchWeight` on clean traffic
+    (that was the regression being tested *for*, not against). Swapped two
+    tests' UA from `curl/8.6.0` to a non-scripting-tool UA so they isolate
+    the single signal they claim to test, instead of silently also
+    tripping `scripting_tool` (+100).
+  - `pkg/tenant/tenant_test.go`: `TestTenantIsolation` asserted
+    `Stats.Challenged() == 5` for 5 plain HTTP requests with no UA/JA4 —
+    that's the same regression baked into a tenant test. Restored the
+    correct expectation, `Stats.Passed() == 5`.
+  - `pkg/challenge/challenge.go`: fixed a stale doc comment on
+    `handleVerify` claiming a bad token/answer/canvas proof "gets a fresh
+    puzzle back rather than a hard error." The code returns a hard 403;
+    the comment was never updated when that behavior was introduced.
+Why: Ran `/code-review` (high effort) over `HEAD~2..HEAD` per CLAUDE.md
+  Section 25. This was the top finding — a shipped false-positive bug that
+  would have made the challenge gate mandatory and unpassable for every
+  legitimate non-JS client on every tenant in enforce mode.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...`: all packages pass.
+  - `gofmt -l`: clean on the changed file (also fixed pre-existing
+    trailing-whitespace gofmt drift in `score.go` while touching it).
+  - Mutation check (CLAUDE.md Section 12): re-added the tautological
+    `untrusted_session` check → 7 of 9 tests in `pkg/signals` failed
+    immediately (TestScoreNoSignals, TestScoreFragmentedOnly,
+    TestScoreUAMismatchOnly, TestScoreBothSignals,
+    TestScorePlainHTTPFailsOpen, TestScoreJA4Blocklist,
+    TestScoreJA4BlocklistWithUAMismatch), proving the tests actually bite.
+    Removed it again → all pass.
+Known gaps / follow-up (found during the same review, not yet fixed —
+flagged rather than fixed in this pass because each is a design/ops
+tradeoff, not a one-line bug):
+  - `pkg/tenant/tenant.go` `fetchFromDB`: an unrecognized Host header
+    triggers a fresh, uncached Postgres lookup on every request with no
+    negative caching. A visitor sending many distinct bogus Host headers
+    can drive unbounded DB load (CLAUDE.md Section 18/19). Needs a
+    negative-cache TTL decision.
+  - `backend/main.go`: `-challenge-secret` silently falls back to a random
+    per-process secret when empty, in the exact multi-node deployment this
+    flag exists for. A misconfigured cluster fails confusingly (tokens
+    from node A rejected by node B) instead of loudly. Needs a decision on
+    whether multi-node mode should refuse to start without an explicit
+    secret.
+  - `pkg/signals/velocity.go`: `checkVelocitySpike` and
+    `checkJA4VelocitySpike` each open their own Redis pipeline with a
+    fresh 50ms timeout per request; a Redis network partition (not a fast
+    refused-connection) can add up to ~100ms to every request's p99 with
+    no circuit breaker. Needs a decision on a shared breaker vs. per-call
+    timeout tuning.

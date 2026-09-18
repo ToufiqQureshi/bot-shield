@@ -267,9 +267,9 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleVerify checks the JS-computed answer against the token we
-// issued. A wrong answer, bad token, or missing canvas proof gets a
-// fresh puzzle back rather than a hard error — a real client that
-// glitched should be able to just try again.
+// issued. A wrong answer, bad token, or missing canvas proof is a
+// hard 403: the visitor's next page load re-triggers the challenge
+// from Serve, which issues a fresh token and puzzle.
 func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxVerifyBodyBytes)
 	if err := r.ParseForm(); err != nil {
