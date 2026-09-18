@@ -2291,3 +2291,60 @@ Known gaps / follow-up:
     checked (false-positive risk) — if false negatives here turn out
     to matter more than false positives for a given tenant, this is a
     per-tenant tuning decision, not a global one.
+
+---
+
+## 2026-09-18 — Passed-challenge sessions are now still rate-limited (continuous trust, not a one-time pass)
+
+Changed:
+  - `pkg/signals/velocity.go`: added exported `VelocityExceeded(ip, ja4 string) bool`,
+    a thin wrapper combining the existing `checkVelocitySpike`/`checkJA4VelocitySpike`
+    so other packages don't need to know both checks exist.
+  - `pkg/core/guard.go`: the `g.challenge.Passed(r)` branch now calls
+    `signals.VelocityExceeded` before forwarding to origin. On a spike,
+    records `DecisionBlock` with signal `velocity_after_pass` and
+    returns 429 (shadow mode still just observes and forwards, same as
+    the main scoring path).
+  - `pkg/signals/velocity_test.go` (new file — velocity.go had zero
+    tests before this): covers fail-open with no Redis, under/over the
+    per-IP threshold, per-IP isolation, common-browser JA4 exemption,
+    per-JA4 threshold, and the new combined `VelocityExceeded`.
+  - `pkg/core/guard_test.go`: added `TestGuardVelocityLimitsPassedSession`,
+    which drives the real GET-challenge/POST-verify flow (via
+    `challenge.Handler()`, not internal APIs) to get a genuine passed
+    cookie, confirms a handful of requests still pass, then floods
+    past the threshold and confirms 429.
+  - Added `github.com/alicebob/miniredis/v2` as a test dependency — the
+    only way to test Redis-backed logic without a live Redis server or
+    network access in CI.
+Why: a solved JS challenge only proves a client could run JS once. The
+  `Passed(r)` branch previously skipped ALL further scoring — including
+  velocity — for the full 30-minute `passedMaxAge` window, so one
+  challenge solve bought unlimited-speed access to the origin for half
+  an hour with zero rate limiting. Found while researching how
+  production anti-bot systems (Kasada, in particular) avoid this exact
+  gap with continuous session-trust decay instead of a one-time pass;
+  full research trail in docs/RESEARCH.md. This is a real, live gap
+  independent of the Patchright work — applies to any passed session,
+  automated or not.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...` — all packages pass.
+  - `gofmt -l` clean on every file this change touched.
+  - Mutation check (CLAUDE.md Section 12): replaced
+    `if signals.VelocityExceeded(ip, ja4)` with `if false` in guard.go →
+    `TestGuardVelocityLimitsPassedSession` failed (`want 429 ..., got 200`).
+    Restored → passed again.
+Known gaps / follow-up:
+  - This closes "solve once, flood forever" but is still a one-shot
+    pass at the *identity* layer — the visitor is never asked to
+    re-prove they're a real browser mid-session, only rate-limited.
+    True continuous re-verification (Kasada-style periodic re-challenge,
+    decaying trust score) is a larger design project, logged in
+    docs/RESEARCH.md, not started.
+  - `maxRequests`/`maxJA4Requests`/`rateLimitMs` are the same fixed
+    global constants used for pre-challenge scoring; no separate,
+    possibly more lenient, threshold was set for already-passed
+    sessions. Worth revisiting if real traffic shows legitimate
+    passed users (e.g. a page that polls an API frequently) tripping
+    this — currently untested against real production traffic
+    patterns.
