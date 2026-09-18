@@ -195,6 +195,30 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
       if (/Chrome/.test(navigator.userAgent) && !/Edge|Edg/.test(navigator.userAgent)) {
         if (!window.chrome || typeof window.chrome !== "object") automation = true;
       }
+
+      // Playwright's own init-script injection leaves this global set,
+      // independent of the CDP leaks (Runtime.enable, navigator.webdriver)
+      // that stealth patches specifically target.
+      if (typeof window.__pwInitScripts !== "undefined") automation = true;
+
+      // Puppeteer's classic default viewport. Real users essentially
+      // never browse at exactly 800x600 today. Playwright's own default
+      // (1280x720) is common enough on real screens that it's not
+      // trusted alone (CLAUDE.md Section 14 false-positive rule).
+      if (window.innerWidth === 800 && window.innerHeight === 600) automation = true;
+
+      // A patched/custom Chromium build can still claim "Chrome" in its
+      // User-Agent string while its client-hints brand list only lists
+      // the generic "Chromium" engine, not "Google Chrome" itself.
+      if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+        try {
+          var brandInfo = await navigator.userAgentData.getHighEntropyValues(["fullVersionList"]);
+          var brands = (brandInfo && brandInfo.fullVersionList) || [];
+          var hasChromium = brands.some(function (b) { return b.brand === "Chromium"; });
+          var hasChrome = brands.some(function (b) { return b.brand === "Google Chrome"; });
+          if (hasChromium && !hasChrome) automation = true;
+        } catch (e) {}
+      }
     } catch (e) {}
 
     var headless = false;
@@ -292,9 +316,11 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A stock Selenium/Puppeteer/Playwright automation framework
-	// exposes navigator.webdriver or similar globals even when the
-	// browser itself is real (so canvas/sha256 pass) — ROADMAP item 6.
-	// We also detect headless cloud VM renderers (SwiftShader/llvmpipe).
+	// exposes navigator.webdriver, __pwInitScripts, a default 800x600
+	// viewport, or a Chromium-without-Chrome client-hints brand, even
+	// when the browser itself is real (so canvas/sha256 pass) —
+	// ROADMAP item 6. We also detect headless cloud VM renderers
+	// (SwiftShader/llvmpipe).
 	if r.FormValue("automation") == "true" || r.FormValue("headless") == "true" {
 		http.Error(w, "automation detected", http.StatusForbidden)
 		return

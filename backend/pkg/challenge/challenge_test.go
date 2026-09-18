@@ -193,6 +193,34 @@ func TestChallengeRejectsHeadlessFlag(t *testing.T) {
 	}
 }
 
+// TestChallengePageDetectsAdvancedAutomation: the client-side automation
+// checks (__pwInitScripts, default Puppeteer viewport, Chromium-without-
+// Chrome client-hints brand) are computed entirely in JS the Go tests
+// never execute — Score()/handleVerify only ever see the boolean form
+// field they produce. This test is the only thing that would catch a
+// future edit silently deleting one of them from the served page.
+func TestChallengePageDetectsAdvancedAutomation(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, challengePath, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	for _, marker := range []string{
+		"window.__pwInitScripts",
+		"window.innerWidth === 800 && window.innerHeight === 600",
+		"getHighEntropyValues",
+		`b.brand === "Chromium"`,
+		`b.brand === "Google Chrome"`,
+	} {
+		if !strings.Contains(body, marker) {
+			t.Errorf("challenge page missing automation check %q", marker)
+		}
+	}
+}
+
 // TestProbeJSServed: /__botshield/probe.js must return valid JS.
 func TestProbeJSServed(t *testing.T) {
 	c := newChallenge(t)

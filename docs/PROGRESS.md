@@ -2224,3 +2224,70 @@ tradeoff, not a one-line bug):
     refused-connection) can add up to ~100ms to every request's p99 with
     no circuit breaker. Needs a decision on a shared breaker vs. per-call
     timeout tuning.
+
+---
+
+## 2026-09-18 — New client-side checks against real-Chrome stealth automation (Patchright/Scrapling)
+
+Changed:
+  - `pkg/challenge/challenge.go`: added three checks to the challenge
+    page's automation probe (see docs/RESEARCH.md for the full
+    threat/research writeup):
+    - `window.__pwInitScripts !== undefined` — Playwright's own
+      init-script global, a different mechanism than the CDP leaks
+      (`Runtime.enable`, `navigator.webdriver`) that stealth patches
+      target, so it survives patching in plain Playwright/Puppeteer.
+    - `window.innerWidth === 800 && window.innerHeight === 600` —
+      Puppeteer's classic default viewport. Deliberately did NOT add
+      Playwright's 1280x720 default as a hard signal: that's a common
+      enough real window size that it would be a false-positive risk
+      on its own (CLAUDE.md Section 14).
+    - Chromium-without-Chrome client-hints brand check via
+      `navigator.userAgentData.getHighEntropyValues(["fullVersionList"])`
+      — a patched/custom Chromium build (like Patchright's patched
+      binary) can still claim "Chrome" in its User-Agent string while
+      its brand list only reports "Chromium", not "Google Chrome".
+  - `pkg/challenge/challenge_test.go`: added
+    `TestChallengePageDetectsAdvancedAutomation`, which asserts the
+    served page's script contains each new check by name. Necessary
+    because these checks run entirely in the visitor's browser — Go's
+    own tests never execute that JS, so without this test a future
+    edit could silently delete one of them and nothing would fail.
+Why: an owner test with Patchright (a stealth-patched Playwright
+  fork) passed straight through scoring and the JS challenge. Root
+  cause: every existing signal (JA4, UA mismatch, header-anomaly,
+  the old webdriver/CDP-leak probe) checks "what the client claims to
+  be," and Patchright drives a real, patched Chromium binary whose
+  TLS handshake and UA are genuinely authentic. These three checks
+  target artifacts of the *injection/build mechanism itself*, which
+  is harder for a stealth tool to fully erase than the well-known
+  CDP/webdriver tells.
+  Evaluated and rejected FingerprintJS BotD (MIT, open source): its
+  own maintainers say the open-source version doesn't reliably catch
+  stealth-patched tools — not worth the added client-side JS for
+  coverage we don't need. Did not copy code from
+  rebrowser-bot-detector (no LICENSE file in that repo) — implemented
+  the same publicly-documented techniques independently.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...` — all packages pass.
+  - `gofmt -l` clean.
+  - Mutation check (CLAUDE.md Section 12): removed the
+    `__pwInitScripts` check line → `TestChallengePageDetectsAdvancedAutomation`
+    failed immediately (`missing automation check "window.__pwInitScripts"`).
+    Restored → passed again.
+Known gaps / follow-up:
+  - Not yet re-tested against a live Patchright session (no browser
+    automation environment available in this session) — the checks
+    are implemented and unit-tested for presence/wiring, but the
+    original failure mode (a real Patchright run bypassing the
+    challenge) has not been re-run to confirm these specific checks
+    close it. Owner should re-run the same Patchright test that
+    originally found the bypass.
+  - Behavioral biometrics (mouse/timing entropy) — the literature's
+    actual answer for "real browser, stealth-patched" — is still not
+    implemented. Logged in docs/RESEARCH.md as the next real signal
+    layer, not a small follow-up.
+  - The `1280x720` Playwright default viewport is intentionally not
+    checked (false-positive risk) — if false negatives here turn out
+    to matter more than false positives for a given tenant, this is a
+    per-tenant tuning decision, not a global one.
