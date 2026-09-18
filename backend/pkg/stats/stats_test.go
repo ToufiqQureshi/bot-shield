@@ -19,9 +19,10 @@ func TestStats_Record_AllDecisions(t *testing.T) {
 	s.Record(signals.DecisionAllow)
 	s.Record(signals.DecisionChallenge)
 	s.Record(signals.DecisionBlock)
+	s.Record(signals.DecisionDeceive)
 
-	if got := s.Total(); got != 4 {
-		t.Errorf("Total: want 4, got %d", got)
+	if got := s.Total(); got != 5 {
+		t.Errorf("Total: want 5, got %d", got)
 	}
 	if got := s.Passed(); got != 2 {
 		t.Errorf("Passed: want 2, got %d", got)
@@ -31,6 +32,9 @@ func TestStats_Record_AllDecisions(t *testing.T) {
 	}
 	if got := s.Blocked(); got != 1 {
 		t.Errorf("Blocked: want 1, got %d", got)
+	}
+	if got := s.Deceived(); got != 1 {
+		t.Errorf("Deceived: want 1, got %d", got)
 	}
 }
 

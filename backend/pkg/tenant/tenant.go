@@ -1,11 +1,14 @@
 package tenant
 
 import (
+	"context"
 	"errors"
 	"net/http/httputil"
 	"sync"
+	"time"
 
 	"github.com/ToufiqQureshi/bot-shield/pkg/config"
+	"github.com/ToufiqQureshi/bot-shield/pkg/db"
 	"github.com/ToufiqQureshi/bot-shield/pkg/evidence"
 	"github.com/ToufiqQureshi/bot-shield/pkg/stats"
 )
@@ -18,6 +21,7 @@ type TenantConfig struct {
 	Target        string      // The origin server to protect (e.g., https://example.com)
 	Mode          config.Mode // Enforce or Shadow
 	EvidenceToken string      // Bearer token for the per-request evidence endpoint
+	Deception     bool        // If true, high-confidence bot traffic is deceived instead of 403 blocked (ROADMAP 11a)
 }
 
 // Tenant represents a single customer's isolated environment.
@@ -30,11 +34,15 @@ type Tenant struct {
 	Origin *httputil.ReverseProxy
 }
 
+// ProxyFactory is a callback to create origin proxies without creating import cycles.
+type ProxyFactory func(target string) (*httputil.ReverseProxy, error)
+
 // Store is a thread-safe implementation that maps hostnames and IDs to tenant environments.
 type Store struct {
-	mu     sync.RWMutex
-	byHost map[string]*Tenant
-	byID   map[string]*Tenant
+	mu           sync.RWMutex
+	byHost       map[string]*Tenant
+	byID         map[string]*Tenant
+	ProxyFactory ProxyFactory
 }
 
 // NewStore creates a store for testing or single-node deployments.
@@ -68,17 +76,52 @@ func (s *Store) Add(id string, config TenantConfig, hosts []string, origin *http
 // GetByHost looks up a tenant by their incoming HTTP host header.
 func (s *Store) GetByHost(host string) (*Tenant, error) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	t, ok := s.byHost[host]
 	if !ok {
-		// Fallback to wildcard if present
 		t, ok = s.byHost["*"]
-		if !ok {
-			return nil, ErrTenantNotFound
-		}
 	}
-	return t, nil
+	s.mu.RUnlock()
+
+	if ok {
+		return t, nil
+	}
+
+	// Not in local cache, try fetching from the database (lazy loading)
+	return s.fetchFromDB(host)
+}
+
+func (s *Store) fetchFromDB(host string) (*Tenant, error) {
+	if s.ProxyFactory == nil {
+		return nil, ErrTenantNotFound
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	id, target, modeStr, evidenceToken, err := db.GetTenant(ctx, host)
+	if err != nil {
+		return nil, ErrTenantNotFound
+	}
+
+	mode, _ := config.ParseMode(modeStr)
+	proxy, err := s.ProxyFactory(target)
+	if err != nil {
+		return nil, err
+	}
+
+	tenantConfig := TenantConfig{
+		Target:        target,
+		Mode:          mode,
+		EvidenceToken: evidenceToken,
+	}
+
+	if err := s.Add(id, tenantConfig, []string{host}, proxy); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.byHost[host], nil
 }
 
 // GetByID looks up a tenant by their internal ID (for dashboard API use).

@@ -1,0 +1,10 @@
+=== RUN   TestStats_Record_AllDecisions
+--- PASS: TestStats_Record_AllDecisions (0.00s)
+=== RUN   TestStats_ZeroValues
+--- PASS: TestStats_ZeroValues (0.00s)
+=== RUN   TestStats_ModeReported
+--- PASS: TestStats_ModeReported (0.00s)
+=== RUN   TestStats_ConcurrentRecord
+--- PASS: TestStats_ConcurrentRecord (0.00s)
+PASS
+ok  	github.com/ToufiqQureshi/bot-shield/pkg/stats	1.332s

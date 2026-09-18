@@ -4,12 +4,39 @@
 package core
 
 import (
+	"context"
 	"net"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 
 	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
 )
+
+type ctxKeyDecision struct{}
+type ctxKeyScore struct{}
+
+// WithDecision attaches the botshield policy decision and score to the request context.
+func WithDecision(ctx context.Context, decision string, score int) context.Context {
+	ctx = context.WithValue(ctx, ctxKeyDecision{}, decision)
+	return context.WithValue(ctx, ctxKeyScore{}, score)
+}
+
+// DecisionFromContext retrieves the policy decision from context.
+func DecisionFromContext(ctx context.Context) string {
+	if s, ok := ctx.Value(ctxKeyDecision{}).(string); ok {
+		return s
+	}
+	return ""
+}
+
+// ScoreFromContext retrieves the bot risk score from context.
+func ScoreFromContext(ctx context.Context) int {
+	if s, ok := ctx.Value(ctxKeyScore{}).(int); ok {
+		return s
+	}
+	return 0
+}
 
 // ja4Header is the header we attach to the forwarded request so the
 // origin (and later, our own scoring code) can see the caller's JA4
@@ -20,6 +47,9 @@ const ja4Header = "X-BotShield-JA4"
 // doesn't match its TLS handshake. Set to "true" only when we caught
 // one — absence means nothing suspicious was found, not "unknown".
 const uaMismatchHeader = "X-BotShield-UA-Mismatch"
+const decisionHeader = "X-BotShield-Decision"
+const scoreHeader = "X-BotShield-Score"
+const signalsHeader = "X-BotShield-Signals"
 
 // realIPHeader is the client-IP header we set ourselves. nginx, Rails
 // and Laravel apps commonly read this one.
@@ -85,6 +115,15 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 			r.Out.Header.Del(uaMismatchHeader)
 			if signals.UAMismatch(r.In.UserAgent(), ja4) {
 				r.Out.Header.Set(uaMismatchHeader, "true")
+			}
+
+			// Inbound requests cannot forge BotShield decision or score headers.
+			r.Out.Header.Del(decisionHeader)
+			r.Out.Header.Del(scoreHeader)
+			r.Out.Header.Del(signalsHeader)
+			if dec := DecisionFromContext(r.In.Context()); dec != "" {
+				r.Out.Header.Set(decisionHeader, dec)
+				r.Out.Header.Set(scoreHeader, strconv.Itoa(ScoreFromContext(r.In.Context())))
 			}
 		},
 	}

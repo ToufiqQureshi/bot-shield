@@ -21,6 +21,7 @@ type Stats struct {
 	passed     atomic.Int64
 	challenged atomic.Int64
 	blocked    atomic.Int64
+	deceived   atomic.Int64
 }
 
 func (s *Stats) Record(d signals.Decision) {
@@ -28,6 +29,8 @@ func (s *Stats) Record(d signals.Decision) {
 	switch d {
 	case signals.DecisionBlock:
 		s.blocked.Add(1)
+	case signals.DecisionDeceive:
+		s.deceived.Add(1)
 	case signals.DecisionChallenge:
 		s.challenged.Add(1)
 	default:
@@ -39,3 +42,4 @@ func (s *Stats) Total() int64      { return s.total.Load() }
 func (s *Stats) Passed() int64     { return s.passed.Load() }
 func (s *Stats) Challenged() int64 { return s.challenged.Load() }
 func (s *Stats) Blocked() int64    { return s.blocked.Load() }
+func (s *Stats) Deceived() int64   { return s.deceived.Load() }

@@ -11,7 +11,7 @@ var crawlerMarkers = []string{"bot", "spider", "crawl"}
 
 // scriptingMarkers match generic HTTP libraries or CLI tools that
 // are typically used by scrapers and scripts rather than browsers.
-var scriptingMarkers = []string{"curl", "wget", "python-urllib", "python-requests", "go-http-client", "locust", "postman"}
+var scriptingMarkers = []string{"curl", "wget", "python-urllib", "python-requests", "go-http-client", "locust", "postman", "headless", "playwright", "patchright", "puppeteer"}
 
 // claimsBrowser reports whether ua claims to be a real browser,
 // rather than a script or a bot that's already honest about itself.
@@ -61,5 +61,12 @@ func UAMismatch(ua, ja4 string) bool {
 		return false
 	}
 	version := ja4[1:3] // e.g. "13" in "t13d1516h2_..."
-	return version == "10" || version == "11"
+	if version == "10" || version == "11" {
+		return true
+	}
+	// Browser impersonation: UA claims browser, but JA4 matches a known scraper library.
+	if isScraper, _ := IsKnownScraperJA4(ja4); isScraper {
+		return true
+	}
+	return false
 }

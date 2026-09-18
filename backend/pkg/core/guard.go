@@ -60,11 +60,19 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	score := signals.Score(ja4, r.UserAgent())
+	ip := r.RemoteAddr
+	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
+		ip = ip[:idx]
+	}
+
+	score := signals.Score(ip, ja4, r.UserAgent())
 	decision := signals.Decide(score)
+	if decision == signals.DecisionBlock && tenant.Config.Deception {
+		decision = signals.DecisionDeceive
+	}
 	tenant.Trail.Record(evidence.Evidence{
 		JA4:      ja4,
-		Signals:  signals.Analyze(ja4, r.UserAgent()),
+		Signals:  signals.Analyze(ip, ja4, r.UserAgent()),
 		Score:    score,
 		Decision: decision.String(),
 		Enforced: enforced,
@@ -83,6 +91,12 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch decision {
 	case signals.DecisionBlock:
 		http.Error(w, "forbidden", http.StatusForbidden)
+	case signals.DecisionDeceive:
+		// ROADMAP Item 11a: Deception mode (decoy response).
+		// Forward the request with X-BotShield-Decision: deceive so the origin
+		// can serve dummy data/poisoned pricing and waste the scraper's resources.
+		ctx := WithDecision(r.Context(), signals.DecisionDeceive.String(), score)
+		tenant.Origin.ServeHTTP(w, r.WithContext(ctx))
 	case signals.DecisionChallenge:
 		g.challenge.Serve(w, r)
 	default:

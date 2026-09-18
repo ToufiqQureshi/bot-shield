@@ -1,0 +1,94 @@
+=== RUN   TestParseJA4
+=== RUN   TestParseJA4/curl_8.6.0
+=== RUN   TestParseJA4/PSK_extension
+--- PASS: TestParseJA4 (0.00s)
+    --- PASS: TestParseJA4/curl_8.6.0 (0.00s)
+    --- PASS: TestParseJA4/PSK_extension (0.00s)
+=== RUN   TestJA4FingerprintRejectsGarbage
+=== RUN   TestJA4FingerprintRejectsGarbage/nil
+=== RUN   TestJA4FingerprintRejectsGarbage/empty
+=== RUN   TestJA4FingerprintRejectsGarbage/random_bytes
+=== RUN   TestJA4FingerprintRejectsGarbage/not_a_handshake_record
+=== RUN   TestJA4FingerprintRejectsGarbage/truncated_mid-handshake
+=== RUN   TestJA4FingerprintRejectsGarbage/header_only,_body_missing
+=== RUN   TestJA4FingerprintRejectsGarbage/length_claims_more_than_sent
+--- PASS: TestJA4FingerprintRejectsGarbage (0.00s)
+    --- PASS: TestJA4FingerprintRejectsGarbage/nil (0.00s)
+    --- PASS: TestJA4FingerprintRejectsGarbage/empty (0.00s)
+    --- PASS: TestJA4FingerprintRejectsGarbage/random_bytes (0.00s)
+    --- PASS: TestJA4FingerprintRejectsGarbage/not_a_handshake_record (0.00s)
+    --- PASS: TestJA4FingerprintRejectsGarbage/truncated_mid-handshake (0.00s)
+    --- PASS: TestJA4FingerprintRejectsGarbage/header_only,_body_missing (0.00s)
+    --- PASS: TestJA4FingerprintRejectsGarbage/length_claims_more_than_sent (0.00s)
+=== RUN   TestHeaderAnomalyRealBrowserNavigation
+--- PASS: TestHeaderAnomalyRealBrowserNavigation (0.00s)
+=== RUN   TestHeaderAnomalyScriptedClientFakingBrowser
+--- PASS: TestHeaderAnomalyScriptedClientFakingBrowser (0.00s)
+=== RUN   TestHeaderAnomalyHonestScriptingTool
+--- PASS: TestHeaderAnomalyHonestScriptingTool (0.00s)
+=== RUN   TestHeaderAnomalyEmptyUA
+--- PASS: TestHeaderAnomalyEmptyUA (0.00s)
+=== RUN   TestHeaderAnomalyCrawlerExempt
+--- PASS: TestHeaderAnomalyCrawlerExempt (0.00s)
+=== RUN   TestHeaderAnomalyMissingFetchMetadataFires
+--- PASS: TestHeaderAnomalyMissingFetchMetadataFires (0.00s)
+=== RUN   TestHeaderAnomalyCaseInsensitiveHeaderLookup
+--- PASS: TestHeaderAnomalyCaseInsensitiveHeaderLookup (0.00s)
+=== RUN   TestScoreNoSignals
+--- PASS: TestScoreNoSignals (0.00s)
+=== RUN   TestScoreFragmentedOnly
+--- PASS: TestScoreFragmentedOnly (0.00s)
+=== RUN   TestScoreUAMismatchOnly
+--- PASS: TestScoreUAMismatchOnly (0.00s)
+=== RUN   TestScoreBothSignals
+--- PASS: TestScoreBothSignals (0.00s)
+=== RUN   TestScorePlainHTTPFailsOpen
+--- PASS: TestScorePlainHTTPFailsOpen (0.00s)
+=== RUN   TestScoreJA4Blocklist
+--- PASS: TestScoreJA4Blocklist (0.00s)
+=== RUN   TestDecideThresholds
+--- PASS: TestDecideThresholds (0.00s)
+=== RUN   TestDecisionString
+--- PASS: TestDecisionString (0.00s)
+=== RUN   TestUAMismatch
+=== RUN   TestUAMismatch/real_Chrome_on_modern_TLS
+=== RUN   TestUAMismatch/claims_Chrome_but_handshake_is_unreadable_(fragmentation_evasion)
+=== RUN   TestUAMismatch/claims_Firefox_but_negotiates_ancient_TLS_1.0
+=== RUN   TestUAMismatch/claims_Safari_but_negotiates_TLS_1.1
+=== RUN   TestUAMismatch/curl_is_honest_about_being_curl_-_nothing_to_catch
+=== RUN   TestUAMismatch/Googlebot_openly_declares_itself,_even_with_'Chrome'_in_the_string
+=== RUN   TestUAMismatch/no_JA4_at_all_(plain_HTTP)_-_nothing_to_compare,_fail_open
+=== RUN   TestUAMismatch/empty_User-Agent
+=== RUN   TestUAMismatch/garbage_JA4_too_short_to_read_a_version_from
+--- PASS: TestUAMismatch (0.00s)
+    --- PASS: TestUAMismatch/real_Chrome_on_modern_TLS (0.00s)
+    --- PASS: TestUAMismatch/claims_Chrome_but_handshake_is_unreadable_(fragmentation_evasion) (0.00s)
+    --- PASS: TestUAMismatch/claims_Firefox_but_negotiates_ancient_TLS_1.0 (0.00s)
+    --- PASS: TestUAMismatch/claims_Safari_but_negotiates_TLS_1.1 (0.00s)
+    --- PASS: TestUAMismatch/curl_is_honest_about_being_curl_-_nothing_to_catch (0.00s)
+    --- PASS: TestUAMismatch/Googlebot_openly_declares_itself,_even_with_'Chrome'_in_the_string (0.00s)
+    --- PASS: TestUAMismatch/no_JA4_at_all_(plain_HTTP)_-_nothing_to_compare,_fail_open (0.00s)
+    --- PASS: TestUAMismatch/empty_User-Agent (0.00s)
+    --- PASS: TestUAMismatch/garbage_JA4_too_short_to_read_a_version_from (0.00s)
+=== RUN   FuzzParseJA4
+=== RUN   FuzzParseJA4/seed#0
+=== RUN   FuzzParseJA4/seed#1
+=== RUN   FuzzParseJA4/seed#2
+=== RUN   FuzzParseJA4/seed#3
+--- PASS: FuzzParseJA4 (0.00s)
+    --- PASS: FuzzParseJA4/seed#0 (0.00s)
+    --- PASS: FuzzParseJA4/seed#1 (0.00s)
+    --- PASS: FuzzParseJA4/seed#2 (0.00s)
+    --- PASS: FuzzParseJA4/seed#3 (0.00s)
+=== RUN   FuzzUAMismatch
+=== RUN   FuzzUAMismatch/seed#0
+=== RUN   FuzzUAMismatch/seed#1
+=== RUN   FuzzUAMismatch/seed#2
+=== RUN   FuzzUAMismatch/seed#3
+--- PASS: FuzzUAMismatch (0.00s)
+    --- PASS: FuzzUAMismatch/seed#0 (0.00s)
+    --- PASS: FuzzUAMismatch/seed#1 (0.00s)
+    --- PASS: FuzzUAMismatch/seed#2 (0.00s)
+    --- PASS: FuzzUAMismatch/seed#3 (0.00s)
+PASS
+ok  	github.com/ToufiqQureshi/bot-shield/pkg/signals	1.795s

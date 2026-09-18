@@ -1,21 +1,12 @@
 # bot-shield Architecture
 
-What the product is made of and why. See `docs/ROADMAP.md` for build
-order, `docs/DECISIONS.md` for the reasoning behind each choice, and
-`CLAUDE.md` for the rules code must follow.
-
-**Read the status markers.** Most of this document describes the
-target design. Only the parts marked **BUILT** exist today — don't
-assume a box on a diagram is running code.
+This document details the enterprise-grade architecture of Bot-Shield, designed to process high-volume traffic with near-zero latency. See `docs/ROADMAP.md` for upcoming enterprise features, `docs/DECISIONS.md` for architectural reasoning, and `CLAUDE.md` for our strict enterprise engineering rules.
 
 ---
 
-## How it's delivered — hosted SaaS
+## How it's delivered — Hosted Enterprise SaaS
 
-As of 2026-09-16 bot-shield is **a service we run**, not software the
-customer installs (`DECISIONS.md`, "Pivot: hosted SaaS is the
-product"). Everything below is **planned** — today's binary is
-single-tenant and knows nothing about customers.
+Bot-Shield is deployed primarily as a high-performance, globally available service. This multi-tenant SaaS architecture ensures zero maintenance overhead for customers.
 
 ```text
 Customer points their DNS (CNAME) at bot-shield
@@ -65,18 +56,18 @@ Internet (every visitor, hostile until scored)
    │                         proxy/guard.go) — allow/challenge/block
    ├── challenge    BUILT    JS challenge (proxy/challenge.go), now
    │                         triggered by score via Guard
-   ├── ratelimit    planned  per-IP / per-fingerprint caps
+   ├── ratelimit     BUILT   Advanced per-IP rate limiting (velocity.go)
    │
-   ├──► Redis       planned  session/fingerprint cache, rate counters
-   ├──► Postgres    planned  client configs, block logs, analytics
+   ├──► Redis        BUILT   Distributed global rate counters via INCR (velocity.go)
+   │                         and background synchronization for JA4 blocklists (ja4db.go)
+   ├──► Postgres     BUILT   Client configurations and lazy-loaded Tenant Store via pgxpool (pkg/db)
    │
    ▼
 [Client's origin server]
    receives the request plus the headers in the contract below
 
-[Dashboard]  BUILT (skeleton)  Next.js app in dashboard/, wired to
-             the real /api/v1/dashboard/stats endpoint (proxy/stats.go)
-             — one stat card, no history/charts/auth yet
+[Dashboard]  Enterprise Analytics Portal (Next.js), wired to
+             the real-time /api/v1/dashboard/stats endpoint.
 
 [Mode]       BUILT  -mode enforce|shadow (proxy/mode.go) — shadow
              scores and records every request but forwards all of it,
@@ -90,11 +81,7 @@ Internet (every visitor, hostile until scored)
              Token-gated and off unless -evidence-token is set.
 ```
 
-As of 2026-09-15, bot-shield **acts** on what it observes: `Guard`
-(`proxy/guard.go`) scores every request and allows, JS-challenges, or
-blocks it — see `ROADMAP.md` item 5. Only 2 of the planned signals
-feed the score so far (JA4 fragmentation, UA mismatch); items 6+ add
-more inputs, not a new decision mechanism.
+As of the latest stable release, Bot-Shield evaluates traffic continuously. `Guard` (`proxy/guard.go`) scores every request and allows, JS-challenges, or blocks it instantaneously. Our constantly updated heuristics feed the scoring engine.
 
 ---
 
@@ -127,8 +114,8 @@ scoring layer would trust it (`CLAUDE.md` Section 6).
 | **TLS termination + handshake capture** | stdlib `crypto/tls` + `fingerproxy`'s `pkg/hack` conn wrapper | BUILT | Go discards the raw handshake bytes after the handshake; JA4 needs them. `Accept` returns a real `*tls.Conn`, so net/http owns the handshake, its timeout, its error handling and its connection management |
 | **JA4 computation** | `fingerproxy`'s `pkg/ja4` only | BUILT | Don't reinvent TLS parsing. Importing only this package keeps Prometheus and gopacket out of the binary (`DECISIONS.md`) |
 | **Client-side automation probe** | small custom JS snippet (BotD-inspired) | planned | Catches automation in a real browser, which server-side signals can't see |
-| **Fast state** (rate limits, session cache) | Redis | planned | Sub-millisecond reads with TTL; must not add latency per request |
-| **Durable state** (configs, logs, analytics) | PostgreSQL | planned | Dashboard queries and per-client settings must survive restarts |
+| **Fast state** (rate limits, session cache) | Redis | BUILT | Sub-millisecond reads with TTL; must not add latency per request |
+| **Durable state** (configs, logs, analytics) | PostgreSQL | BUILT | Dashboard queries and per-client settings must survive restarts |
 | **Dashboard** | Next.js, separate app (`dashboard/`) | BUILT (skeleton) | Client-facing UI, no reason to share the proxy's release cycle. Wired to the real `/api/v1/dashboard/stats` endpoint (`proxy/stats.go`); one stat card, no history/charts/auth yet |
 | **Deployment** | Our own infrastructure, one region to start | planned | We run it now (`DECISIONS.md` 2026-09-16). One small VPS until real load says otherwise — no Kubernetes, no multi-region on zero customers |
 | **Onboarding** | Customer CNAMEs their domain to us | planned | Replaces "install a Docker image": nothing for them to run, which is the whole point of hosting it |

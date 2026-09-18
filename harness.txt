@@ -1,0 +1,24 @@
+Microsoft Windows [Version 10.0.26200.9445]
+(c) Microsoft Corporation. All rights reserved.
+
+C:\Users\ACER>npx @deepseek-ai/dsh web
+Need to install the following packages:
+@deepseek-ai/dsh@0.1.5-rc.1
+Ok to proceed? (y)
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+dsh web: http://127.0.0.1:3080/?token=D66-j9A_kCabZUO9ORkMFel9F6MRjzpjwMnB13XeuDU
+dsh web: opening the default browser; pass --no-open to disable
+
+
+
+
+
+
+
+
+
+
+
+
+
+

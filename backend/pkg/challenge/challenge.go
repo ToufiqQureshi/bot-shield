@@ -36,21 +36,23 @@ const passedMaxAge = 30 * time.Minute
 
 const challengePath = "/__botshield/challenge"
 const verifyPath = "/__botshield/verify"
+const probePath = "/__botshield/probe.js"
+
+const probeScript = `(function(){try{var d={webdriver:!!navigator.webdriver,plugins:navigator.plugins?navigator.plugins.length:0,languages:navigator.languages?navigator.languages.join(','):''};document.cookie="_bs_probe="+btoa(JSON.stringify(d))+"; path=/; max-age=3600; SameSite=Lax";}catch(e){}})();`
 
 // maxVerifyBodyBytes bounds the POST body from an unauthenticated,
 // visitor-controlled endpoint. A real canvas proof is a few KB; this
 // leaves headroom without letting one caller send an unbounded body.
 const maxVerifyBodyBytes = 64 * 1024
 
-// NewChallenge generates a fresh signing secret. It lives in memory
-// only: restarting bot-shield, or running more than one instance,
-// invalidates outstanding challenges and passed-cookies. That's fine
-// for a single-process v1 deployment (docs/ARCHITECTURE.md); sharing
-// the secret across instances needs the planned Redis store, not this.
-func NewChallenge() (*Challenge, error) {
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return nil, fmt.Errorf("proxy: generating challenge secret: %w", err)
+// NewChallenge takes a shared secret for signing challenges.
+// By using a shared secret provided at startup (e.g., via CLI flag),
+// any instance in a multi-node deployment can verify a challenge
+// issued by any other instance, making the challenge system completely
+// stateless and database-free.
+func NewChallenge(secret []byte) (*Challenge, error) {
+	if len(secret) == 0 {
+		return nil, fmt.Errorf("proxy: challenge secret cannot be empty")
 	}
 	return &Challenge{secret: secret}, nil
 }
@@ -182,6 +184,32 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
       if (navigator.webdriver) automation = true;
       if (window.callPhantom || window._phantom || window.__nightmare) automation = true;
       if (document.__selenium_unwrapped || document.__webdriver_evaluate || document.__driver_evaluate) automation = true;
+      if (window.cdc_adoQpoasnfa76pfcZLmcfl_ || window.cdc_adoQpoasnfa76pfcZLmcfl_Array) automation = true;
+      if (window.__playwright || window.__puppeteer) automation = true;
+
+      // Stealth evasion artifact: property descriptor on navigator.webdriver
+      var desc = Object.getOwnPropertyDescriptor(navigator, "webdriver");
+      if (desc && (desc.value === false || desc.get)) automation = true;
+
+      // Chrome consistency: authentic Chrome defines window.chrome
+      if (/Chrome/.test(navigator.userAgent) && !/Edge|Edg/.test(navigator.userAgent)) {
+        if (!window.chrome || typeof window.chrome !== "object") automation = true;
+      }
+    } catch (e) {}
+
+    var headless = false;
+    try {
+      var glCanvas = document.createElement("canvas");
+      var gl = glCanvas.getContext("webgl") || glCanvas.getContext("experimental-webgl");
+      if (gl) {
+        var dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        if (dbg) {
+          var rend = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "";
+          if (/SwiftShader|llvmpipe|VirtualBox|Mesa OffScreen/i.test(rend)) {
+            headless = true;
+          }
+        }
+      }
     } catch (e) {}
 
     var body = new URLSearchParams();
@@ -189,6 +217,7 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
     body.set("answer", answer);
     body.set("canvas", canvasProof);
     body.set("automation", String(automation));
+    body.set("headless", String(headless));
     body.set("elapsed", String(Date.now() - start));
 
     var res = await fetch("{{.VerifyPath}}", {
@@ -250,26 +279,24 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 
 	nonce, redirectPath, ok := c.parseToken(r.FormValue("token"))
 	if !ok {
-		c.Serve(w, r)
+		http.Error(w, "invalid token", http.StatusForbidden)
 		return
 	}
 	answer := r.FormValue("answer")
 	if subtle.ConstantTimeCompare([]byte(answer), []byte(expectedAnswer(nonce))) != 1 {
-		c.Serve(w, r)
+		http.Error(w, "incorrect answer", http.StatusForbidden)
 		return
 	}
 	if !validCanvasProof(r.FormValue("canvas")) {
-		c.Serve(w, r)
+		http.Error(w, "invalid canvas proof", http.StatusForbidden)
 		return
 	}
 	// A stock Selenium/Puppeteer/Playwright automation framework
 	// exposes navigator.webdriver or similar globals even when the
 	// browser itself is real (so canvas/sha256 pass) — ROADMAP item 6.
-	// A tool built specifically to hide this (e.g. Patchright) defeats
-	// it; that's a documented gap, not something this check claims to
-	// catch (see docs/DECISIONS.md and docs/RESEARCH.md).
-	if r.FormValue("automation") == "true" {
-		c.Serve(w, r)
+	// We also detect headless cloud VM renderers (SwiftShader/llvmpipe).
+	if r.FormValue("automation") == "true" || r.FormValue("headless") == "true" {
+		http.Error(w, "automation detected", http.StatusForbidden)
 		return
 	}
 
@@ -334,6 +361,15 @@ func (c *Challenge) Handler() http.Handler {
 			return
 		}
 		c.handleVerify(w, r)
+	})
+	mux.HandleFunc(probePath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		_, _ = w.Write([]byte(probeScript))
 	})
 	return mux
 }

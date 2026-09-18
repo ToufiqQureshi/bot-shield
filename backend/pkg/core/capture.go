@@ -48,6 +48,13 @@ func ConnContext(ctx context.Context, c net.Conn) context.Context {
 	return context.WithValue(ctx, ctxKeyConn{}, c)
 }
 
+type ctxKeyJA4 struct{}
+
+// WithJA4 returns a context containing an explicit JA4 fingerprint.
+func WithJA4(ctx context.Context, ja4 string) context.Context {
+	return context.WithValue(ctx, ctxKeyJA4{}, ja4)
+}
+
 // signals.JA4Unreadable marks a TLS connection whose handshake we could not
 // read. A normal client never causes this; a bot splitting its
 // handshake across TLS records to dodge fingerprinting does. So it is
@@ -59,6 +66,9 @@ func ConnContext(ctx context.Context, c net.Conn) context.Context {
 // read it, or "" if it wasn't TLS at all. None of these block a
 // request on their own — that's the scoring layer's job.
 func JA4FromContext(ctx context.Context) string {
+	if ja4, ok := ctx.Value(ctxKeyJA4{}).(string); ok && ja4 != "" {
+		return ja4
+	}
 	conn, _ := ctx.Value(ctxKeyConn{}).(*tls.Conn)
 	if conn == nil {
 		return "" // plain HTTP, or capture isn't set up

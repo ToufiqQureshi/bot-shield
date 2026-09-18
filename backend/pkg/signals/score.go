@@ -11,6 +11,7 @@ const (
 	DecisionAllow Decision = iota
 	DecisionChallenge
 	DecisionBlock
+	DecisionDeceive
 )
 
 func (d Decision) String() string {
@@ -21,6 +22,8 @@ func (d Decision) String() string {
 		return "challenge"
 	case DecisionBlock:
 		return "block"
+	case DecisionDeceive:
+		return "deceive"
 	default:
 		return "unknown"
 	}
@@ -38,9 +41,19 @@ func (d Decision) String() string {
 const (
 	fragmentedWeight   = 50
 	uaMismatchWeight   = 50
+	firstTouchWeight   = 50 // Enforce JS challenge on unverified sessions
 	blockThreshold     = 100
 	challengeThreshold = 50
 )
+
+// Known malicious JA4 fingerprints. Every entry must be verified against
+// real captures before being added — blocking a JA4 shared with a real
+// browser family would block every legitimate user on that browser
+// (false positive, CLAUDE.md Section 14). Placeholder hashes without
+// verified captures must never ship.
+var badJA4Hashes = map[string]bool{
+	"t12d190800_4464c1bd5eb7_b3394627b738": true, // Python requests (verified capture)
+}
 
 // checks is the single list every scoring check lives in, so a score
 // and the explanation shown for it can never disagree — adding a check
@@ -49,19 +62,27 @@ const (
 var checks = []struct {
 	name   string
 	weight int
-	fired  func(ja4, ua string) bool
+	fired  func(ip, ja4, ua string) bool
 }{
-	{"fragmented_handshake", fragmentedWeight, func(ja4, ua string) bool { return ja4 == JA4Unreadable }},
-	{"ua_mismatch", uaMismatchWeight, func(ja4, ua string) bool { return UAMismatch(ua, ja4) }},
+	{"fragmented_handshake", fragmentedWeight, func(ip, ja4, ua string) bool { return ja4 == JA4Unreadable }},
+	{"ua_mismatch", uaMismatchWeight, func(ip, ja4, ua string) bool { return UAMismatch(ua, ja4) }},
+	{"ja4_blocklist", 100, func(ip, ja4, ua string) bool { 
+		isScraper, _ := IsKnownScraperJA4(ja4)
+		return isScraper || badJA4Hashes[ja4] 
+	}},
+	{"scripting_tool", 100, func(ip, ja4, ua string) bool { return IsScriptingTool(ua) }},
+	{"velocity_spike", 50, func(ip, ja4, ua string) bool { return checkVelocitySpike(ip) }},
+	{"ja4_velocity_spike", 50, func(ip, ja4, ua string) bool { return checkJA4VelocitySpike(ja4) }},
+	{"untrusted_session", firstTouchWeight, func(ip, ja4, ua string) bool { return true }},
 }
 
 // Score combines a request's known signals into one risk score. ja4
 // and ua are read the same way proxy.go already reads them to set the
 // label headers.
-func Score(ja4, ua string) int {
+func Score(ip, ja4, ua string) int {
 	total := 0
 	for _, c := range checks {
-		if c.fired(ja4, ua) {
+		if c.fired(ip, ja4, ua) {
 			total += c.weight
 		}
 	}
@@ -70,10 +91,10 @@ func Score(ja4, ua string) int {
 
 // Analyze names the checks that fired for a request, so the evidence
 // trail can answer "why was this stopped?" and not just "how much."
-func Analyze(ja4, ua string) []string {
+func Analyze(ip, ja4, ua string) []string {
 	var fired []string
 	for _, c := range checks {
-		if c.fired(ja4, ua) {
+		if c.fired(ip, ja4, ua) {
 			fired = append(fired, c.name)
 		}
 	}

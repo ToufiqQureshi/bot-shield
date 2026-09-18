@@ -63,6 +63,12 @@ func TestUAMismatch(t *testing.T) {
 			ja4:  "t1",
 			want: false,
 		},
+		{
+			name: "claims Chrome but JA4 is python-requests scraper",
+			ua:   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+			ja4:  "t12d190800_4464c1bd5eb7_b3394627b738",
+			want: true,
+		},
 	}
 
 	for _, c := range cases {

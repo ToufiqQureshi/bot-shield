@@ -1,4 +1,4 @@
-# bot-shield Roadmap
+# Upcoming Enterprise Innovations
 
 What's built, what's next, and why — in that order. Not a wishlist:
 every item targets a real evasion technique seen in the field

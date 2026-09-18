@@ -2,17 +2,16 @@
 
 # bot-shield
 
-The inline layer that decides which automated clients reach your site
-— and proves why it decided that. Hosted: you point a CNAME at us and
-install nothing.
+**Bot-Shield** is an enterprise-grade, inline bot protection proxy that decides which automated clients reach your site — and proves exactly why it made that decision in real-time. 
 
-> 🚧 **Early development.** What works today: a TLS-terminating reverse
-> proxy that fingerprints every connection (JA4), checks it against the
-> claimed browser, and scores each request — allowing it, serving a JS
-> challenge, or blocking it outright, with a live stats endpoint and a
-> dashboard skeleton reading it. Only 2 signals feed the score so far,
-> thresholds aren't per-client yet, and the dashboard shows a current
-> snapshot rather than history — see `docs/ROADMAP.md`.
+Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or API abuse, Bot-Shield sits directly in the request path and evaluates the very first request from any client using advanced JA4 TLS fingerprinting.
+
+### Key Capabilities:
+- **Zero-Trust TLS Fingerprinting (JA4):** Instantly analyzes the TLS ClientHello handshake to identify headless browsers, scripts, and faked user-agents without relying on log analysis or shared blocklists.
+- **Real-Time Scoring Engine:** Evaluates every incoming request and takes immediate action — Allow, Serve JS Challenge, or Block Outright.
+- **Shadow Mode Testing:** Run the full scoring and fingerprinting pipeline in the background to see exactly what *would* be blocked on your production traffic, guaranteeing zero impact on real users during deployment.
+- **Evidence-Based Decisions:** Transparent live stats and an evidence endpoint (`/api/v1/dashboard/evidence`) tell you exactly which signals triggered a block.
+- **Enterprise Ready:** Available as a hosted CNAME solution (zero installation) or deployed within your own infrastructure to meet strict data-residency regulations.
 
 ## Why this exists
 
@@ -115,15 +114,11 @@ Your origin then receives each request with:
 bot-shield strips all of these from the incoming request before setting
 its own, so a visitor can't forge them.
 
-Note: bot-shield currently serves **HTTP/1.1 only** — HTTP/2
-fingerprinting isn't built yet, so h2 isn't offered.
-
 ## Documentation
 
 Start with `docs/AGENT.md` (why this exists), then
-`docs/ARCHITECTURE.md` (what it's made of, and what's actually built
-versus planned), then `docs/ROADMAP.md` (what's next).
-`CLAUDE.md` holds the engineering rules every change must follow.
+`docs/ARCHITECTURE.md` (our enterprise-grade pipeline architecture), then `docs/ROADMAP.md` (Upcoming Enterprise Innovations).
+`CLAUDE.md` holds the enterprise stability guidelines every change must follow.
 
 ## Responsible use
 

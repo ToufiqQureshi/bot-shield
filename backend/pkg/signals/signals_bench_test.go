@@ -22,7 +22,7 @@ func BenchmarkParseJA4(b *testing.B) {
 func BenchmarkScore(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_ = signals.Score("unreadable", "Mozilla/5.0 (Windows NT 10.0)")
+			_ = signals.Score("", "unreadable", "Mozilla/5.0 (Windows NT 10.0)")
 		}
 	})
 }
@@ -30,7 +30,7 @@ func BenchmarkScore(b *testing.B) {
 func BenchmarkAnalyze(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_ = signals.Analyze("unreadable", "bot/1.0")
+			_ = signals.Analyze("", "unreadable", "bot/1.0")
 		}
 	})
 }

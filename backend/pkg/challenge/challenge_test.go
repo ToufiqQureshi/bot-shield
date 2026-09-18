@@ -25,7 +25,7 @@ const (
 
 func newChallenge(t *testing.T) *challenge.Challenge {
 	t.Helper()
-	c, err := challenge.NewChallenge()
+	c, err := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
 	if err != nil {
 		t.Fatalf("NewChallenge: %v", err)
 	}
@@ -167,5 +167,43 @@ func TestChallengeHandlerMethodNotAllowed(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, verifyPath, nil))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("GET verify: want 405, got %d", rec.Code)
+	}
+}
+
+// TestChallengeRejectsHeadlessFlag: headless=true (detected VM WebGL) must not pass.
+func TestChallengeRejectsHeadlessFlag(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+	token, nonce := fetchPage(t, h, challengePath)
+
+	form := url.Values{}
+	form.Set("token", token)
+	form.Set("answer", sha256Hex(nonce))
+	form.Set("canvas", validCanvas())
+	form.Set("automation", "false")
+	form.Set("headless", "true")
+
+	req := httptest.NewRequest(http.MethodPost, verifyPath, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusSeeOther {
+		t.Fatal("headless=true must not pass")
+	}
+}
+
+// TestProbeJSServed: /__botshield/probe.js must return valid JS.
+func TestProbeJSServed(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/__botshield/probe.js", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /__botshield/probe.js: want 200, got %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "javascript") {
+		t.Errorf("Content-Type: want javascript, got %s", ct)
 	}
 }
