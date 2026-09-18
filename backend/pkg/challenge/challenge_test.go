@@ -2,6 +2,7 @@ package challenge_test
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
@@ -209,7 +210,7 @@ func TestChallengePageDetectsAdvancedAutomation(t *testing.T) {
 	body := rec.Body.String()
 
 	for _, marker := range []string{
-		"window.__pwInitScripts",
+		base64.StdEncoding.EncodeToString([]byte("__pwInitScripts")),
 		"window.innerWidth === 800 && window.innerHeight === 600",
 		"getHighEntropyValues",
 		`b.brand === "Chromium"`,
@@ -217,6 +218,44 @@ func TestChallengePageDetectsAdvancedAutomation(t *testing.T) {
 	} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("challenge page missing automation check %q", marker)
+		}
+	}
+}
+
+// TestChallengePageObfuscatesAutomationTells: the classic tell property
+// names (cdc_..., __playwright, __puppeteer, __selenium_unwrapped, ...)
+// must not appear in the served page as plain text — a scraper author's
+// first move is to curl the challenge page and grep it for exactly
+// these strings without ever running the JS. They are still present,
+// base64-encoded, and decoded at runtime (see the _d helper).
+func TestChallengePageObfuscatesAutomationTells(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, challengePath, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	plaintextTells := []string{
+		"cdc_adoQpoasnfa76pfcZLmcfl_",
+		"__playwright",
+		"__puppeteer",
+		"__pwInitScripts",
+		"__selenium_unwrapped",
+		"__webdriver_evaluate",
+		"__driver_evaluate",
+		"callPhantom",
+		"_phantom",
+		"__nightmare",
+	}
+	for _, tell := range plaintextTells {
+		if strings.Contains(body, tell) {
+			t.Errorf("challenge page leaks plaintext automation tell %q — should be base64-encoded", tell)
+		}
+		encoded := base64.StdEncoding.EncodeToString([]byte(tell))
+		if !strings.Contains(body, encoded) {
+			t.Errorf("challenge page missing encoded form of %q (want %q)", tell, encoded)
 		}
 	}
 }

@@ -155,6 +155,15 @@ type challengeData struct {
 	RedirectPath string
 }
 
+// challengePage's script base64-encodes the classic automation-tell
+// property names (via the _d/atob helper) so they don't appear as
+// plain text in the served page — only in this Go source, which never
+// reaches a visitor's browser. Decoded, in the order they appear:
+// callPhantom, _phantom, __nightmare, __selenium_unwrapped,
+// __webdriver_evaluate, __driver_evaluate, cdc_adoQpoasnfa76pfcZLmcfl_,
+// cdc_adoQpoasnfa76pfcZLmcfl_Array, __playwright, __puppeteer,
+// __pwInitScripts. TestChallengePageObfuscatesAutomationTells asserts
+// none of them leak into the rendered page as plain text.
 var challengePage = template.Must(template.New("challenge").Parse(`<!doctype html>
 <html><head><meta charset="utf-8"><title>Checking your browser</title></head>
 <body>
@@ -179,13 +188,21 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
       canvasProof = c.toDataURL();
     } catch (e) {}
 
+    // _d decodes the base64-encoded automation-tell property names
+    // below. This is not real security — anyone stepping through the
+    // script in devtools sees the decoded name at runtime just the
+    // same — it only defeats a plain "view source"/curl-and-grep read
+    // of the challenge page, which is exactly how a scraper author
+    // would first probe what a competitor's challenge checks for.
+    function _d(s) { return atob(s); }
+
     var automation = false;
     try {
       if (navigator.webdriver) automation = true;
-      if (window.callPhantom || window._phantom || window.__nightmare) automation = true;
-      if (document.__selenium_unwrapped || document.__webdriver_evaluate || document.__driver_evaluate) automation = true;
-      if (window.cdc_adoQpoasnfa76pfcZLmcfl_ || window.cdc_adoQpoasnfa76pfcZLmcfl_Array) automation = true;
-      if (window.__playwright || window.__puppeteer) automation = true;
+      if (window[_d("Y2FsbFBoYW50b20=")] || window[_d("X3BoYW50b20=")] || window[_d("X19uaWdodG1hcmU=")]) automation = true;
+      if (document[_d("X19zZWxlbml1bV91bndyYXBwZWQ=")] || document[_d("X193ZWJkcml2ZXJfZXZhbHVhdGU=")] || document[_d("X19kcml2ZXJfZXZhbHVhdGU=")]) automation = true;
+      if (window[_d("Y2RjX2Fkb1Fwb2FzbmZhNzZwZmNaTG1jZmxf")] || window[_d("Y2RjX2Fkb1Fwb2FzbmZhNzZwZmNaTG1jZmxfQXJyYXk=")]) automation = true;
+      if (window[_d("X19wbGF5d3JpZ2h0")] || window[_d("X19wdXBwZXRlZXI=")]) automation = true;
 
       // Stealth evasion artifact: property descriptor on navigator.webdriver
       var desc = Object.getOwnPropertyDescriptor(navigator, "webdriver");
@@ -199,7 +216,7 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
       // Playwright's own init-script injection leaves this global set,
       // independent of the CDP leaks (Runtime.enable, navigator.webdriver)
       // that stealth patches specifically target.
-      if (typeof window.__pwInitScripts !== "undefined") automation = true;
+      if (typeof window[_d("X19wd0luaXRTY3JpcHRz")] !== "undefined") automation = true;
 
       // Puppeteer's classic default viewport. Real users essentially
       // never browse at exactly 800x600 today. Playwright's own default

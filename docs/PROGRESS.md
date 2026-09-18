@@ -2348,3 +2348,58 @@ Known gaps / follow-up:
     passed users (e.g. a page that polls an API frequently) tripping
     this — currently untested against real production traffic
     patterns.
+
+---
+
+## 2026-09-18 — Obfuscated the challenge page's automation-tell property names
+
+Changed:
+  - `pkg/challenge/challenge.go`: the classic automation-tell globals
+    (`cdc_adoQpoasnfa76pfcZLmcfl_`, `__playwright`, `__puppeteer`,
+    `__pwInitScripts`, `__selenium_unwrapped`, `__webdriver_evaluate`,
+    `__driver_evaluate`, `callPhantom`, `_phantom`, `__nightmare`) are
+    now read via `window[_d("<base64>")]` bracket access instead of
+    literal dot-notation, where `_d` is a one-line `atob` wrapper
+    defined in the page's own script. A plain "view source" or
+    `curl | grep` of the challenge page no longer reveals which
+    property names are being checked. Added a Go-source doc comment
+    above `challengePage` listing the decoded plaintext for our own
+    maintainability, since that comment lives in Go source and never
+    reaches the rendered page.
+  - `pkg/challenge/challenge_test.go`: added
+    `TestChallengePageObfuscatesAutomationTells`, which asserts each
+    plaintext tell is *absent* from the rendered page and its base64
+    form *is* present. Updated `TestChallengePageDetectsAdvancedAutomation`'s
+    `__pwInitScripts` marker to check for its base64 encoding instead
+    of the now-obfuscated literal.
+Why: this is not a detection improvement — `navigator.webdriver`,
+  viewport, and the client-hints brand check are unchanged and do the
+  actual catching. It raises the cost of a scraper author's first,
+  cheapest move: fetching the challenge page once (no JS execution,
+  no browser) and grepping the raw HTML for known tell names to learn
+  exactly what's being checked before writing a bypass. Matches the
+  pattern in commercial anti-bot JS (Kasada's `p.js` ships as
+  obfuscated bytecode for the same reason) — see docs/RESEARCH.md
+  2026-09-18 "How commercial vendors actually get to high block
+  rates," which named this as a fast, zero-detection-risk next step.
+  Explicitly not real security: anyone who actually runs the script
+  in devtools and steps through `_d()` sees the decoded name at
+  runtime, same as before. It only defeats static analysis.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...` — all packages pass.
+  - `gofmt -l` clean.
+  - Mutation check (CLAUDE.md Section 12): reverted the `__playwright`/
+    `__puppeteer` line to its old literal `window.__playwright` form →
+    `TestChallengePageObfuscatesAutomationTells` failed on both the
+    leak and the missing-encoding assertions. Restored → passed again.
+Known gaps / follow-up:
+  - This only obfuscates literal property-name leaks. The viewport
+    check (`window.innerWidth === 800 ...`) and the client-hints brand
+    check are still fully readable in plain text — they're structural
+    logic, not a literal tell name, so bracket-encoding them wouldn't
+    hide anything meaningful. Not treated as a gap, just noting the
+    boundary of what this technique covers.
+  - No real obfuscation (control-flow flattening, string-splitting
+    beyond base64, self-defense against a debugger) — that's a much
+    larger, ongoing investment (see docs/RESEARCH.md) and was
+    explicitly out of scope for this fast pass.
