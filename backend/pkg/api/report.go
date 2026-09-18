@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/csv"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -108,7 +109,9 @@ func DashboardTopOffendersHandler(store *tenant.Store) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		// Enable CORS so the separate dashboard dev server can call it.
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		json.NewEncoder(w).Encode(list)
+		if err := json.NewEncoder(w).Encode(list); err != nil {
+			log.Printf("botshield: encoding top-offenders response: %v", err)
+		}
 	})
 }
 

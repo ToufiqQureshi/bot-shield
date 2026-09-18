@@ -2470,3 +2470,65 @@ Known gaps / follow-up:
     to tune against. Logged here, not started.
   - CI does not yet run a `dashboard/` job — there is no `dashboard/`
     directory in the repo yet (ROADMAP item), so nothing to add.
+
+---
+
+## 2026-09-18 — Static analysis (golangci-lint) wired in; three real findings fixed
+
+Changed:
+  - `backend/.golangci.yml` (new): enables errcheck, staticcheck,
+    unused, ineffassign, gosec on top of the standard set. Excludes
+    errcheck/gosec's G104 (unhandled error) for `_test.go` files only
+    — an unchecked `store.Add`/`w.Write` in a test helper is noise, the
+    same class of error in production code is not exempted.
+  - `.github/workflows/ci.yml`: added a `golangci-lint` step so this
+    now runs on every push/PR, not just when someone remembers to run
+    it locally.
+  - `pkg/api/handlers.go`, `pkg/api/report.go`: three call sites
+    (`DashboardStatsHandler`, `DashboardEvidenceHandler`, top-offenders
+    report) called `json.NewEncoder(w).Encode(...)` and silently
+    discarded the error. Now logged when Encode fails. This is exactly
+    the "silent bug in a function that runs on every API call" class
+    the owner asked about by name — errcheck exists specifically to
+    surface it.
+  - `main.go`: the HTTPS listener's `tls.Config` didn't set
+    `MinVersion`, so it accepted TLS 1.0/1.1 (gosec G402). Set
+    `MinVersion: tls.VersionTLS12`. Doubly relevant here specifically:
+    `pkg/signals.UAMismatch` reads negotiated TLS version to catch
+    automation, so accepting old TLS on real connections also weakened
+    that signal for genuine old-client traffic.
+  - `pkg/core/proxy_test.go`: staticcheck's SA9003 caught a genuinely
+    empty if-branch — `TestNewOriginProxy` checked
+    `X-Forwarded-For != ""` and asserted nothing in either direction
+    (CLAUDE.md Section 13, vacuous assertion). Fixed to fail when the
+    header is missing.
+  - `pkg/challenge/challenge.go`: gosec's G101 flagged
+    `passedCookie = "X-BotShield-Passed"` as a potential hardcoded
+    credential — a false positive (it's a cookie *name*, not a secret
+    value). Suppressed inline with `#nosec G101` and a comment
+    explaining why, rather than broadening the linter exclusion.
+Why: owner asked, as a solo dev, what tooling exists to catch bad code
+  quality, silent bugs, and functions that could load the server
+  unnecessarily *before* they reach production, rather than relying on
+  Sentry to notice after the fact. golangci-lint is the standard Go
+  answer — it caught three things worth fixing on the very first run
+  against this codebase (two silently-discarded encode errors, one
+  weak TLS floor), not zero, which is exactly the point of adding it
+  now rather than after the next incident.
+Tested how:
+  - `golangci-lint run ./...`: 0 issues after the fixes (11 before).
+  - `go build ./...`, `go vet ./...`, `go test ./...`, `gofmt -l .` —
+    all clean.
+Known gaps / follow-up:
+  - Only ran the linter's default rule set plus five extra linters.
+    Did not enable `gocyclo`/`cyclop` (cyclomatic complexity) or
+    `unparam`, which more directly answer "which function is getting
+    too complicated" — deferred rather than tuning thresholds blind
+    against a codebase this size; worth adding once there's a function
+    actually worth flagging.
+  - Does not cover "unnecessary server load" from a *logic* standpoint
+    (e.g., an O(n^2) loop, or the pre-existing Redis-per-request-without-
+    negative-caching gap already logged earlier) — static analysis
+    catches code smells and correctness bugs, not algorithmic cost.
+    That needs profiling (`net/http/pprof`) against real traffic, not
+    a linter, and is still open.

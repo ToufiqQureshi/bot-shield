@@ -31,7 +31,7 @@ const challengeMaxAge = 2 * time.Minute
 
 // passedCookie marks a visitor who already solved a challenge, so
 // they aren't re-challenged on every request in the same session.
-const passedCookie = "X-BotShield-Passed"
+const passedCookie = "X-BotShield-Passed" // #nosec G101 -- cookie name, not a credential
 const passedMaxAge = 30 * time.Minute
 
 const challengePath = "/__botshield/challenge"

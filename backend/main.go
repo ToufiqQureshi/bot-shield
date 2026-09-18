@@ -147,7 +147,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("botshield: loading TLS cert/key: %v", err)
 		}
-		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+		// TLS 1.0/1.1 are deprecated and, for a product whose own
+		// detection logic reads TLS version to spot automation
+		// (UAMismatch in pkg/signals), accepting them here would also
+		// undermine that signal for real visitors on old clients.
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 		ln = core.NewCaptureListener(ln, tlsConfig)
 	}
 
