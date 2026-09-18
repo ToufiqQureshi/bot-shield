@@ -39,7 +39,7 @@ func TestJA4DynamicDatabase(t *testing.T) {
 			defer wg.Done()
 			IsKnownScraperJA4("t12d190800_4464c1bd5eb7_b3394627b738")
 			isCommonBrowserJA4("t13d1516h2_8daaf6152771_e5627efa2ab1")
-			
+
 			if i%10 == 0 {
 				AddKnownScraperJA4("fake_bot", "fake")
 			}
@@ -55,14 +55,14 @@ func TestJA4SyncFromRedisFailures(t *testing.T) {
 	// Ensure syncing with a bad redis client fails gracefully without clearing the list
 	opt, _ := redis.ParseURL("redis://invalid-host:1234")
 	rdb := redis.NewClient(opt)
-	
+
 	AddKnownScraperJA4("t12_survive", "survivor")
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	
+
 	syncJA4FromRedis(ctx, rdb)
-	
+
 	// Should survive
 	isScraper, tool := IsKnownScraperJA4("t12_survive")
 	if !isScraper || tool != "survivor" {

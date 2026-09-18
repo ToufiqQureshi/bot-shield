@@ -19,7 +19,7 @@ func TestNewOriginProxy(t *testing.T) {
 		if r.Header.Get("True-Client-IP") != "" {
 			t.Error("expected spoofed IP header to be stripped")
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer origin.Close()

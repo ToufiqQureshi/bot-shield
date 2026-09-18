@@ -19,9 +19,11 @@ import (
 	"github.com/ToufiqQureshi/bot-shield/pkg/config"
 	"github.com/ToufiqQureshi/bot-shield/pkg/core"
 	"github.com/ToufiqQureshi/bot-shield/pkg/db"
+	"github.com/ToufiqQureshi/bot-shield/pkg/observability"
 	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
 	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -42,6 +44,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("botshield: %v", err)
 	}
+
+	// SENTRY_DSN is an env var, not a flag: flags show up in `ps aux`
+	// output on shared hosts, which a DSN (while not a secret that
+	// grants access to customer data) still has no reason to leak into.
+	if err := observability.Init(os.Getenv("SENTRY_DSN")); err != nil {
+		log.Printf("botshield: warning: sentry init failed: %v", err)
+	}
+	defer sentry.Flush(2 * time.Second)
 
 	if *target == "" {
 		log.Fatal("botshield: -target is required")
@@ -121,7 +131,7 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Handler:           mux,
+		Handler:           observability.Middleware(mux),
 		ConnContext:       core.ConnContext,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,

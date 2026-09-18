@@ -76,6 +76,10 @@ go build -o botshield ./cmd/botshield
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
 | `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
 
+| Env var | Meaning |
+|---|---|
+| `SENTRY_DSN` | Optional. A handler panic is always recovered and logged either way (the process never crashes); setting this also reports it to Sentry so it surfaces as an alert instead of a line in a log nobody is watching. Unset by default — no signup required to run bot-shield. |
+
 ### Shadow mode
 
 `-mode shadow` runs the full scoring pipeline and records what it

@@ -2403,3 +2403,70 @@ Known gaps / follow-up:
     beyond base64, self-defense against a debugger) — that's a much
     larger, ongoing investment (see docs/RESEARCH.md) and was
     explicitly out of scope for this fast pass.
+
+---
+
+## 2026-09-18 — CI pipeline added (there was none); panic recovery + optional Sentry reporting
+
+Changed:
+  - `.github/workflows/ci.yml` (new): runs on every push to `main` and
+    every PR — `go vet`, a `gofmt -l` check that fails the build on any
+    unformatted file, `go build ./...`, `go test -race ./...`. There
+    was no `.github/` directory in this repo at all before this change
+    — every test added in every prior session only ever ran when
+    someone remembered to run `go test` by hand. Nothing enforced it on
+    push or merge.
+  - Fixed pre-existing `gofmt -l` failures in `pkg/api/handlers_test.go`,
+    `pkg/core/capture_test.go`, `pkg/core/proxy_test.go`,
+    `pkg/signals/headers.go`, `pkg/signals/headers_test.go`,
+    `pkg/signals/ja4db_test.go` — formatting only, no behavior change.
+    Necessary so the new CI's gofmt check starts green instead of
+    immediately red on unrelated pre-existing drift.
+  - `pkg/observability/sentry.go` (new package): `Init(dsn string)`
+    (no-op if `dsn` is empty — no signup required to run bot-shield)
+    and `Middleware(next http.Handler) http.Handler`, which recovers a
+    panicking handler, reports it to Sentry when configured, logs it
+    either way, and returns 500 instead of the client just seeing the
+    connection drop.
+  - `main.go`: reads `SENTRY_DSN` from the environment (not a flag —
+    flags show up in `ps aux` on shared hosts) and wraps the server's
+    `Handler` with `observability.Middleware`.
+  - `README.md`: documented `SENTRY_DSN` next to the existing flags table.
+Why: owner asked, for general knowledge as a solo dev managing the
+  whole product, how the industry catches silent bugs, runaway
+  function calls, and unexpected cloud-cost spikes. Go's `net/http`
+  server already recovers a handler panic per-connection today (the
+  process doesn't crash), but only logs it to stderr — on a real
+  deployment with nobody tailing logs, that's indistinguishable from
+  the bug not existing until a customer complains. This closes that
+  visibility gap for panics specifically. Checking for a CI pipeline
+  while answering "are my tests actually CI tests?" surfaced the
+  bigger gap (no CI existed at all), fixed in the same pass since it
+  was fast, safe, and exactly the kind of "solo dev" tooling asked about.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test -race ./...` — all
+    packages pass (this is also now literally the CI job).
+  - `gofmt -l .` clean across the whole `backend/` tree.
+  - New `pkg/observability/sentry_test.go`: empty-DSN no-op, a panic
+    is recovered and returns 500, and a normal request still passes
+    through unchanged.
+  - Mutation check (CLAUDE.md Section 12): replaced `Middleware`'s
+    body with a bare passthrough (`return next`) → `TestMiddlewareRecoversPanic`
+    itself panicked and failed the test run (proving the recover is
+    load-bearing, not just present). Restored → passed again.
+Known gaps / follow-up:
+  - No Sentry DSN is actually configured anywhere yet — this only adds
+    the integration point. Owner needs to create a Sentry account and
+    set `SENTRY_DSN` on the real deployment for panics to actually
+    alert anyone; until then this only improves the 500 response and
+    the log line, not visibility.
+  - This covers panics only, not the other three things discussed
+    (metrics/anomaly alerting for "a function called far more than
+    normal," cloud-provider billing alarms, and a circuit breaker for
+    a failing/expensive downstream dependency). Those need an actual
+    metrics backend (Prometheus/Grafana or a hosted equivalent) and
+    the owner's own cloud/Railway account for billing alerts — not
+    something to wire blind without the owner's accounts and traffic
+    to tune against. Logged here, not started.
+  - CI does not yet run a `dashboard/` job — there is no `dashboard/`
+    directory in the repo yet (ROADMAP item), so nothing to add.
