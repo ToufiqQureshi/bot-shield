@@ -40,5 +40,10 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # golangci-lint-action@v6's "latest" resolves to a cached
+          # v1.x binary built with an older Go than our go.mod targets
+          # (go1.25.0), which the config loader flat-out refuses to
+          # run against. Pin a v2.x release known to work — the same
+          # major version this repo's .golangci.yml schema requires.
+          version: v2.5.0
           working-directory: backend
