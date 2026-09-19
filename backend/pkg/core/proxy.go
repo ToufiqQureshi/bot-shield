@@ -153,4 +153,3 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 	}
 	return p, nil
 }
-

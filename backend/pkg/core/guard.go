@@ -149,4 +149,3 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tenant.Origin.ServeHTTP(w, r)
 	}
 }
-

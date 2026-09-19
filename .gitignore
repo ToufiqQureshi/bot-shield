@@ -1,13 +1,49 @@
-/bin/
-*.log
-.env
-/agentchat/
-/.agents/
-/playwright-test/
-/scripts/
-.gocache/
-*.exe
-/scratch/
-/Scrapling/
-/patchright/
+```
+# Dependencies
+go.sum
 
+# Compressed files
+*.gz
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
+# Directories
+dist/
+build/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+target/
+.gradle/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# System
+.DS_Store
+Thumbs.db
+```
