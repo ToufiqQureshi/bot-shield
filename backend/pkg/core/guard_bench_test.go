@@ -23,7 +23,7 @@ func newBenchGuard(b *testing.B) (http.Handler, *httptest.Server) {
 		Target: origin.URL,
 		Mode:   config.ModeEnforce,
 	}, []string{"*"}, proxy)
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	return core.NewGuard(store, c), origin
 }
 
@@ -66,7 +66,7 @@ func BenchmarkGuardHighConcurrency(b *testing.B) {
 // TestGuardUnknownTenant verifies that requests to unregistered hosts return 404.
 func TestGuardUnknownTenant(t *testing.T) {
 	store := tenant.NewStore()
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	guard := core.NewGuard(store, c)
 
 	req := httptest.NewRequest("GET", "http://unknown-host.io/", nil)
@@ -93,7 +93,7 @@ func TestGuardShadowModeDoesNotBlock(t *testing.T) {
 		Mode:   config.ModeShadow,
 	}, []string{"shadow.local"}, proxy)
 
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	guard := core.NewGuard(store, c)
 
 	// Even with a suspicious-looking (unreadable JA4) request, shadow mode must pass.

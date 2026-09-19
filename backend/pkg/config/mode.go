@@ -32,3 +32,34 @@ func ParseMode(s string) (Mode, error) {
 		return ModeEnforce, fmt.Errorf("unknown mode %q: want \"enforce\" or \"shadow\"", s)
 	}
 }
+
+// PolicyMode controls the decision strategy for incoming unscored traffic.
+// PolicyBalanced passively allows clean traffic (score 0) without challenge,
+// reserving challenges for elevated risk (25-99) and blocks for >=100.
+// PolicyStrict requires a mandatory interstitial challenge for all initial traffic.
+type PolicyMode int
+
+const (
+	PolicyBalanced PolicyMode = iota
+	PolicyStrict
+)
+
+func (p PolicyMode) String() string {
+	if p == PolicyStrict {
+		return "strict"
+	}
+	return "balanced"
+}
+
+// ParsePolicy parses policy strings ("balanced", "strict").
+func ParsePolicy(s string) (PolicyMode, error) {
+	switch s {
+	case "balanced", "":
+		return PolicyBalanced, nil
+	case "strict":
+		return PolicyStrict, nil
+	default:
+		return PolicyBalanced, fmt.Errorf("unknown policy %q: want \"balanced\" or \"strict\"", s)
+	}
+}
+

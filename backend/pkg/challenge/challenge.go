@@ -15,10 +15,10 @@ import (
 	"time"
 )
 
-// Challenge issues a JS-only puzzle to traffic that scoring (ROADMAP
-// item 5, not built yet) will decide is ambiguous. A plain HTTP
-// client that never runs JavaScript never even attempts the verify
-// step; the sha256 answer stops a cached/replayed response; the
+// Challenge issues a JS-only puzzle to every visitor Guard does not
+// block (core/guard.go). A plain HTTP client that never runs JavaScript
+// never even attempts the verify step; the proof-of-work answer stops a
+// cached/replayed response; the
 // canvas proof raises the bar toward needing a real browser engine.
 type Challenge struct {
 	secret []byte
@@ -37,9 +37,6 @@ const passedMaxAge = 30 * time.Minute
 
 const challengePath = "/__botshield/challenge"
 const verifyPath = "/__botshield/verify"
-const probePath = "/__botshield/probe.js"
-
-const probeScript = `(function(){try{var d={webdriver:!!navigator.webdriver,plugins:navigator.plugins?navigator.plugins.length:0,languages:navigator.languages?navigator.languages.join(','):''};document.cookie="_bs_probe="+btoa(JSON.stringify(d))+"; path=/; max-age=3600; SameSite=Lax";}catch(e){}})();`
 
 // maxVerifyBodyBytes bounds the POST body from an unauthenticated,
 // visitor-controlled endpoint. A real canvas proof is a few KB; this
@@ -201,8 +198,10 @@ h2 { font-weight: normal; font-size: 1.2rem; }
   try {
     var start = Date.now();
     
-    // Proof-of-Work: Find a counter where SHA-256(nonce + counter) starts with "000" (12 bits)
-    // 4096 iterations on average. Uses crypto.subtle.
+    // Proof-of-Work: find a counter where SHA-256(nonce + counter) starts
+    // with "00" (8 bits). ~256 iterations on average, so it finishes in
+    // well under 50ms. Deliberately low difficulty: this runs in front of
+    // every visitor and must not feel like a bottleneck.
     var counter = 0;
     var answer = "";
     var enc = new TextEncoder();
@@ -211,13 +210,15 @@ h2 { font-weight: normal; font-size: 1.2rem; }
       var digest = await crypto.subtle.digest("SHA-256", data);
       var hashArray = Array.from(new Uint8Array(digest));
       var hashHex = hashArray.map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
-      // Reduced to 8-bit difficulty ("00") to execute in <50ms instead of 4 seconds
       if (hashHex.substring(0, 2) === "00") {
         answer = counter.toString();
         break;
       }
       counter++;
-      if (counter > 5000) { answer = "0"; break; } // fallback safety
+      // Practically unreachable (odds ~1 in 3e9). If it ever happens the
+      // answer below fails server-side verification and the page retries,
+      // which is the safe failure direction (fail closed, not a bypass).
+      if (counter > 5000) { answer = ""; break; }
     }
 
     var canvasProof = "";
@@ -338,9 +339,9 @@ h2 { font-weight: normal; font-size: 1.2rem; }
 // pointing at the page the visitor actually asked for — i.e. served
 // in place of proxying that request, not as a separate "go solve this
 // first" landing page — so a passing visitor lands back on the real
-// page they wanted. The dedicated GET route in Handler() below is a
-// standalone testing/demo convenience only; ROADMAP item 5's scoring
-// engine is what will call this mid-proxy for a real request.
+// page they wanted. core.Guard calls this mid-proxy for every request
+// it decides to challenge; the dedicated GET route in Handler() below
+// stays available for manual testing.
 func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 	nonce, err := randomNonce()
 	if err != nil {
@@ -416,8 +417,7 @@ func (c *Challenge) setPassedCookie(w http.ResponseWriter) {
 }
 
 // Passed reports whether r already carries a valid, unexpired
-// "solved the challenge" cookie signed by c. Exposed for whatever
-// wires the challenge into a real decision (ROADMAP item 5) to check
+// "solved the challenge" cookie signed by c. core.Guard checks this
 // before re-challenging a visitor who already passed.
 func (c *Challenge) Passed(r *http.Request) bool {
 	ck, err := r.Cookie(passedCookie)
@@ -441,8 +441,9 @@ func (c *Challenge) Passed(r *http.Request) bool {
 
 // Handler returns the HTTP surface for the challenge: GET issues a
 // puzzle, POST verifies the answer. Not yet wired into the proxy's
-// own request path automatically — deciding *who* gets challenged is
-// ROADMAP item 5 (scoring engine); this is the mechanism it will call.
+// own request path (core.Guard calls Serve/handleVerify directly for
+// the requests it decides to challenge); these routes stay available
+// for manual testing and for the page's own verify POST.
 func (c *Challenge) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(challengePath, func(w http.ResponseWriter, r *http.Request) {
@@ -458,15 +459,6 @@ func (c *Challenge) Handler() http.Handler {
 			return
 		}
 		c.handleVerify(w, r)
-	})
-	mux.HandleFunc(probePath, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "public, max-age=3600")
-		_, _ = w.Write([]byte(probeScript))
 	})
 	return mux
 }

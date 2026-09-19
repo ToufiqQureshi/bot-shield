@@ -10,6 +10,71 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Enterprise Hardening: Adaptive Policy Modes, Verified Good Bots, and Production Transport — 2026-09-19
+
+**Decision:** Bot Shield now supports adaptive policy modes (`PolicyBalanced` vs `PolicyStrict`). Under `PolicyBalanced` (the production default for e-commerce/SaaS), clean visitors (score 0) are passively forwarded to the origin with zero latency, reserving challenges for elevated risk scores (25-99) and blocks for >=100. `PolicyStrict` preserves the mandatory ~50ms invisible interstitial for strict zero-scrape environments. In addition, genuine search engine crawlers (Googlebot, Bingbot, Applebot, etc.) are verified via cached reverse+forward DNS and granted clean passthrough to protect SEO indexing. Upstream proxy connections are backed by a production-tuned pooled transport with explicit timeouts and custom 502/504 error handlers.
+
+**Why:** Forcing 100% of organic visitors through an interstitial challenge page increases bounce rates and harms SEO on e-commerce platforms. Adaptive policy modes provide maximum operational flexibility without compromising security against automated scraping.
+
+**Revisit when:** Dynamic machine-learning based risk scoring thresholds are deployed or multi-region anycast edge nodes are added.
+
+---
+
+## Server-observed request patterns; asset-aware rate limiting — 2026-09-19
+
+**Decision:** request classification by URL path (`isStaticAsset`) is now a first-class server-side fact. The per-IP velocity limit counts navigations and subresources separately (20/s vs 300/s), and a new `crawl_pattern` signal flags a browser-claiming client that walks many distinct page paths in a window (Redis HyperLogLog, >60/min). Scoring now reads a `RequestFacts` struct (IP/JA4/UA/Header/Path).
+
+**Why the velocity change was not optional:** the old counter capped *every* request at 5/s per IP and Guard hard-429'd passed sessions. A real browser loading one page fires dozens of asset requests in a second, so this returned 429 to paying customers' real visitors — a production false positive of the worst kind (`CLAUDE.md` Section 14). Classifying assets server-side fixes the bug and, for free, makes navigation rate a real signal: a person cannot open 20 pages a second, a crawler can.
+
+**Why request patterns are worth a layer:** every other signal we have is either client-reported (spoofable) or TLS-level (defeated by real-browser impersonation). The *shape and rate of requests* is observed by the server and cannot be forged from the client — the attacker's only defence is to slow down, which is the economic goal. This is the layer that the headful-scraper gap needs; it is also why it is scoped to browser-claiming clients (a script is not pretending, so there is no lie to catch — Section 8) and why assets are excluded (a real page load is mostly assets — Section 14).
+
+**Why HyperLogLog, not a set:** distinct-path cardinality per IP is all we need, and HLL bounds that state at ~12KB regardless of how many paths one IP requests (`CLAUDE.md` Section 15 — bounded state against adversarial volume). It also naturally ignores volume: hitting one page 500 times is a reload loop, not a crawl, and must not fire.
+
+**Alternatives considered:**
+- *Count distinct paths in a Go map per process.* Rejected: unbounded memory per hostile IP, and wrong across instances on a hosted multi-node deployment.
+- *Use `Sec-Fetch-Dest` to classify navigations.* Rejected: a client header, spoofable; the URL path is not.
+- *Raise the old single limit instead of splitting it.* Rejected: any single number either 429s real page loads or lets crawlers through — the two request classes genuinely need different limits.
+
+**Revisit when:** real traffic gives real numbers for the caps, or a NAT/mobile-carrier test shows the navigation cap is too tight.
+
+---
+
+## Wire header_anomaly into scoring; drop the orphaned probe.js — 2026-09-19
+
+**Decision:** the header-consistency check (`HeaderAnomaly`, `signals/headers.go`)
+is now a real scoring input: `Score`/`Analyze` take the request `http.Header`,
+and the single `checks` table gains a `header_anomaly` entry weighted 25 — below
+the block bar. Separately, the `/__botshield/probe.js` endpoint and its
+`probeScript` are deleted.
+
+**Why header_anomaly:** it was fully built and tested but never referenced by
+scoring, so it contributed nothing while looking finished — the "built but
+unwired" gap `CLAUDE.md` Section 21 warns about. Its weight is deliberately the
+lowest: a browser-claiming client that omits every `Sec-Fetch-*` and `Sec-CH-UA`
+header is suspicious, but privacy tools and unusual-but-real clients can drop
+them, so it must never decide a block alone. 25 on its own stays below the 100
+block threshold, and every path to 100 already fires a stronger signal — pinned
+by `TestHeaderAnomalyNeverBlocksAlone`.
+
+**Why delete probe.js:** it served a standalone script that set a `_bs_probe`
+cookie nothing ever read, and nothing injected it anywhere. That contradicts the
+earlier recorded decision (2026-09-16, "Automation probe lives inside the JS
+challenge, not injected site-wide"): the probe belongs inside the challenge page,
+which is where item 6 actually runs. A second, unused probe endpoint only widened
+the attack surface and implied a site-wide injection feature that was explicitly
+not built.
+
+**Also recorded:** `Decide` no longer carries a `challengeThreshold` constant it
+does not use. With the mandatory interstitial (see the entry below), the honest
+contract is "block at 100, challenge otherwise", so a dead threshold that
+implied a band which no longer existed was removed rather than left in place.
+
+**Revisit when:** real traffic exists to tune the header_anomaly weight, or
+HTML-injection into origin responses becomes a roadmap item (which would let
+item 6's probe run everywhere, making a site-wide probe script relevant again).
+
+---
+
 ## Fast, Invisible Challenges and Headful Bot Evasion — 2026-09-19
 
 **Decision:** The JS challenge engine now runs at an ultra-fast 8-bit Proof-of-Work (PoW) difficulty (~50ms) and supports theme customization (`ghost` and `branded` modes). It also strictly checks `Error.stack` and `navigator.permissions` to block headful Playwright/Puppeteer (e.g., Scrapling, Patchright) that evade TLS fingerprinting.

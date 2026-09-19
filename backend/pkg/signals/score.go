@@ -1,10 +1,16 @@
 package signals
 
-// Decision is the three-way outcome scoring produces for a request:
-// forward it untouched, make it prove it's a browser first, or refuse
-// it outright. No single signal may pick DecisionBlock by itself
-// (CLAUDE.md Section 6) — only combined evidence crosses that
-// threshold; one mid-strength signal only earns a challenge.
+import (
+	"net/http"
+
+	"github.com/ToufiqQureshi/bot-shield/pkg/config"
+)
+
+// Decision is the outcome scoring produces for a request: challenge it
+// (the default, and the only non-block outcome today), refuse it, or —
+// when the tenant enables deception — forward it with a deceived flag.
+// No single signal may pick DecisionBlock by itself (CLAUDE.md Section 6)
+// — only combined evidence crosses that threshold.
 type Decision int
 
 const (
@@ -39,10 +45,11 @@ func (d Decision) String() string {
 // UAMismatch's own inputs — see docs/DECISIONS.md for why that's not
 // double-counting the same fact.
 const (
-	fragmentedWeight   = 50
-	uaMismatchWeight   = 50
-	blockThreshold     = 100
-	challengeThreshold = 50
+	fragmentedWeight    = 50
+	uaMismatchWeight    = 50
+	headerAnomalyWeight = 25
+	crawlPatternWeight  = 50
+	blockThreshold      = 100
 )
 
 // Known malicious JA4 fingerprints. Every entry must be verified against
@@ -54,6 +61,19 @@ var badJA4Hashes = map[string]bool{
 	"t12d190800_4464c1bd5eb7_b3394627b738": true, // Python requests (verified capture)
 }
 
+// RequestFacts is the server-observed view of one request that scoring
+// uses. Keeping them in one struct avoids a growing parameter list, and
+// makes explicit that every field is read without trusting a client
+// beyond what it can actually control (path, TLS fingerprint and
+// connection come from the connection, not the visitor).
+type RequestFacts struct {
+	IP     string
+	JA4    string
+	UA     string
+	Header http.Header
+	Path   string
+}
+
 // checks is the single list every scoring check lives in, so a score
 // and the explanation shown for it can never disagree — adding a check
 // in one place and forgetting the other would make the evidence trail
@@ -61,26 +81,34 @@ var badJA4Hashes = map[string]bool{
 var checks = []struct {
 	name   string
 	weight int
-	fired  func(ip, ja4, ua string) bool
+	fired  func(f RequestFacts) bool
 }{
-	{"fragmented_handshake", fragmentedWeight, func(ip, ja4, ua string) bool { return ja4 == JA4Unreadable }},
-	{"ua_mismatch", uaMismatchWeight, func(ip, ja4, ua string) bool { return UAMismatch(ua, ja4) }},
-	{"ja4_blocklist", 100, func(ip, ja4, ua string) bool {
-		isScraper, _ := IsKnownScraperJA4(ja4)
-		return isScraper || badJA4Hashes[ja4]
+	{"fragmented_handshake", fragmentedWeight, func(f RequestFacts) bool { return f.JA4 == JA4Unreadable }},
+	{"ua_mismatch", uaMismatchWeight, func(f RequestFacts) bool { return UAMismatch(f.UA, f.JA4) }},
+	// header_anomaly is a weaker consistency signal than ua_mismatch
+	// (privacy tools and unusual-but-real clients can drop browser
+	// headers), so it is weighted below the challenge/block bar. It can
+	// never be the only reason for a block: by itself it scores 25, and
+	// every path to 100 already fires stronger signals (CLAUDE.md §6).
+	{"header_anomaly", headerAnomalyWeight, func(f RequestFacts) bool { return HeaderAnomaly(f.UA, f.Header) }},
+	{"ja4_blocklist", 100, func(f RequestFacts) bool {
+		isScraper, _ := IsKnownScraperJA4(f.JA4)
+		return isScraper || badJA4Hashes[f.JA4]
 	}},
-	{"scripting_tool", 100, func(ip, ja4, ua string) bool { return IsScriptingTool(ua) }},
-	{"velocity_spike", 50, func(ip, ja4, ua string) bool { return checkVelocitySpike(ip) }},
-	{"ja4_velocity_spike", 50, func(ip, ja4, ua string) bool { return checkJA4VelocitySpike(ja4) }},
+	{"scripting_tool", 100, func(f RequestFacts) bool { return IsScriptingTool(f.UA) }},
+	{"velocity_spike", 50, func(f RequestFacts) bool { return checkVelocitySpike(f.IP, f.Path) }},
+	{"ja4_velocity_spike", 50, func(f RequestFacts) bool { return checkJA4VelocitySpike(f.JA4) }},
+	// crawl_pattern is a server-observed behaviour signal, not a client
+	// claim: a real browser's requests per page look nothing like a
+	// scraper walking many distinct URLs quickly with no subresources.
+	{"crawl_pattern", crawlPatternWeight, func(f RequestFacts) bool { return CrawlPatternSuspected(f) }},
 }
 
-// Score combines a request's known signals into one risk score. ja4
-// and ua are read the same way proxy.go already reads them to set the
-// label headers.
-func Score(ip, ja4, ua string) int {
+// Score combines a request's known signals into one risk score.
+func Score(f RequestFacts) int {
 	total := 0
 	for _, c := range checks {
-		if c.fired(ip, ja4, ua) {
+		if c.fired(f) {
 			total += c.weight
 		}
 	}
@@ -89,26 +117,35 @@ func Score(ip, ja4, ua string) int {
 
 // Analyze names the checks that fired for a request, so the evidence
 // trail can answer "why was this stopped?" and not just "how much."
-func Analyze(ip, ja4, ua string) []string {
+func Analyze(f RequestFacts) []string {
 	var fired []string
 	for _, c := range checks {
-		if c.fired(ip, ja4, ua) {
+		if c.fired(f) {
 			fired = append(fired, c.name)
 		}
 	}
 	return fired
 }
 
-// Decide turns a score into the three-way outcome using the fixed
-// thresholds above.
+// Decide turns a score into an outcome using the balanced policy by default.
 func Decide(score int) Decision {
-	switch {
-	case score >= blockThreshold:
+	return DecideWithPolicy(score, config.PolicyBalanced)
+}
+
+// DecideWithPolicy turns a score into an outcome according to the policy mode.
+// PolicyBalanced: clean traffic (score 0) is allowed passively without delay,
+// elevated risk (1-99) is challenged, and score >= 100 is blocked.
+// PolicyStrict: all unscored traffic (< 100) receives the mandatory interstitial challenge.
+func DecideWithPolicy(score int, policy config.PolicyMode) Decision {
+	if score >= blockThreshold {
 		return DecisionBlock
-	case score >= challengeThreshold:
-		return DecisionChallenge
-	default:
-		// Force challenge for all unknown/clean traffic to ensure JS checks run
+	}
+	if policy == config.PolicyStrict {
 		return DecisionChallenge
 	}
+	if score == 0 {
+		return DecisionAllow
+	}
+	return DecisionChallenge
 }
+

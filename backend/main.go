@@ -36,12 +36,18 @@ func main() {
 	evidenceToken := flag.String("evidence-token", "", "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
 	modeFlag := flag.String("mode", "enforce", `"enforce" acts on scores; "shadow" only records what it would have done`)
 	themeFlag := flag.String("theme", "ghost", `challenge page theme: "ghost", "branded", or "default"`)
+	policyFlag := flag.String("policy", "balanced", `policy strategy: "balanced" (allow clean score 0, challenge suspicious) or "strict" (mandatory challenge)`)
 	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-BotShield-Decision: deceive instead of 403)")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", "", "PostgreSQL URL for Supabase integration (e.g. postgres://user:pass@host:5432/db)")
 	flag.Parse()
 
 	mode, err := config.ParseMode(*modeFlag)
+	if err != nil {
+		log.Fatalf("botshield: %v", err)
+	}
+
+	policy, err := config.ParsePolicy(*policyFlag)
 	if err != nil {
 		log.Fatalf("botshield: %v", err)
 	}
@@ -58,7 +64,11 @@ func main() {
 		log.Fatal("botshield: -target is required")
 	}
 
-	secret := []byte(*challengeSecret)
+	secretStr := *challengeSecret
+	if secretStr == "" {
+		secretStr = os.Getenv("BOTSHIELD_CHALLENGE_SECRET")
+	}
+	secret := []byte(secretStr)
 	if len(secret) == 0 {
 		// Fallback to random if not provided, sufficient for single-node.
 		secret = make([]byte, 32)
@@ -108,6 +118,7 @@ func main() {
 	err = store.Add("default", tenant.TenantConfig{
 		Target:        *target,
 		Mode:          mode,
+		Policy:        policy,
 		EvidenceToken: *evidenceToken,
 		Deception:     *deceptionFlag,
 	}, []string{"*"}, originProxy)

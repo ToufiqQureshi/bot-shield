@@ -1,6 +1,0 @@
-=== RUN   TestParseMode
---- PASS: TestParseMode (0.00s)
-=== RUN   TestModeString
---- PASS: TestModeString (0.00s)
-PASS
-ok  	github.com/ToufiqQureshi/bot-shield/pkg/config	0.964s

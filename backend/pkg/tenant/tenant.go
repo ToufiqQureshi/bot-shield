@@ -3,6 +3,7 @@ package tenant
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http/httputil"
 	"sync"
 	"time"
@@ -18,10 +19,11 @@ var ErrTenantNotFound = errors.New("tenant not found")
 
 // TenantConfig holds the configuration specific to a single customer.
 type TenantConfig struct {
-	Target        string      // The origin server to protect (e.g., https://example.com)
-	Mode          config.Mode // Enforce or Shadow
-	EvidenceToken string      // Bearer token for the per-request evidence endpoint
-	Deception     bool        // If true, high-confidence bot traffic is deceived instead of 403 blocked (ROADMAP 11a)
+	Target        string            // The origin server to protect (e.g., https://example.com)
+	Mode          config.Mode       // Enforce or Shadow
+	Policy        config.PolicyMode // Balanced or Strict
+	EvidenceToken string            // Bearer token for the per-request evidence endpoint
+	Deception     bool              // If true, high-confidence bot traffic is deceived instead of 403 blocked (ROADMAP 11a)
 }
 
 // Tenant represents a single customer's isolated environment.
@@ -103,7 +105,14 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 		return nil, ErrTenantNotFound
 	}
 
-	mode, _ := config.ParseMode(modeStr)
+	// A stored mode we can't parse must never silently decide behaviour.
+	// Treat an unknown value as enforce (fail closed) and say so, rather
+	// than letting Go's zero value quietly pick a mode for a live tenant.
+	mode, err := config.ParseMode(modeStr)
+	if err != nil {
+		log.Printf("botshield: tenant %q has unknown mode %q, defaulting to enforce: %v", id, modeStr, err)
+		mode = config.ModeEnforce
+	}
 	proxy, err := s.ProxyFactory(target)
 	if err != nil {
 		return nil, err

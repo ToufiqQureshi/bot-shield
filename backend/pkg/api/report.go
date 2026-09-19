@@ -107,8 +107,9 @@ func DashboardTopOffendersHandler(store *tenant.Store) http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		// Enable CORS so the separate dashboard dev server can call it.
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// Deliberately no wildcard CORS: this returns per-visitor JA4
+		// fingerprints, so it follows the evidence endpoint's rule, not
+		// /stats'. See docs/DECISIONS.md, "Evidence trail: token-gated".
 		if err := json.NewEncoder(w).Encode(list); err != nil {
 			log.Printf("botshield: encoding top-offenders response: %v", err)
 		}
@@ -143,10 +144,11 @@ func DashboardExportHandler(store *tenant.Store) http.Handler {
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", `attachment; filename="bot-shield-traffic.csv"`)
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// No wildcard CORS — same per-visitor-fingerprint reasoning as
+		// top-offenders above.
 
 		writer := csv.NewWriter(w)
-		_ = writer.Write([]string{"Time", "JA4", "signals.Score", "signals.Decision", "Enforced", "Signals"})
+		_ = writer.Write([]string{"Time", "JA4", "Score", "Decision", "Enforced", "Signals"})
 		for _, e := range evidence {
 			_ = writer.Write([]string{
 				e.Time.Format("2006-01-02T15:04:05Z07:00"),

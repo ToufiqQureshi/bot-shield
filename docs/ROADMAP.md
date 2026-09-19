@@ -375,7 +375,20 @@ always the operator.
       weeks of traffic" summary yet: no history (the trail is a
       1000-entry in-memory ring), no top-offenders view, no export.
       That is the part a client is actually shown, and it needs item
-      12's dashboard work plus durable storage.
+- [x] **19. Enterprise Hardening & Production Traffic Governance** (`pkg/config`,
+      `pkg/signals/goodbots.go`, `pkg/core/proxy.go`, `pkg/core/guard.go`) —
+      Introduced adaptive policy modes (`PolicyBalanced` vs `PolicyStrict`):
+      `balanced` allows clean traffic (score 0) direct zero-latency access to the origin,
+      while `strict` enforces mandatory invisible challenge execution.
+      Integrated automated reverse+forward DNS verification engine for search engine
+      crawlers (`IsVerifiedGoodBot`) with 6-hour caching to ensure zero SEO penalty.
+      Upstream proxy connections now use production-tuned pooled `http.Transport`
+      (1000 max conns, 200 per host, 90s idle timeout, 15s response header timeout)
+      and custom structured 502/504 error handlers. Added `/__botshield/healthz`
+      for load balancer health probes and `BOTSHIELD_CHALLENGE_SECRET` env var for
+      multi-instance cluster synchronization. Tested: 100% test coverage across
+      unit test suites, fresh build/vet checks, and real-world headful Patchright
+      adversarial tests.
 
 ---
 
@@ -440,6 +453,13 @@ always the operator.
 - [ ] **9. Rate & pattern anomaly detection** — per-fingerprint and
       per-IP request velocity, sequential/enumerated URL access,
       missing normal referrer chains.
+      **Started, not done:** per-IP/per-JA4 velocity is built and now
+      asset-aware (navigations vs subresources have separate limits),
+      and `crawl_pattern` detects a browser-claiming client walking many
+      distinct page paths in a window via Redis HyperLogLog — see
+      `docs/PROGRESS.md` 2026-09-19. Missing: referrer-chain analysis,
+      per-fingerprint request *rate* (not just distinct paths), and the
+      caps are reasoned guesses, not tuned against real traffic.
 - [ ] **9a. API-aware endpoint rules** — tag endpoints by category
       (login, checkout, listing, generic) in config so item 9's rate
       thresholds differ per category, instead of one global rate limit

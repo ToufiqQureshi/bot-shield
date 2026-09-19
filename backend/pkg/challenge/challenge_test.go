@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -16,7 +17,10 @@ import (
 
 var (
 	tokenRe = regexp.MustCompile(`token", "([^"]+)"`)
-	nonceRe = regexp.MustCompile(`encode\("([^"]+)"\)`)
+	// The page's JS now feeds the nonce into the PoW loop, so the encode
+	// call is followed by ` + counter` rather than `)`. Match the string
+	// literal itself, not a parenthesised call.
+	nonceRe = regexp.MustCompile(`encode\("([^"]+)"`)
 )
 
 const (
@@ -26,16 +30,33 @@ const (
 
 func newChallenge(t *testing.T) *challenge.Challenge {
 	t.Helper()
-	c, err := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, err := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	if err != nil {
 		t.Fatalf("NewChallenge: %v", err)
 	}
 	return c
 }
 
-func sha256Hex(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])
+// solvePoW returns the smallest counter whose SHA-256 with nonce starts
+// with "00" — the 8-bit proof-of-work the challenge page's JS computes.
+func solvePoW(nonce string) string {
+	for i := 0; ; i++ {
+		sum := sha256.Sum256([]byte(nonce + strconv.Itoa(i)))
+		if hex.EncodeToString(sum[:])[:2] == "00" {
+			return strconv.Itoa(i)
+		}
+	}
+}
+
+// wrongPoW returns a counter whose hash does NOT satisfy the PoW, for
+// exercising the reject path with a well-formed but incorrect answer.
+func wrongPoW(nonce string) string {
+	for i := 0; ; i++ {
+		sum := sha256.Sum256([]byte(nonce + strconv.Itoa(i)))
+		if hex.EncodeToString(sum[:])[:2] != "00" {
+			return strconv.Itoa(i)
+		}
+	}
 }
 
 func validCanvas() string {
@@ -80,7 +101,7 @@ func TestChallengeRealFlowPasses(t *testing.T) {
 	h := c.Handler()
 
 	token, nonce := fetchPage(t, h, challengePath+"?next=1")
-	rec := postVerify(h, token, sha256Hex(nonce), validCanvas(), "false")
+	rec := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
 
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status: want 303, got %d", rec.Code)
@@ -102,8 +123,8 @@ func TestChallengeRealFlowPasses(t *testing.T) {
 func TestChallengeRejectsWrongAnswer(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, _ := fetchPage(t, h, challengePath)
-	rec := postVerify(h, token, strings.Repeat("0", 64), validCanvas(), "false")
+	token, nonce := fetchPage(t, h, challengePath)
+	rec := postVerify(h, token, wrongPoW(nonce), validCanvas(), "false")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("wrong answer must not pass")
 	}
@@ -114,7 +135,7 @@ func TestChallengeRejectsAutomationFlag(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
 	token, nonce := fetchPage(t, h, challengePath)
-	rec := postVerify(h, token, sha256Hex(nonce), validCanvas(), "true")
+	rec := postVerify(h, token, solvePoW(nonce), validCanvas(), "true")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("automation=true must not pass")
 	}
@@ -125,7 +146,7 @@ func TestChallengeRejectsMissingCanvas(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
 	token, nonce := fetchPage(t, h, challengePath)
-	rec := postVerify(h, token, sha256Hex(nonce), "", "false")
+	rec := postVerify(h, token, solvePoW(nonce), "", "false")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("missing canvas must not pass")
 	}
@@ -137,7 +158,7 @@ func TestChallengeRejectsTamperedToken(t *testing.T) {
 	h := c.Handler()
 	token, nonce := fetchPage(t, h, challengePath)
 	tampered := token[:len(token)-1] + "X"
-	rec := postVerify(h, tampered, sha256Hex(nonce), validCanvas(), "false")
+	rec := postVerify(h, tampered, solvePoW(nonce), validCanvas(), "false")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("tampered token must not pass")
 	}
@@ -179,7 +200,7 @@ func TestChallengeRejectsHeadlessFlag(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("token", token)
-	form.Set("answer", sha256Hex(nonce))
+	form.Set("answer", solvePoW(nonce))
 	form.Set("canvas", validCanvas())
 	form.Set("automation", "false")
 	form.Set("headless", "true")
@@ -257,20 +278,5 @@ func TestChallengePageObfuscatesAutomationTells(t *testing.T) {
 		if !strings.Contains(body, encoded) {
 			t.Errorf("challenge page missing encoded form of %q (want %q)", tell, encoded)
 		}
-	}
-}
-
-// TestProbeJSServed: /__botshield/probe.js must return valid JS.
-func TestProbeJSServed(t *testing.T) {
-	c := newChallenge(t)
-	h := c.Handler()
-
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/__botshield/probe.js", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /__botshield/probe.js: want 200, got %d", rec.Code)
-	}
-	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "javascript") {
-		t.Errorf("Content-Type: want javascript, got %s", ct)
 	}
 }

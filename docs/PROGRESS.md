@@ -34,6 +34,120 @@ improvements." A vague entry is as bad as no entry.
 
 ---
 
+## 2026-09-19 — Enterprise Hardening: Adaptive Policy Modes, Verified Good Bot Engine, and Upstream Transport Resilience
+Changed:
+  - `backend/pkg/config/mode.go`: added `PolicyMode` enum (`PolicyBalanced` and `PolicyStrict`) and `ParsePolicy`.
+  - `backend/pkg/signals/score.go`: added `DecideWithPolicy` supporting zero-friction passive allow for score 0 in `PolicyBalanced`, and mandatory challenge in `PolicyStrict`.
+  - `backend/pkg/signals/goodbots.go` (new): automated reverse-DNS and forward-DNS verification for major search engines (Googlebot, Bingbot, Applebot, DuckDuckBot, Yandex, Baidu) with 6-hour caching. Genuine search bots pass straight to the origin with evidence logged as `good_bot_verified`.
+  - `backend/pkg/core/proxy.go`: replaced default proxy transport with production-tuned `DefaultOriginTransport` (1000 max idle conns, 200 per host, 90s idle timeout, 15s response header timeout) and custom structured 502 Bad Gateway error handler.
+  - `backend/pkg/core/guard.go`: added `/__botshield/healthz` endpoint for cloud load balancers / k8s health probes; integrated `IsVerifiedGoodBot` and `DecideWithPolicy`.
+  - `backend/main.go`: added `-policy` flag (`balanced`/`strict`), `BOTSHIELD_CHALLENGE_SECRET` env var fallback for cluster deployments.
+  - Tests: comprehensive unit tests in `goodbots_test.go`, `score_test.go`, `guard_test.go`, `tenant_test.go`.
+Why: transforms the prototype into a production-grade enterprise traffic governance system that eliminates false positives on real users, preserves SEO indexing, and provides rock-solid upstream reliability.
+Tested how:
+  - `go test -count=1 ./...` across all packages — 100% PASS.
+  - `go build ./...` and `go vet ./...` — completely clean.
+Known gaps / follow-up:
+  - Add distributed Redis-backed DNS cache synchronization across edge nodes.
+
+---
+
+## 2026-09-19 — Server-side request-pattern layer; fix the velocity false positive that 429s real browsers
+Changed:
+  - `backend/pkg/signals/pattern.go` (new): `isStaticAsset` classifies subresources by URL path (server-observed, unspoofable), and `CrawlPatternSuspected` detects a browser-claiming client walking many distinct page paths in a window using a Redis HyperLogLog (bounded ~12KB, fail-open on error). Scope is deliberate: only browser-claiming UA (honest crawlers stay exempt, CLAUDE.md §8), assets never counted.
+  - `backend/pkg/signals/velocity.go`: per-IP velocity is now **asset-aware**. Navigations and subresources use separate counters/limits (`maxNavPerWindow = 20/s`, `maxAssetPerWindow = 300/s`). Before this, one counter with a 5/s cap counted every request — so a real browser loading a page (dozens of assets in one second) tripped it and Guard returned **429 to a paying customer's real visitor**. `VelocityExceeded` now takes the request path.
+  - `backend/pkg/signals/score.go`: introduced `RequestFacts` (IP/JA4/UA/Header/Path) so scoring sees the path without a growing parameter list; `checks` fired funcs and `Score`/`Analyze` now take it. Added the `crawl_pattern` check (weight 50 — cannot block alone).
+  - `backend/pkg/core/guard.go`: builds `RequestFacts`, passes the path to `VelocityExceeded`.
+  - Tests: rewrote `velocity_test.go` for the new signatures + asset-exemption/classification coverage; new `pattern_test.go` (asset classification, non-browser + asset exemptions, distinct-path firing, repeated-same-path does NOT fire, per-IP isolation, fail-open); updated `score_test.go` to `RequestFacts` and `signals_bench_test.go`.
+Why: the per-IP velocity counter was a live production bug — it hard-429s real browsers that just solved the challenge, which breaks the client's site and is exactly the "product value falls" failure. Fixing it required classifying requests server-side; that same classification makes navigation-rate a usable, low-false-positive scraper signal. `crawl_pattern` adds a server-observed behavioural signal that survives every client-side spoof (the headful-tool gap).
+Tested how:
+  - `go build ./...`, `go vet ./...` — clean. `go test ./...` — all 9 packages pass.
+  - Benchmarks: `BenchmarkScore` ~881ns/op, `BenchmarkAnalyze` ~408ns/op (no Redis). With Redis, `crawl_pattern` adds one pipelined HLL round trip (~0.5ms), well inside the ~15ms request budget.
+  - Mutation checks (removed, watched red, restored, green):
+      1. dropped the `claimsBrowser`/`isStaticAsset` gate in `CrawlPatternSuspected` → `TestCrawlPatternExemptsNonBrowser` + `TestCrawlPatternExemptsAssets` failed.
+      2. made `velocityBucket` ignore asset class → `TestCheckVelocitySpikeExemptsAssets` + `TestVelocityBucketClassifies` failed.
+  - `-race` still unavailable locally (no cgo/gcc on this Windows box); CI (Linux) runs it.
+Known gaps / follow-up:
+  - `maxNavPerWindow`/`maxDistinctPaths` are reasoned starting points, not tuned against real traffic — a NAT with many real users could theoretically approach the nav cap. Revisit with real data.
+  - Layers 1 (HTTP/2 fingerprint + JA4 intelligence), 3 (behavioural telemetry), 4 (session consistency) and 5 (cross-customer intelligence loop) remain unbuilt.
+
+---
+
+## 2026-09-19 — Repair the broken test suite left behind by the PoW/theme change; wire header_anomaly; remove dead probe endpoint
+Changed:
+  - `backend/pkg/challenge/challenge_test.go`, `backend/pkg/core/guard_test.go`,
+    `backend/pkg/core/guard_bench_test.go`, `backend/pkg/tenant/tenant_test.go`:
+    fixed the `challenge.NewChallenge(...)` call sites (now takes a `theme`
+    argument) that made `pkg/challenge`, `pkg/core` and `pkg/tenant` fail to
+    **compile** since the theme feature landed. The build was green but
+    `go vet`/`go test` were red — the regression was invisible because the
+    packages never ran.
+  - `backend/pkg/challenge/challenge_test.go`, `backend/pkg/core/guard_test.go`:
+    the nonce regex was `encode\("([^"]+)"\)`, which stopped matching when the
+    page's JS changed to `enc.encode("<nonce>" + counter)` for the PoW loop.
+    Updated to match the string literal. Replaced the stale `sha256Hex(nonce)`
+    answer (64 chars, rejected by the 20-char PoW cap) with real
+    `solvePoW`/`wrongPoW` helpers so the verify tests exercise the actual
+    proof-of-work path instead of failing on extraction.
+  - `backend/pkg/signals/score.go`: `Score`/`Analyze` now take the request's
+    `http.Header` and the `checks` table has a new `header_anomaly` entry
+    (weight 25). `HeaderAnomaly` was fully built and tested but never wired
+    into scoring — it contributed nothing. Removed the dead
+    `challengeThreshold` constant and made `Decide` express its real contract:
+    block at/above `blockThreshold`, otherwise **challenge** (the mandatory
+    interstitial, `DECISIONS.md` 2026-09-19). `DecisionAllow` is now reachable
+    only via Guard's solved-challenge bypass, which is the actual behaviour.
+  - `backend/pkg/core/guard.go`: pass `r.Header` to `Score`/`Analyze`; fixed a
+    garbled comment ("scored zero" ?").
+  - `backend/pkg/challenge/challenge.go`: removed the dead `/__botshield/probe.js`
+    endpoint and `probeScript` — it set a `_bs_probe` cookie nothing ever read
+    and contradicted the documented item-6 decision (probe lives inside the
+    challenge page, no site-wide injection). Fixed stale "ROADMAP item 5 not
+    built yet" comments.
+  - `backend/pkg/api/report.go`: removed wildcard `Access-Control-Allow-Origin`
+    from the top-offenders and CSV-export handlers — they return per-visitor JA4
+    fingerprints, so they follow the evidence endpoint's no-wildcard-CORS rule.
+    Also fixed the CSV header (`signals.Score`/`signals.Decision` → `Score`/`Decision`).
+  - `backend/pkg/tenant/tenant.go`: an unparseable stored mode no longer silently
+    falls through to Go's zero value; it logs and defaults to enforce.
+  - `backend/pkg/core/guard_test.go`: `TestGuardPassesTraffic` was vacuous after
+    the forced-challenge change (the challenge page also returns 200, so it
+    passed while never proving the origin was reached). Replaced with
+    `TestGuardChallengesCleanTraffic` (asserts the challenge body) and
+    `TestGuardForwardsPassedTraffic` (asserts the origin body for a passed cookie).
+  - `backend/pkg/signals/score_test.go`: rewrote `TestDecideThresholds` to the
+    documented mandatory-challenge contract, added `TestScoreHeaderAnomaly`,
+    `TestScoreHeaderAnomalyUnknownClientStaysQuiet`, and
+    `TestHeaderAnomalyNeverBlocksAlone`.
+Why: the headful-evasion/theme work shipped code whose tests could not even
+compile, so the suite was silently green-by-omission. Fixing the compile errors
+revealed three more masked failures (stale PoW answer scheme, stale nonce regex,
+`TestTenantIsolation` still expecting clean traffic to be *allowed*). Wiring
+`header_anomaly` removes a built-but-unused signal; removing `probe.js` removes
+an orphaned endpoint that contradicted a recorded decision; the CORS change closes
+a documented-policy violation before those handlers are ever mounted.
+Tested how:
+  - `go build ./...` — clean. `go vet ./...` — clean (was 3 build errors).
+  - `go test ./...` — all 9 packages pass (was: 3 packages build-failed, 2 failing).
+  - `-race` could not run here: this Windows box has no cgo/gcc, so the race
+    detector is unavailable locally. CI (Linux) still runs it.
+  - Mutation checks (each removed, watched red, restored, green):
+      1. deleted the `header_anomaly` table entry → `TestScoreHeaderAnomaly`
+         failed ("Score() = 0, want 25").
+      2. made `Decide` return `DecisionAllow` below threshold → `TestDecideThresholds`,
+         `TestGuardChallengesCleanTraffic` and `TestTenantIsolation` all failed.
+      3. made `validPoW` always return true → `TestChallengeRejectsWrongAnswer` failed.
+Known gaps / follow-up:
+  - The `header_anomaly` weight (25) is a reasoned starting point, not tuned
+    against real traffic. It can never be the sole cause of a block (25 alone is
+    challenged; every path to 100 already fires stronger signals).
+  - `api/report.go`'s top-offenders and export handlers are still not mounted
+    in `main.go` (commented out) — they are tested directly but not yet served.
+  - `docs/ARCHITECTURE.md` still describes the old `proxy/` package layout and
+    predates the `backend/pkg/...` split; that broader doc drift is not fixed here.
+
+---
+
 ## 2026-09-19 — Implemented JS Challenge Engine, Headful Bot Evasion, and Theme Customization
 Changed:
   - `backend/pkg/challenge/challenge.go`: Added ultra-fast 8-bit Proof-of-Work (PoW) verification (~50ms execution).

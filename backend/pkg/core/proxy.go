@@ -6,9 +6,11 @@ package core
 import (
 	"context"
 	"net"
+	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
 )
@@ -69,6 +71,22 @@ var clientIPHeaders = []string{
 	"X-Cluster-Client-IP",
 }
 
+// DefaultOriginTransport is a production-tuned HTTP transport with connection pooling and explicit timeouts.
+var DefaultOriginTransport = &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          1000,
+	MaxIdleConnsPerHost:   200,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 15 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
 // NewOriginProxy sets up the HTTP proxy to the origin server.
 // It forces TLS since a WAF that doesn't protect the origin connection
 // is just security theater.
@@ -86,6 +104,12 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 	// fake the IP that our rate limiting and geo checks will rely on.
 	// Director leaves those headers untouched.
 	p := &httputil.ReverseProxy{
+		Transport: DefaultOriginTransport,
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>502 Bad Gateway</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}h1{font-size:2rem;color:#f85149;}p{color:#8b949e;}</style></head><body><div style="text-align:center;"><h1>502 Bad Gateway</h1><p>Origin server connection failed or timed out.</p><small style="color:#484f58;">Protected by BotShield</small></div></body></html>`))
+		},
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(u)
 			// SetURL would point Host at the origin; the origin serves
@@ -129,3 +153,4 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 	}
 	return p, nil
 }
+
