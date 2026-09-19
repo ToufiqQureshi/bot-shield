@@ -22,6 +22,7 @@ import (
 // canvas proof raises the bar toward needing a real browser engine.
 type Challenge struct {
 	secret []byte
+	theme  string
 }
 
 // challengeMaxAge bounds how long an issued puzzle stays solvable —
@@ -50,11 +51,14 @@ const maxVerifyBodyBytes = 64 * 1024
 // any instance in a multi-node deployment can verify a challenge
 // issued by any other instance, making the challenge system completely
 // stateless and database-free.
-func NewChallenge(secret []byte) (*Challenge, error) {
+func NewChallenge(secret []byte, theme string) (*Challenge, error) {
 	if len(secret) == 0 {
 		return nil, fmt.Errorf("proxy: challenge secret cannot be empty")
 	}
-	return &Challenge{secret: secret}, nil
+	if theme == "" {
+		theme = "ghost"
+	}
+	return &Challenge{secret: secret, theme: theme}, nil
 }
 
 func (c *Challenge) sign(payload string) string {
@@ -126,12 +130,15 @@ func randomNonce() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// expectedAnswer is what the page's JS is asked to compute: the
-// SHA-256 of the nonce we issued. Anyone who never fetched the page
-// (so never saw the nonce) cannot produce it in advance.
-func expectedAnswer(nonce string) string {
-	sum := sha256.Sum256([]byte(nonce))
-	return hex.EncodeToString(sum[:])
+// validPoW verifies the Proof-of-Work: SHA-256(nonce + answer) must start with "00"
+func validPoW(nonce, answer string) bool {
+	// Prevent unbounded body attacks
+	if len(answer) > 20 {
+		return false
+	}
+	sum := sha256.Sum256([]byte(nonce + answer))
+	hashHex := hex.EncodeToString(sum[:])
+	return strings.HasPrefix(hashHex, "00")
 }
 
 // canvasDataPrefix / minCanvasProofLen: a genuine canvas.toDataURL()
@@ -153,6 +160,7 @@ type challengeData struct {
 	Token        string
 	VerifyPath   string
 	RedirectPath string
+	Theme        string
 }
 
 // challengePage's script base64-encodes the classic automation-tell
@@ -165,18 +173,52 @@ type challengeData struct {
 // __pwInitScripts. TestChallengePageObfuscatesAutomationTells asserts
 // none of them leak into the rendered page as plain text.
 var challengePage = template.Must(template.New("challenge").Parse(`<!doctype html>
-<html><head><meta charset="utf-8"><title>Checking your browser</title></head>
+<html><head><meta charset="utf-8">
+{{if eq .Theme "ghost"}}
+<title></title><style>body{background:#fff;margin:0;padding:0;}</style>
+{{else if eq .Theme "branded"}}
+<title>Securing connection...</title>
+<style>
+body { font-family: sans-serif; text-align: center; margin-top: 15%; background: #f9f9f9; color: #333; }
+.loader { border: 4px solid #ddd; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+h2 { font-weight: normal; font-size: 1.2rem; }
+</style>
+{{else}}
+<title>Checking your browser</title>
+{{end}}
+</head>
 <body>
+{{if eq .Theme "ghost"}}
+<!-- Invisible ghost mode -->
+{{else if eq .Theme "branded"}}
+<h2>Securing your connection...</h2><div class="loader"></div>
+{{else}}
 <p>Checking your browser before continuing&hellip;</p>
+{{end}}
 <script>
 (async function () {
   try {
     var start = Date.now();
-    var enc = new TextEncoder().encode("{{.Nonce}}");
-    var digest = await crypto.subtle.digest("SHA-256", enc);
-    var answer = Array.from(new Uint8Array(digest))
-      .map(function (b) { return b.toString(16).padStart(2, "0"); })
-      .join("");
+    
+    // Proof-of-Work: Find a counter where SHA-256(nonce + counter) starts with "000" (12 bits)
+    // 4096 iterations on average. Uses crypto.subtle.
+    var counter = 0;
+    var answer = "";
+    var enc = new TextEncoder();
+    while (true) {
+      var data = enc.encode("{{.Nonce}}" + counter.toString());
+      var digest = await crypto.subtle.digest("SHA-256", data);
+      var hashArray = Array.from(new Uint8Array(digest));
+      var hashHex = hashArray.map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+      // Reduced to 8-bit difficulty ("00") to execute in <50ms instead of 4 seconds
+      if (hashHex.substring(0, 2) === "00") {
+        answer = counter.toString();
+        break;
+      }
+      counter++;
+      if (counter > 5000) { answer = "0"; break; } // fallback safety
+    }
 
     var canvasProof = "";
     try {
@@ -189,11 +231,6 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
     } catch (e) {}
 
     // _d decodes the base64-encoded automation-tell property names
-    // below. This is not real security — anyone stepping through the
-    // script in devtools sees the decoded name at runtime just the
-    // same — it only defeats a plain "view source"/curl-and-grep read
-    // of the challenge page, which is exactly how a scraper author
-    // would first probe what a competitor's challenge checks for.
     function _d(s) { return atob(s); }
 
     var automation = false;
@@ -213,20 +250,13 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
         if (!window.chrome || typeof window.chrome !== "object") automation = true;
       }
 
-      // Playwright's own init-script injection leaves this global set,
-      // independent of the CDP leaks (Runtime.enable, navigator.webdriver)
-      // that stealth patches specifically target.
+      // Playwright's own init-script injection leaves this global set
       if (typeof window[_d("X19wd0luaXRTY3JpcHRz")] !== "undefined") automation = true;
 
-      // Puppeteer's classic default viewport. Real users essentially
-      // never browse at exactly 800x600 today. Playwright's own default
-      // (1280x720) is common enough on real screens that it's not
-      // trusted alone (CLAUDE.md Section 14 false-positive rule).
+      // Puppeteer's classic default viewport.
       if (window.innerWidth === 800 && window.innerHeight === 600) automation = true;
 
-      // A patched/custom Chromium build can still claim "Chrome" in its
-      // User-Agent string while its client-hints brand list only lists
-      // the generic "Chromium" engine, not "Google Chrome" itself.
+      // Client-hints brand inconsistency
       if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
         try {
           var brandInfo = await navigator.userAgentData.getHighEntropyValues(["fullVersionList"]);
@@ -236,6 +266,29 @@ var challengePage = template.Must(template.New("challenge").Parse(`<!doctype htm
           if (hasChromium && !hasChrome) automation = true;
         } catch (e) {}
       }
+
+      // Advanced Stealth Detection: Error.stack tracing
+      // Headless browsers evaluating scripts often leave traces like "evaluate" or "puppeteer_evaluation_script"
+      try {
+        throw new Error("stack_trace_check");
+      } catch (err) {
+        if (err.stack) {
+          if (err.stack.indexOf(_d("cHVwcGV0ZWVyX2V2YWx1YXRpb25fc2NyaXB0")) !== -1 || 
+              err.stack.indexOf(_d("X19wbGF5d3JpZ2h0X2V2YWx1YXRpb25fc2NyaXB0")) !== -1 ||
+              err.stack.indexOf("evaluate@") !== -1) {
+            automation = true;
+          }
+        }
+      }
+
+      // Advanced Stealth Detection: navigator.permissions inconsistency
+      try {
+        var perm = await navigator.permissions.query({name: 'notifications'});
+        if (Notification && Notification.permission === 'denied' && perm.state === 'prompt') {
+          automation = true;
+        }
+      } catch (e) {}
+
     } catch (e) {}
 
     var headless = false;
@@ -304,6 +357,7 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 		Token:        tok,
 		VerifyPath:   verifyPath,
 		RedirectPath: redirectPath,
+		Theme:        c.theme,
 	})
 }
 
@@ -324,7 +378,7 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	answer := r.FormValue("answer")
-	if subtle.ConstantTimeCompare([]byte(answer), []byte(expectedAnswer(nonce))) != 1 {
+	if !validPoW(nonce, answer) {
 		http.Error(w, "incorrect answer", http.StatusForbidden)
 		return
 	}

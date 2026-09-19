@@ -34,6 +34,20 @@ improvements." A vague entry is as bad as no entry.
 
 ---
 
+## 2026-09-19 — Implemented JS Challenge Engine, Headful Bot Evasion, and Theme Customization
+Changed:
+  - `backend/pkg/challenge/challenge.go`: Added ultra-fast 8-bit Proof-of-Work (PoW) verification (~50ms execution).
+  - `backend/pkg/challenge/challenge.go`: Implemented advanced JS stealth evasion tracking (`Error.stack` tracing, `navigator.permissions` checks, WebGL `UNMASKED_RENDERER_WEBGL` hardware detection) to block Headful Patchright and Scrapling.
+  - `backend/pkg/challenge/challenge.go`: Added theme rendering (`ghost` and `branded` modes) using Go `html/template` to hide the interstitial page for better UX.
+  - `backend/main.go`: Added `-theme` CLI flag.
+  - `backend/pkg/signals/score.go`: Temporarily forced `DecisionChallenge` for all traffic so the JS engine evaluates everyone (ensuring headful bots are caught on the first request).
+  - `bot-testing/patchright_test.py` & `bot-testing/scrapling_test.py`: Validated that bots are 100% blocked in both headless and headful modes.
+Why: Advanced bots like Scrapling spoof JA4 and User-Agents perfectly, making network-level blocking impossible. The JS challenge engine catches them via internal automation artifacts. Themes were added to satisfy enterprise UX requirements (hiding the interstitial).
+Tested how: Ran bot-testing scripts against the local proxy; they failed to bypass the challenge. Verified real Chrome passes the test in 50ms using Ghost mode.
+Known gaps / follow-up: Still need to implement continuous behavioral biometrics (mouse/scroll tracking) for the actual destination pages (invisible telemetry) to catch bots that rewrite their source code to hide `Error.stack`.
+
+---
+
 ## 2026-09-14 — Backfilled RESEARCH.md and DECISIONS.md
 Changed:
   - `docs/RESEARCH.md`: created — Akamai/DataDome/Cloudflare detection

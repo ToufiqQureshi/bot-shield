@@ -35,6 +35,7 @@ func main() {
 	challengeSecret := flag.String("challenge-secret", "", "Shared secret for stateless JS challenges. If empty, a random one is generated.")
 	evidenceToken := flag.String("evidence-token", "", "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
 	modeFlag := flag.String("mode", "enforce", `"enforce" acts on scores; "shadow" only records what it would have done`)
+	themeFlag := flag.String("theme", "ghost", `challenge page theme: "ghost", "branded", or "default"`)
 	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-BotShield-Decision: deceive instead of 403)")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", "", "PostgreSQL URL for Supabase integration (e.g. postgres://user:pass@host:5432/db)")
@@ -66,7 +67,7 @@ func main() {
 		}
 	}
 
-	challengeHandler, err := challenge.NewChallenge(secret)
+	challengeHandler, err := challenge.NewChallenge(secret, *themeFlag)
 	if err != nil {
 		log.Fatalf("botshield: %v", err)
 	}

@@ -108,6 +108,7 @@ func Decide(score int) Decision {
 	case score >= challengeThreshold:
 		return DecisionChallenge
 	default:
-		return DecisionAllow
+		// Force challenge for all unknown/clean traffic to ensure JS checks run
+		return DecisionChallenge
 	}
 }

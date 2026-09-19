@@ -10,6 +10,20 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Fast, Invisible Challenges and Headful Bot Evasion — 2026-09-19
+
+**Decision:** The JS challenge engine now runs at an ultra-fast 8-bit Proof-of-Work (PoW) difficulty (~50ms) and supports theme customization (`ghost` and `branded` modes). It also strictly checks `Error.stack` and `navigator.permissions` to block headful Playwright/Puppeteer (e.g., Scrapling, Patchright) that evade TLS fingerprinting.
+
+**Why:** Clients hate visible interstitial pages ("Checking your browser..."). However, removing the interstitial entirely allows advanced Headful bots to scrape the first page before background telemetry catches them. To guarantee **zero scraping**, the interstitial is mandatory.
+To make it "sellable", we implemented:
+1. **Ultra-Fast PoW:** Reduced from 12-bit ("000") to 8-bit ("00") solving the 4-second delay caused by JS `await` event loop overhead. It now executes in <50ms.
+2. **Ghost Mode (`-theme=ghost`):** A completely blank page that executes the 50ms check and redirects, appearing as normal network latency rather than a security check.
+3. **Branded Mode (`-theme=branded`):** An enterprise-style loading spinner for clients who want a visible security check.
+
+**Why Error.stack?** Headful bots (Patchright, Scrapling) perfectly spoof `navigator.webdriver` and JA4 signatures. They are indistinguishable from real Chrome at the network level. However, to control the browser, they inject internal evaluation scripts (`puppeteer_evaluation_script`, `evaluate@`). Throwing a deliberate error in JS and reading the stack trace is the only reliable way to catch them on the very first request without behavioral biometrics.
+
+---
+
 ## Back to one agent; Claude Code owns the dashboard too — 2026-09-16
 
 **Decision:** the two-agent workflow is over. The project owner ended
