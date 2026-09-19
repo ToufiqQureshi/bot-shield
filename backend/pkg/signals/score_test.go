@@ -141,7 +141,6 @@ func TestDecideThresholds(t *testing.T) {
 	})
 }
 
-
 // TestWeakSignalsNeverBlockAlone guards CLAUDE.md Section 6: no single
 // signal may be the only thing between allow and block. The two
 // mid-strength signals must never, on their own, produce a block.

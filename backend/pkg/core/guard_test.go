@@ -107,7 +107,6 @@ func TestGuardHealthzEndpoint(t *testing.T) {
 	}
 }
 
-
 // TestGuardForwardsPassedTraffic: a visitor who already solved the
 // challenge is forwarded to the origin without re-scoring (guard.go).
 func TestGuardForwardsPassedTraffic(t *testing.T) {

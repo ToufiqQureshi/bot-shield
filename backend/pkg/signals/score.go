@@ -148,4 +148,3 @@ func DecideWithPolicy(score int, policy config.PolicyMode) Decision {
 	}
 	return DecisionChallenge
 }
-

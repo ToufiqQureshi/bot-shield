@@ -3,6 +3,7 @@ package signals
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -22,12 +23,14 @@ func RecordHoneypotTrigger(ctx context.Context, ja4, ip string, rdb *redis.Clien
 
 		if rdb != nil {
 			go func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
 				// Persist to Redis shared scraper hash
-				if err := rdb.HSet(ctx, "ja4:scrapers", ja4, "honeypot_trap").Err(); err != nil {
+				if err := rdb.HSet(bgCtx, "ja4:scrapers", ja4, "honeypot_trap").Err(); err != nil {
 					log.Printf("botshield: error persisting honeypot JA4 to redis: %v", err)
 				}
 				// Publish event to swarm channel for instant multi-node sync
-				if err := rdb.Publish(ctx, "ja4:updates", ja4).Err(); err != nil {
+				if err := rdb.Publish(bgCtx, "ja4:updates", ja4).Err(); err != nil {
 					log.Printf("botshield: error publishing honeypot JA4 update to redis pubsub: %v", err)
 				}
 			}()

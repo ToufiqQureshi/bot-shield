@@ -116,6 +116,10 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 		ModifyResponse: func(resp *http.Response) error {
 			if resp.Request != nil {
 				if dec := DecisionFromContext(resp.Request.Context()); dec == signals.DecisionDeceive.String() {
+					if encoding := resp.Header.Get("Content-Encoding"); encoding != "" && encoding != "identity" {
+						return nil
+					}
+
 					body, err := io.ReadAll(resp.Body)
 					if err != nil {
 						return nil
@@ -179,4 +183,3 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 	}
 	return p, nil
 }
-
