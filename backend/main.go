@@ -19,9 +19,11 @@ import (
 	"github.com/ToufiqQureshi/bot-shield/pkg/config"
 	"github.com/ToufiqQureshi/bot-shield/pkg/core"
 	"github.com/ToufiqQureshi/bot-shield/pkg/db"
+	"github.com/ToufiqQureshi/bot-shield/pkg/observability"
 	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
 	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -33,6 +35,7 @@ func main() {
 	challengeSecret := flag.String("challenge-secret", "", "Shared secret for stateless JS challenges. If empty, a random one is generated.")
 	evidenceToken := flag.String("evidence-token", "", "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
 	modeFlag := flag.String("mode", "enforce", `"enforce" acts on scores; "shadow" only records what it would have done`)
+	themeFlag := flag.String("theme", "ghost", `challenge page theme: "ghost", "branded", or "default"`)
 	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-BotShield-Decision: deceive instead of 403)")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", "", "PostgreSQL URL for Supabase integration (e.g. postgres://user:pass@host:5432/db)")
@@ -42,6 +45,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("botshield: %v", err)
 	}
+
+	// SENTRY_DSN is an env var, not a flag: flags show up in `ps aux`
+	// output on shared hosts, which a DSN (while not a secret that
+	// grants access to customer data) still has no reason to leak into.
+	if err := observability.Init(os.Getenv("SENTRY_DSN")); err != nil {
+		log.Printf("botshield: warning: sentry init failed: %v", err)
+	}
+	defer sentry.Flush(2 * time.Second)
 
 	if *target == "" {
 		log.Fatal("botshield: -target is required")
@@ -56,7 +67,7 @@ func main() {
 		}
 	}
 
-	challengeHandler, err := challenge.NewChallenge(secret)
+	challengeHandler, err := challenge.NewChallenge(secret, *themeFlag)
 	if err != nil {
 		log.Fatalf("botshield: %v", err)
 	}
@@ -121,7 +132,7 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Handler:           mux,
+		Handler:           observability.Middleware(mux),
 		ConnContext:       core.ConnContext,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -137,7 +148,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("botshield: loading TLS cert/key: %v", err)
 		}
-		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+		// TLS 1.0/1.1 are deprecated and, for a product whose own
+		// detection logic reads TLS version to spot automation
+		// (UAMismatch in pkg/signals), accepting them here would also
+		// undermine that signal for real visitors on old clients.
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 		ln = core.NewCaptureListener(ln, tlsConfig)
 	}
 

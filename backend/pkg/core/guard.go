@@ -50,7 +50,27 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ja4 := JA4FromContext(r.Context())
 	enforced := tenant.Config.Mode == config.ModeEnforce
 
+	ip := r.RemoteAddr
+	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
+		ip = ip[:idx]
+	}
+
 	if g.challenge.Passed(r) {
+		// A solved challenge proves this client could run JS once; it
+		// says nothing about the volume of requests after that. Without
+		// this check, one solve buys unlimited-speed access to the
+		// origin for the rest of passedMaxAge (CLAUDE.md Section 15/18 —
+		// bounded resource use, can't let a visitor exhaust the origin).
+		if signals.VelocityExceeded(ip, ja4) {
+			tenant.Stats.Record(signals.DecisionBlock)
+			tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"velocity_after_pass"}, Decision: signals.DecisionBlock.String(), Enforced: enforced})
+			if enforced {
+				http.Error(w, "too many requests", http.StatusTooManyRequests)
+				return
+			}
+			tenant.Origin.ServeHTTP(w, r)
+			return
+		}
 		tenant.Stats.Record(signals.DecisionAllow)
 		// Recorded as its own reason, not as "scored zero" ?" otherwise
 		// the trail would claim this visitor looked clean when really
@@ -58,11 +78,6 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"challenge_solved"}, Decision: signals.DecisionAllow.String(), Enforced: enforced})
 		tenant.Origin.ServeHTTP(w, r)
 		return
-	}
-
-	ip := r.RemoteAddr
-	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
-		ip = ip[:idx]
 	}
 
 	score := signals.Score(ip, ja4, r.UserAgent())

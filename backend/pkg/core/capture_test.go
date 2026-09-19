@@ -10,6 +10,7 @@ import (
 
 // mockConn is a fake net.Conn for testing
 type mockConn struct{}
+
 func (mockConn) Read(b []byte) (n int, err error)   { return 0, nil }
 func (mockConn) Write(b []byte) (n int, err error)  { return len(b), nil }
 func (mockConn) Close() error                       { return nil }
@@ -35,7 +36,7 @@ func TestJA4FromContext(t *testing.T) {
 			t.Errorf("expected empty string, got %s", ja4)
 		}
 	})
-	
+
 	// Testing valid TLS connection fingerprinting would require hacking a raw ClientHello stream,
 	// which is complex to mock without a real network connection. We cover the failure paths here.
 }

@@ -78,8 +78,8 @@ func TestTenantIsolation(t *testing.T) {
 	if got := tenA.Stats.Total(); got != 5 {
 		t.Errorf("tenant A: want 5 total, got %d", got)
 	}
-	if got := tenA.Stats.Challenged(); got != 5 {
-		t.Errorf("tenant A: want 5 challenged, got %d", got)
+	if got := tenA.Stats.Passed(); got != 5 {
+		t.Errorf("tenant A: want 5 passed, got %d", got)
 	}
 	// Tenant B must be untouched
 	if got := tenB.Stats.Total(); got != 0 {

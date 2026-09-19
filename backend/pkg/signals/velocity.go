@@ -20,6 +20,15 @@ func InitRedis(client *redis.Client) {
 	rdb = client
 }
 
+// VelocityExceeded reports whether ip or ja4 has tripped its rate
+// limit in the current window. Exported so a visitor who already
+// passed the JS challenge can still be rate-limited on later requests
+// (guard.go) — a solved challenge proves the client can run JS once,
+// not that every request after it is legitimate at any volume.
+func VelocityExceeded(ip, ja4 string) bool {
+	return checkVelocitySpike(ip) || checkJA4VelocitySpike(ja4)
+}
+
 // checkVelocitySpike returns true if the IP has made more than maxRequests in the last rateLimitMs.
 // It uses a simple fixed-window counter in Redis to allow horizontal scaling.
 func checkVelocitySpike(ip string) bool {

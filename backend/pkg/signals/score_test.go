@@ -5,14 +5,16 @@ import "testing"
 func TestScoreNoSignals(t *testing.T) {
 	// Real Chrome, modern TLS: nothing should fire.
 	got := Score("", "t13d1516h2_8daaf6152771_e5627efa2ab1", "Mozilla/5.0 Chrome/120.0")
-	if got != firstTouchWeight {
-		t.Fatalf("Score() = %d, want %d", got, firstTouchWeight)
+	if got != 0 {
+		t.Fatalf("Score() = %d, want 0", got)
 	}
 }
 
 func TestScoreFragmentedOnly(t *testing.T) {
-	got := Score("", JA4Unreadable, "curl/8.6.0")
-	want := firstTouchWeight + fragmentedWeight
+	// curl also trips scripting_tool, so isolate fragmented_handshake
+	// with a UA that isn't a known scripting tool or browser claim.
+	got := Score("", JA4Unreadable, "SomeUnknownClient/1.0")
+	want := fragmentedWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
 	}
@@ -22,7 +24,7 @@ func TestScoreUAMismatchOnly(t *testing.T) {
 	// Claims Firefox but negotiated TLS 1.0 - a real JA4 whose version
 	// nibble is "10", not JA4Unreadable, so only UAMismatch fires.
 	got := Score("", "t10d1516h2_8daaf6152771_e5627efa2ab1", "Mozilla/5.0 Firefox/120.0")
-	want := firstTouchWeight + uaMismatchWeight
+	want := uaMismatchWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
 	}
@@ -31,7 +33,7 @@ func TestScoreUAMismatchOnly(t *testing.T) {
 func TestScoreBothSignals(t *testing.T) {
 	// Fragmented handshake AND claims to be a browser - both layers fire.
 	got := Score("", JA4Unreadable, "Mozilla/5.0 Chrome/120.0")
-	want := firstTouchWeight + fragmentedWeight + uaMismatchWeight
+	want := fragmentedWeight + uaMismatchWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
 	}
@@ -40,15 +42,16 @@ func TestScoreBothSignals(t *testing.T) {
 func TestScorePlainHTTPFailsOpen(t *testing.T) {
 	// No TLS at all (ja4 == "") - can't fingerprint, must not penalize.
 	got := Score("", "", "Mozilla/5.0 Chrome/120.0")
-	if got != firstTouchWeight {
-		t.Fatalf("Score() = %d, want %d", got, firstTouchWeight)
+	if got != 0 {
+		t.Fatalf("Score() = %d, want 0", got)
 	}
 }
 
 func TestScoreJA4Blocklist(t *testing.T) {
-	// Known malicious JA4 with non-browser client should add 100 points
-	got := Score("", "t12d190800_4464c1bd5eb7_b3394627b738", "curl/8.6.0")
-	want := firstTouchWeight + 100
+	// Known malicious JA4 with a non-browser, non-scripting-tool client
+	// should add 100 points from ja4_blocklist alone.
+	got := Score("", "t12d190800_4464c1bd5eb7_b3394627b738", "SomeUnknownClient/1.0")
+	want := 100
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
 	}
@@ -57,7 +60,7 @@ func TestScoreJA4Blocklist(t *testing.T) {
 func TestScoreJA4BlocklistWithUAMismatch(t *testing.T) {
 	// Known malicious JA4 that also claims to be Chrome fires both blocklist and UA mismatch
 	got := Score("", "t12d190800_4464c1bd5eb7_b3394627b738", "Mozilla/5.0 Chrome/120.0")
-	want := firstTouchWeight + 100 + uaMismatchWeight
+	want := 100 + uaMismatchWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
 	}

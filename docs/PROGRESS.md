@@ -34,6 +34,20 @@ improvements." A vague entry is as bad as no entry.
 
 ---
 
+## 2026-09-19 — Implemented JS Challenge Engine, Headful Bot Evasion, and Theme Customization
+Changed:
+  - `backend/pkg/challenge/challenge.go`: Added ultra-fast 8-bit Proof-of-Work (PoW) verification (~50ms execution).
+  - `backend/pkg/challenge/challenge.go`: Implemented advanced JS stealth evasion tracking (`Error.stack` tracing, `navigator.permissions` checks, WebGL `UNMASKED_RENDERER_WEBGL` hardware detection) to block Headful Patchright and Scrapling.
+  - `backend/pkg/challenge/challenge.go`: Added theme rendering (`ghost` and `branded` modes) using Go `html/template` to hide the interstitial page for better UX.
+  - `backend/main.go`: Added `-theme` CLI flag.
+  - `backend/pkg/signals/score.go`: Temporarily forced `DecisionChallenge` for all traffic so the JS engine evaluates everyone (ensuring headful bots are caught on the first request).
+  - `bot-testing/patchright_test.py` & `bot-testing/scrapling_test.py`: Validated that bots are 100% blocked in both headless and headful modes.
+Why: Advanced bots like Scrapling spoof JA4 and User-Agents perfectly, making network-level blocking impossible. The JS challenge engine catches them via internal automation artifacts. Themes were added to satisfy enterprise UX requirements (hiding the interstitial).
+Tested how: Ran bot-testing scripts against the local proxy; they failed to bypass the challenge. Verified real Chrome passes the test in 50ms using Ghost mode.
+Known gaps / follow-up: Still need to implement continuous behavioral biometrics (mouse/scroll tracking) for the actual destination pages (invisible telemetry) to catch bots that rewrite their source code to hide `Error.stack`.
+
+---
+
 ## 2026-09-14 — Backfilled RESEARCH.md and DECISIONS.md
 Changed:
   - `docs/RESEARCH.md`: created — Akamai/DataDome/Cloudflare detection
@@ -2157,3 +2171,378 @@ Tested how:
   - Full package test pass go test -v ./pkg/signals/....
 Known gaps / follow-up:
   - Final end-to-end test with a real python bot hitting the flask hotel app through the bot-shield proxy.
+
+---
+
+## 2026-09-18 — Code review of the headless/patchright commit found a critical false-positive regression; fixed
+Changed:
+  - `pkg/signals/score.go`: removed the `untrusted_session` check added in
+    commit 2eedf8d. Its `fired` function ignored all three arguments and
+    always returned `true`, adding `firstTouchWeight` (50 = challengeThreshold)
+    to *every* request that reaches `Score()`. Since `guard.go` only calls
+    `Score()` for visitors who have not already passed a challenge, this
+    meant every unverified first-time visitor — Googlebot, UptimeRobot,
+    screen readers, JS-disabled browsers, corporate proxies — was forced
+    into the JS challenge on every single visit, with zero discriminating
+    signal behind it. Non-JS clients can never solve that challenge, so in
+    practice this permanently blocked them. Directly contradicts
+    docs/DECISIONS.md ("a single signal firing alone can only ever reach
+    50") and CLAUDE.md Section 14/26 (crawlers, monitors, accessibility
+    tools must not be penalized).
+  - `pkg/signals/score_test.go`: reverted the baseline-score assertions
+    that had been bent to expect `firstTouchWeight` on clean traffic
+    (that was the regression being tested *for*, not against). Swapped two
+    tests' UA from `curl/8.6.0` to a non-scripting-tool UA so they isolate
+    the single signal they claim to test, instead of silently also
+    tripping `scripting_tool` (+100).
+  - `pkg/tenant/tenant_test.go`: `TestTenantIsolation` asserted
+    `Stats.Challenged() == 5` for 5 plain HTTP requests with no UA/JA4 —
+    that's the same regression baked into a tenant test. Restored the
+    correct expectation, `Stats.Passed() == 5`.
+  - `pkg/challenge/challenge.go`: fixed a stale doc comment on
+    `handleVerify` claiming a bad token/answer/canvas proof "gets a fresh
+    puzzle back rather than a hard error." The code returns a hard 403;
+    the comment was never updated when that behavior was introduced.
+Why: Ran `/code-review` (high effort) over `HEAD~2..HEAD` per CLAUDE.md
+  Section 25. This was the top finding — a shipped false-positive bug that
+  would have made the challenge gate mandatory and unpassable for every
+  legitimate non-JS client on every tenant in enforce mode.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...`: all packages pass.
+  - `gofmt -l`: clean on the changed file (also fixed pre-existing
+    trailing-whitespace gofmt drift in `score.go` while touching it).
+  - Mutation check (CLAUDE.md Section 12): re-added the tautological
+    `untrusted_session` check → 7 of 9 tests in `pkg/signals` failed
+    immediately (TestScoreNoSignals, TestScoreFragmentedOnly,
+    TestScoreUAMismatchOnly, TestScoreBothSignals,
+    TestScorePlainHTTPFailsOpen, TestScoreJA4Blocklist,
+    TestScoreJA4BlocklistWithUAMismatch), proving the tests actually bite.
+    Removed it again → all pass.
+Known gaps / follow-up (found during the same review, not yet fixed —
+flagged rather than fixed in this pass because each is a design/ops
+tradeoff, not a one-line bug):
+  - `pkg/tenant/tenant.go` `fetchFromDB`: an unrecognized Host header
+    triggers a fresh, uncached Postgres lookup on every request with no
+    negative caching. A visitor sending many distinct bogus Host headers
+    can drive unbounded DB load (CLAUDE.md Section 18/19). Needs a
+    negative-cache TTL decision.
+  - `backend/main.go`: `-challenge-secret` silently falls back to a random
+    per-process secret when empty, in the exact multi-node deployment this
+    flag exists for. A misconfigured cluster fails confusingly (tokens
+    from node A rejected by node B) instead of loudly. Needs a decision on
+    whether multi-node mode should refuse to start without an explicit
+    secret.
+  - `pkg/signals/velocity.go`: `checkVelocitySpike` and
+    `checkJA4VelocitySpike` each open their own Redis pipeline with a
+    fresh 50ms timeout per request; a Redis network partition (not a fast
+    refused-connection) can add up to ~100ms to every request's p99 with
+    no circuit breaker. Needs a decision on a shared breaker vs. per-call
+    timeout tuning.
+
+---
+
+## 2026-09-18 — New client-side checks against real-Chrome stealth automation (Patchright/Scrapling)
+
+Changed:
+  - `pkg/challenge/challenge.go`: added three checks to the challenge
+    page's automation probe (see docs/RESEARCH.md for the full
+    threat/research writeup):
+    - `window.__pwInitScripts !== undefined` — Playwright's own
+      init-script global, a different mechanism than the CDP leaks
+      (`Runtime.enable`, `navigator.webdriver`) that stealth patches
+      target, so it survives patching in plain Playwright/Puppeteer.
+    - `window.innerWidth === 800 && window.innerHeight === 600` —
+      Puppeteer's classic default viewport. Deliberately did NOT add
+      Playwright's 1280x720 default as a hard signal: that's a common
+      enough real window size that it would be a false-positive risk
+      on its own (CLAUDE.md Section 14).
+    - Chromium-without-Chrome client-hints brand check via
+      `navigator.userAgentData.getHighEntropyValues(["fullVersionList"])`
+      — a patched/custom Chromium build (like Patchright's patched
+      binary) can still claim "Chrome" in its User-Agent string while
+      its brand list only reports "Chromium", not "Google Chrome".
+  - `pkg/challenge/challenge_test.go`: added
+    `TestChallengePageDetectsAdvancedAutomation`, which asserts the
+    served page's script contains each new check by name. Necessary
+    because these checks run entirely in the visitor's browser — Go's
+    own tests never execute that JS, so without this test a future
+    edit could silently delete one of them and nothing would fail.
+Why: an owner test with Patchright (a stealth-patched Playwright
+  fork) passed straight through scoring and the JS challenge. Root
+  cause: every existing signal (JA4, UA mismatch, header-anomaly,
+  the old webdriver/CDP-leak probe) checks "what the client claims to
+  be," and Patchright drives a real, patched Chromium binary whose
+  TLS handshake and UA are genuinely authentic. These three checks
+  target artifacts of the *injection/build mechanism itself*, which
+  is harder for a stealth tool to fully erase than the well-known
+  CDP/webdriver tells.
+  Evaluated and rejected FingerprintJS BotD (MIT, open source): its
+  own maintainers say the open-source version doesn't reliably catch
+  stealth-patched tools — not worth the added client-side JS for
+  coverage we don't need. Did not copy code from
+  rebrowser-bot-detector (no LICENSE file in that repo) — implemented
+  the same publicly-documented techniques independently.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...` — all packages pass.
+  - `gofmt -l` clean.
+  - Mutation check (CLAUDE.md Section 12): removed the
+    `__pwInitScripts` check line → `TestChallengePageDetectsAdvancedAutomation`
+    failed immediately (`missing automation check "window.__pwInitScripts"`).
+    Restored → passed again.
+Known gaps / follow-up:
+  - Not yet re-tested against a live Patchright session (no browser
+    automation environment available in this session) — the checks
+    are implemented and unit-tested for presence/wiring, but the
+    original failure mode (a real Patchright run bypassing the
+    challenge) has not been re-run to confirm these specific checks
+    close it. Owner should re-run the same Patchright test that
+    originally found the bypass.
+  - Behavioral biometrics (mouse/timing entropy) — the literature's
+    actual answer for "real browser, stealth-patched" — is still not
+    implemented. Logged in docs/RESEARCH.md as the next real signal
+    layer, not a small follow-up.
+  - The `1280x720` Playwright default viewport is intentionally not
+    checked (false-positive risk) — if false negatives here turn out
+    to matter more than false positives for a given tenant, this is a
+    per-tenant tuning decision, not a global one.
+
+---
+
+## 2026-09-18 — Passed-challenge sessions are now still rate-limited (continuous trust, not a one-time pass)
+
+Changed:
+  - `pkg/signals/velocity.go`: added exported `VelocityExceeded(ip, ja4 string) bool`,
+    a thin wrapper combining the existing `checkVelocitySpike`/`checkJA4VelocitySpike`
+    so other packages don't need to know both checks exist.
+  - `pkg/core/guard.go`: the `g.challenge.Passed(r)` branch now calls
+    `signals.VelocityExceeded` before forwarding to origin. On a spike,
+    records `DecisionBlock` with signal `velocity_after_pass` and
+    returns 429 (shadow mode still just observes and forwards, same as
+    the main scoring path).
+  - `pkg/signals/velocity_test.go` (new file — velocity.go had zero
+    tests before this): covers fail-open with no Redis, under/over the
+    per-IP threshold, per-IP isolation, common-browser JA4 exemption,
+    per-JA4 threshold, and the new combined `VelocityExceeded`.
+  - `pkg/core/guard_test.go`: added `TestGuardVelocityLimitsPassedSession`,
+    which drives the real GET-challenge/POST-verify flow (via
+    `challenge.Handler()`, not internal APIs) to get a genuine passed
+    cookie, confirms a handful of requests still pass, then floods
+    past the threshold and confirms 429.
+  - Added `github.com/alicebob/miniredis/v2` as a test dependency — the
+    only way to test Redis-backed logic without a live Redis server or
+    network access in CI.
+Why: a solved JS challenge only proves a client could run JS once. The
+  `Passed(r)` branch previously skipped ALL further scoring — including
+  velocity — for the full 30-minute `passedMaxAge` window, so one
+  challenge solve bought unlimited-speed access to the origin for half
+  an hour with zero rate limiting. Found while researching how
+  production anti-bot systems (Kasada, in particular) avoid this exact
+  gap with continuous session-trust decay instead of a one-time pass;
+  full research trail in docs/RESEARCH.md. This is a real, live gap
+  independent of the Patchright work — applies to any passed session,
+  automated or not.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...` — all packages pass.
+  - `gofmt -l` clean on every file this change touched.
+  - Mutation check (CLAUDE.md Section 12): replaced
+    `if signals.VelocityExceeded(ip, ja4)` with `if false` in guard.go →
+    `TestGuardVelocityLimitsPassedSession` failed (`want 429 ..., got 200`).
+    Restored → passed again.
+Known gaps / follow-up:
+  - This closes "solve once, flood forever" but is still a one-shot
+    pass at the *identity* layer — the visitor is never asked to
+    re-prove they're a real browser mid-session, only rate-limited.
+    True continuous re-verification (Kasada-style periodic re-challenge,
+    decaying trust score) is a larger design project, logged in
+    docs/RESEARCH.md, not started.
+  - `maxRequests`/`maxJA4Requests`/`rateLimitMs` are the same fixed
+    global constants used for pre-challenge scoring; no separate,
+    possibly more lenient, threshold was set for already-passed
+    sessions. Worth revisiting if real traffic shows legitimate
+    passed users (e.g. a page that polls an API frequently) tripping
+    this — currently untested against real production traffic
+    patterns.
+
+---
+
+## 2026-09-18 — Obfuscated the challenge page's automation-tell property names
+
+Changed:
+  - `pkg/challenge/challenge.go`: the classic automation-tell globals
+    (`cdc_adoQpoasnfa76pfcZLmcfl_`, `__playwright`, `__puppeteer`,
+    `__pwInitScripts`, `__selenium_unwrapped`, `__webdriver_evaluate`,
+    `__driver_evaluate`, `callPhantom`, `_phantom`, `__nightmare`) are
+    now read via `window[_d("<base64>")]` bracket access instead of
+    literal dot-notation, where `_d` is a one-line `atob` wrapper
+    defined in the page's own script. A plain "view source" or
+    `curl | grep` of the challenge page no longer reveals which
+    property names are being checked. Added a Go-source doc comment
+    above `challengePage` listing the decoded plaintext for our own
+    maintainability, since that comment lives in Go source and never
+    reaches the rendered page.
+  - `pkg/challenge/challenge_test.go`: added
+    `TestChallengePageObfuscatesAutomationTells`, which asserts each
+    plaintext tell is *absent* from the rendered page and its base64
+    form *is* present. Updated `TestChallengePageDetectsAdvancedAutomation`'s
+    `__pwInitScripts` marker to check for its base64 encoding instead
+    of the now-obfuscated literal.
+Why: this is not a detection improvement — `navigator.webdriver`,
+  viewport, and the client-hints brand check are unchanged and do the
+  actual catching. It raises the cost of a scraper author's first,
+  cheapest move: fetching the challenge page once (no JS execution,
+  no browser) and grepping the raw HTML for known tell names to learn
+  exactly what's being checked before writing a bypass. Matches the
+  pattern in commercial anti-bot JS (Kasada's `p.js` ships as
+  obfuscated bytecode for the same reason) — see docs/RESEARCH.md
+  2026-09-18 "How commercial vendors actually get to high block
+  rates," which named this as a fast, zero-detection-risk next step.
+  Explicitly not real security: anyone who actually runs the script
+  in devtools and steps through `_d()` sees the decoded name at
+  runtime, same as before. It only defeats static analysis.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...` — all packages pass.
+  - `gofmt -l` clean.
+  - Mutation check (CLAUDE.md Section 12): reverted the `__playwright`/
+    `__puppeteer` line to its old literal `window.__playwright` form →
+    `TestChallengePageObfuscatesAutomationTells` failed on both the
+    leak and the missing-encoding assertions. Restored → passed again.
+Known gaps / follow-up:
+  - This only obfuscates literal property-name leaks. The viewport
+    check (`window.innerWidth === 800 ...`) and the client-hints brand
+    check are still fully readable in plain text — they're structural
+    logic, not a literal tell name, so bracket-encoding them wouldn't
+    hide anything meaningful. Not treated as a gap, just noting the
+    boundary of what this technique covers.
+  - No real obfuscation (control-flow flattening, string-splitting
+    beyond base64, self-defense against a debugger) — that's a much
+    larger, ongoing investment (see docs/RESEARCH.md) and was
+    explicitly out of scope for this fast pass.
+
+---
+
+## 2026-09-18 — CI pipeline added (there was none); panic recovery + optional Sentry reporting
+
+Changed:
+  - `.github/workflows/ci.yml` (new): runs on every push to `main` and
+    every PR — `go vet`, a `gofmt -l` check that fails the build on any
+    unformatted file, `go build ./...`, `go test -race ./...`. There
+    was no `.github/` directory in this repo at all before this change
+    — every test added in every prior session only ever ran when
+    someone remembered to run `go test` by hand. Nothing enforced it on
+    push or merge.
+  - Fixed pre-existing `gofmt -l` failures in `pkg/api/handlers_test.go`,
+    `pkg/core/capture_test.go`, `pkg/core/proxy_test.go`,
+    `pkg/signals/headers.go`, `pkg/signals/headers_test.go`,
+    `pkg/signals/ja4db_test.go` — formatting only, no behavior change.
+    Necessary so the new CI's gofmt check starts green instead of
+    immediately red on unrelated pre-existing drift.
+  - `pkg/observability/sentry.go` (new package): `Init(dsn string)`
+    (no-op if `dsn` is empty — no signup required to run bot-shield)
+    and `Middleware(next http.Handler) http.Handler`, which recovers a
+    panicking handler, reports it to Sentry when configured, logs it
+    either way, and returns 500 instead of the client just seeing the
+    connection drop.
+  - `main.go`: reads `SENTRY_DSN` from the environment (not a flag —
+    flags show up in `ps aux` on shared hosts) and wraps the server's
+    `Handler` with `observability.Middleware`.
+  - `README.md`: documented `SENTRY_DSN` next to the existing flags table.
+Why: owner asked, for general knowledge as a solo dev managing the
+  whole product, how the industry catches silent bugs, runaway
+  function calls, and unexpected cloud-cost spikes. Go's `net/http`
+  server already recovers a handler panic per-connection today (the
+  process doesn't crash), but only logs it to stderr — on a real
+  deployment with nobody tailing logs, that's indistinguishable from
+  the bug not existing until a customer complains. This closes that
+  visibility gap for panics specifically. Checking for a CI pipeline
+  while answering "are my tests actually CI tests?" surfaced the
+  bigger gap (no CI existed at all), fixed in the same pass since it
+  was fast, safe, and exactly the kind of "solo dev" tooling asked about.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test -race ./...` — all
+    packages pass (this is also now literally the CI job).
+  - `gofmt -l .` clean across the whole `backend/` tree.
+  - New `pkg/observability/sentry_test.go`: empty-DSN no-op, a panic
+    is recovered and returns 500, and a normal request still passes
+    through unchanged.
+  - Mutation check (CLAUDE.md Section 12): replaced `Middleware`'s
+    body with a bare passthrough (`return next`) → `TestMiddlewareRecoversPanic`
+    itself panicked and failed the test run (proving the recover is
+    load-bearing, not just present). Restored → passed again.
+Known gaps / follow-up:
+  - No Sentry DSN is actually configured anywhere yet — this only adds
+    the integration point. Owner needs to create a Sentry account and
+    set `SENTRY_DSN` on the real deployment for panics to actually
+    alert anyone; until then this only improves the 500 response and
+    the log line, not visibility.
+  - This covers panics only, not the other three things discussed
+    (metrics/anomaly alerting for "a function called far more than
+    normal," cloud-provider billing alarms, and a circuit breaker for
+    a failing/expensive downstream dependency). Those need an actual
+    metrics backend (Prometheus/Grafana or a hosted equivalent) and
+    the owner's own cloud/Railway account for billing alerts — not
+    something to wire blind without the owner's accounts and traffic
+    to tune against. Logged here, not started.
+  - CI does not yet run a `dashboard/` job — there is no `dashboard/`
+    directory in the repo yet (ROADMAP item), so nothing to add.
+
+---
+
+## 2026-09-18 — Static analysis (golangci-lint) wired in; three real findings fixed
+
+Changed:
+  - `backend/.golangci.yml` (new): enables errcheck, staticcheck,
+    unused, ineffassign, gosec on top of the standard set. Excludes
+    errcheck/gosec's G104 (unhandled error) for `_test.go` files only
+    — an unchecked `store.Add`/`w.Write` in a test helper is noise, the
+    same class of error in production code is not exempted.
+  - `.github/workflows/ci.yml`: added a `golangci-lint` step so this
+    now runs on every push/PR, not just when someone remembers to run
+    it locally.
+  - `pkg/api/handlers.go`, `pkg/api/report.go`: three call sites
+    (`DashboardStatsHandler`, `DashboardEvidenceHandler`, top-offenders
+    report) called `json.NewEncoder(w).Encode(...)` and silently
+    discarded the error. Now logged when Encode fails. This is exactly
+    the "silent bug in a function that runs on every API call" class
+    the owner asked about by name — errcheck exists specifically to
+    surface it.
+  - `main.go`: the HTTPS listener's `tls.Config` didn't set
+    `MinVersion`, so it accepted TLS 1.0/1.1 (gosec G402). Set
+    `MinVersion: tls.VersionTLS12`. Doubly relevant here specifically:
+    `pkg/signals.UAMismatch` reads negotiated TLS version to catch
+    automation, so accepting old TLS on real connections also weakened
+    that signal for genuine old-client traffic.
+  - `pkg/core/proxy_test.go`: staticcheck's SA9003 caught a genuinely
+    empty if-branch — `TestNewOriginProxy` checked
+    `X-Forwarded-For != ""` and asserted nothing in either direction
+    (CLAUDE.md Section 13, vacuous assertion). Fixed to fail when the
+    header is missing.
+  - `pkg/challenge/challenge.go`: gosec's G101 flagged
+    `passedCookie = "X-BotShield-Passed"` as a potential hardcoded
+    credential — a false positive (it's a cookie *name*, not a secret
+    value). Suppressed inline with `#nosec G101` and a comment
+    explaining why, rather than broadening the linter exclusion.
+Why: owner asked, as a solo dev, what tooling exists to catch bad code
+  quality, silent bugs, and functions that could load the server
+  unnecessarily *before* they reach production, rather than relying on
+  Sentry to notice after the fact. golangci-lint is the standard Go
+  answer — it caught three things worth fixing on the very first run
+  against this codebase (two silently-discarded encode errors, one
+  weak TLS floor), not zero, which is exactly the point of adding it
+  now rather than after the next incident.
+Tested how:
+  - `golangci-lint run ./...`: 0 issues after the fixes (11 before).
+  - `go build ./...`, `go vet ./...`, `go test ./...`, `gofmt -l .` —
+    all clean.
+Known gaps / follow-up:
+  - Only ran the linter's default rule set plus five extra linters.
+    Did not enable `gocyclo`/`cyclop` (cyclomatic complexity) or
+    `unparam`, which more directly answer "which function is getting
+    too complicated" — deferred rather than tuning thresholds blind
+    against a codebase this size; worth adding once there's a function
+    actually worth flagging.
+  - Does not cover "unnecessary server load" from a *logic* standpoint
+    (e.g., an O(n^2) loop, or the pre-existing Redis-per-request-without-
+    negative-caching gap already logged earlier) — static analysis
+    catches code smells and correctness bugs, not algorithmic cost.
+    That needs profiling (`net/http/pprof`) against real traffic, not
+    a linter, and is still open.

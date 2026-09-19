@@ -272,3 +272,130 @@ policy. **That gap is where items 11b and 12a come from.**
 Sources: cside and Prosopo vendor comparisons, Pi Stack's 2026
 self-hosted WAF comparison, Stack Overflow's pay-per-crawl writeup,
 TechCrunch on Cloudflare's crawler policy (all fetched 2026-09-16).
+
+---
+
+## 2026-09-18 — Real-Chrome stealth automation (Patchright, Scrapling) beats every existing signal
+
+### Threat
+
+An owner test with **Patchright** (a stealth-patched Playwright fork)
+passed straight through in-place scoring and the JS challenge. Root
+cause: every signal we had — JA4, UA mismatch, header-anomaly, the
+`navigator.webdriver`/CDP-leak probe — operates on "what the client
+claims to be" (its TLS handshake, its UA string, its JS globals).
+Patchright drives a real, patched Chromium binary via CDP and
+specifically removes the well-known automation tells:
+`--disable-blink-features=AutomationControlled`, no `--enable-automation`,
+`Runtime.enable`/`Console.enable` avoided via isolated execution
+contexts. Its TLS handshake and UA are therefore **genuinely** a real
+browser's — nothing to catch at the network layer. Same root cause
+applies to Scrapling's `camoufox` real-Firefox mode and any other
+tool built the same way (nodriver, nodriver-based rebrowser-patches
+consumers, nodriver-driven SeleniumBase CDP mode).
+
+### Sources checked
+
+- [Patchright README](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) —
+  its own docs admit `__pwInitScripts`-style init-script injection
+  "can be detected by Timing Attacks. However, no antibot currently
+  checks for this" — a confirmed, still-open gap as of this scan.
+- [rebrowser-bot-detector](https://github.com/rebrowser/rebrowser-bot-detector) —
+  the most current, narrowly-targeted open check set (by the team
+  that makes `rebrowser-patches`). Confirmed checks that survive
+  patching: `window.__pwInitScripts !== undefined` (Playwright's own
+  init-script global — a different mechanism than the CDP leaks that
+  get patched), a default 800x600/1280x720 viewport, and a Chromium
+  UA claiming "Chrome" while `navigator.userAgentData` client hints
+  list "Chromium" without "Google Chrome". No LICENSE file in that
+  repo — we did not copy its code, only implemented the same
+  publicly-documented techniques ourselves.
+- [FingerprintJS BotD](https://github.com/fingerprintjs/botd) (MIT) —
+  evaluated and **not adopted**: covers Selenium/Puppeteer/basic
+  headless well, but FingerprintJS's own docs say the open-source
+  version does not reliably catch stealth-patched tools — the exact
+  threat here. Not worth the extra client-side weight for coverage we
+  don't need.
+- Academic: "Detection of Advanced Web Bots by Combining Web Logs
+  with Mouse Behavioural Biometrics" (Bournemouth, ACM Digital
+  Threats 2021) and "FP-Agent: Fingerprinting AI Browsing Agents"
+  (arXiv 2605.01247, 2026) both conclude that once a scraper drives a
+  real browser, **network/fingerprint signals alone stop working** —
+  behavioral biometrics (mouse movement entropy, timing) combined
+  with the fingerprint layer is what catches what fingerprinting
+  alone lets through.
+
+### What shipped from this (see PROGRESS.md 2026-09-18)
+
+Added to `challenge.go`'s browser probe: `__pwInitScripts` global
+check, 800x600 exact-viewport check (1280x720 deliberately excluded —
+too common a real window size, CLAUDE.md Section 14), and the
+Chromium-without-Chrome client-hints brand check.
+
+### What's still open (not built yet)
+
+- **Behavioral biometrics** (mouse/click/scroll timing entropy) — the
+  literature's actual answer to "real browser, stealth-patched" — not
+  implemented. This is the next real signal layer, not a one-line fix.
+- **Init-script timing attack** — Patchright's own admitted open gap.
+  Nobody has published a concrete implementation; would need our own
+  empirical research (timing distribution of real vs. Patchright-
+  injected scripts) before it could ship. Logged as a research
+  project, not started.
+- Scrapling's `camoufox`-based real-Firefox mode not separately
+  tested — same root cause expected (real browser engine), same gap.
+
+---
+
+## 2026-09-18 — How commercial vendors actually get to high block rates: layered, continuous
+
+### Finding
+
+Vendor research (Scrapfly's anti-bot bypass write-ups, Evomi's Kasada
+analysis) is consistent on one point: no single technique gets a
+vendor to a high block rate. Cloudflare/DataDome/Akamai/Kasada each
+stack 5+ independent layers (TLS/JA4, HTTP/2 fingerprint, JS/browser
+fingerprint, behavior, per-customer ML) specifically so that beating
+one layer doesn't beat the product — "passing one layer means
+nothing, you must pass all five simultaneously."
+
+The other pattern worth copying at our scale: **continuous trust**,
+not a one-time pass. Kasada's `p.js` re-solves a proof-of-work puzzle
+every 60-180 seconds per session, with difficulty scaled by a trust
+score that decays if the session behaves mechanically. A challenge
+passed once does not mean trusted forever.
+
+### What this changed for us
+
+Checking our own challenge flow against that pattern surfaced a real
+gap unrelated to Patchright: `guard.go`'s `Passed(r)` branch trusted a
+challenge solve for the full 30-minute cookie lifetime with zero
+further scoring, including velocity. Fixed same day — see
+docs/PROGRESS.md 2026-09-18 "Passed-challenge sessions are now still
+rate-limited."
+
+### Not built (bigger projects, logged for the roadmap)
+
+- **True periodic re-challenge** (Kasada-style: re-verify identity,
+  not just rate, mid-session). What shipped only closes the
+  rate-limiting half of "continuous trust" — the identity check is
+  still one-shot per 30-minute cookie.
+- **HTTP/2 fingerprinting** (pseudo-header order, SETTINGS/PRIORITY
+  frames). Does not help against Patchright specifically (it drives a
+  real Chrome network stack), but would catch a lightweight/non-browser
+  Scrapling session the same way JA4 catches non-browser TLS stacks
+  today. Go's `net/http` doesn't expose this without our own HTTP/2
+  frame-level handling — nontrivial, not started.
+- **Proof-of-work with scaling difficulty.** Our canvas/sha256
+  challenge is fixed-cost; Kasada's scales cost with session
+  suspicion. Would raise the economic cost of scraping at volume even
+  when a request isn't caught outright.
+- **Obfuscating the challenge JS itself.** It ships as plain,
+  readable JS in `challenge.go` today — trivial for anyone motivated
+  to read exactly what's being checked. Not a detection improvement
+  by itself, but raises the cost of building a bypass in the first
+  place.
+
+Sources: [Scrapfly — How to Bypass Anti-Bot Protection in 2026](https://scrapfly.io/blog/posts/how-to-bypass-anti-bot-protection),
+[Evomi — Kasada, Shape, and the Next Generation of Anti-Bot](https://evomi.com/blog/kasada-shape-and-the-next-generation-of-anti-bot-what-scrapers-need-to-know),
+[Scrapfly — HTTP/2 and HTTP/3 Fingerprinting](https://scrapfly.io/blog/posts/http2-http3-fingerprinting-guide).

@@ -78,7 +78,7 @@ func TestDashboardStatsHandler(t *testing.T) {
 			t.Fatalf("expected 405, got %d", w.Code)
 		}
 	})
-	
+
 	t.Run("options method", func(t *testing.T) {
 		req := httptest.NewRequest("OPTIONS", "/", nil)
 		w := httptest.NewRecorder()

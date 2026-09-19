@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: golangci-lint
+        # v6 of this action does not support golangci-lint v2 at all
+        # ("golangci-lint v2 is not supported by golangci-lint-action
+        # v6, you must update to golangci-lint-action v7"); v6's
+        # "latest" resolves to a cached v1.x binary built with an
+        # older Go than our go.mod targets (go1.25.0), which the v1
+        # config loader then refuses to run against anyway.
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.5.0
+          working-directory: backend

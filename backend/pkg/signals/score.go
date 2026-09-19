@@ -41,7 +41,6 @@ func (d Decision) String() string {
 const (
 	fragmentedWeight   = 50
 	uaMismatchWeight   = 50
-	firstTouchWeight   = 50 // Enforce JS challenge on unverified sessions
 	blockThreshold     = 100
 	challengeThreshold = 50
 )
@@ -66,14 +65,13 @@ var checks = []struct {
 }{
 	{"fragmented_handshake", fragmentedWeight, func(ip, ja4, ua string) bool { return ja4 == JA4Unreadable }},
 	{"ua_mismatch", uaMismatchWeight, func(ip, ja4, ua string) bool { return UAMismatch(ua, ja4) }},
-	{"ja4_blocklist", 100, func(ip, ja4, ua string) bool { 
+	{"ja4_blocklist", 100, func(ip, ja4, ua string) bool {
 		isScraper, _ := IsKnownScraperJA4(ja4)
-		return isScraper || badJA4Hashes[ja4] 
+		return isScraper || badJA4Hashes[ja4]
 	}},
 	{"scripting_tool", 100, func(ip, ja4, ua string) bool { return IsScriptingTool(ua) }},
 	{"velocity_spike", 50, func(ip, ja4, ua string) bool { return checkVelocitySpike(ip) }},
 	{"ja4_velocity_spike", 50, func(ip, ja4, ua string) bool { return checkJA4VelocitySpike(ja4) }},
-	{"untrusted_session", firstTouchWeight, func(ip, ja4, ua string) bool { return true }},
 }
 
 // Score combines a request's known signals into one risk score. ja4
@@ -110,6 +108,7 @@ func Decide(score int) Decision {
 	case score >= challengeThreshold:
 		return DecisionChallenge
 	default:
-		return DecisionAllow
+		// Force challenge for all unknown/clean traffic to ensure JS checks run
+		return DecisionChallenge
 	}
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,7 +48,7 @@ func DashboardStatsHandler(store *tenant.Store) http.Handler {
 		s := ten.Stats
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		json.NewEncoder(w).Encode(statsResponse{
+		if err := json.NewEncoder(w).Encode(statsResponse{
 			TotalRequests: s.Total(),
 			Passed:        s.Passed(),
 			Challenged:    s.Challenged(),
@@ -55,7 +56,9 @@ func DashboardStatsHandler(store *tenant.Store) http.Handler {
 			Deceived:      s.Deceived(),
 			Mode:          s.Mode.String(),
 			Enforcing:     s.Mode == config.ModeEnforce,
-		})
+		}); err != nil {
+			log.Printf("botshield: encoding dashboard stats response: %v", err)
+		}
 	})
 }
 
@@ -84,7 +87,9 @@ func DashboardEvidenceHandler(store *tenant.Store) http.Handler {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		json.NewEncoder(w).Encode(ten.Trail.Recent(limit))
+		if err := json.NewEncoder(w).Encode(ten.Trail.Recent(limit)); err != nil {
+			log.Printf("botshield: encoding dashboard evidence response: %v", err)
+		}
 	})
 }
 

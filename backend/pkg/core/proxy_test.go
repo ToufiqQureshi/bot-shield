@@ -12,14 +12,14 @@ func TestNewOriginProxy(t *testing.T) {
 		if r.Header.Get("X-Real-IP") == "" {
 			t.Error("expected X-Real-IP to be set")
 		}
-		if r.Header.Get("X-Forwarded-For") != "" {
-			// httputil.ReverseProxy sets X-Forwarded-For automatically
+		if got := r.Header.Get("X-Forwarded-For"); got == "" {
+			t.Error("expected httputil.ReverseProxy to set X-Forwarded-For automatically")
 		}
 		// Spoofed headers should be stripped
 		if r.Header.Get("True-Client-IP") != "" {
 			t.Error("expected spoofed IP header to be stripped")
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer origin.Close()
