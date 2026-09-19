@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,9 +21,98 @@ import (
 	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
 )
 
-func TestGuardPassesTraffic(t *testing.T) {
+// TestGuardChallengesCleanTrafficStrict: under PolicyStrict, a scoreless first request
+// from a clean visitor is served the challenge page in place of the origin.
+func TestGuardChallengesCleanTrafficStrict(t *testing.T) {
 	store := tenant.NewStore()
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("origin"))
+	}))
+	defer target.Close()
+
+	proxy, _ := core.NewOriginProxy(target.URL)
+	store.Add("default", tenant.TenantConfig{
+		Target: target.URL,
+		Mode:   config.ModeEnforce,
+		Policy: config.PolicyStrict,
+	}, []string{"example.com"}, proxy)
+
+	guard := core.NewGuard(store, c)
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	rec := httptest.NewRecorder()
+
+	guard.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from the challenge page, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "__botshield") {
+		t.Fatalf("clean unscored traffic under PolicyStrict must be challenged, body=%q", rec.Body.String())
+	}
+}
+
+// TestGuardAllowsCleanTrafficBalanced: under PolicyBalanced (the production default),
+// clean traffic (score 0) is allowed to reach the origin with zero latency.
+func TestGuardAllowsCleanTrafficBalanced(t *testing.T) {
+	store := tenant.NewStore()
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("origin"))
+	}))
+	defer target.Close()
+
+	proxy, _ := core.NewOriginProxy(target.URL)
+	store.Add("default", tenant.TenantConfig{
+		Target: target.URL,
+		Mode:   config.ModeEnforce,
+		Policy: config.PolicyBalanced,
+	}, []string{"example.com"}, proxy)
+
+	guard := core.NewGuard(store, c)
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	rec := httptest.NewRecorder()
+
+	guard.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from origin, got %d", rec.Code)
+	}
+	if rec.Body.String() != "origin" {
+		t.Fatalf("clean traffic in balanced mode must reach origin; got body=%q", rec.Body.String())
+	}
+}
+
+func TestGuardHealthzEndpoint(t *testing.T) {
+	store := tenant.NewStore()
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+	guard := core.NewGuard(store, c)
+
+	req := httptest.NewRequest("GET", "http://any-host/__botshield/healthz", nil)
+	rec := httptest.NewRecorder()
+
+	guard.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("healthz: want 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
+		t.Fatalf("healthz: expected ok status, got %s", rec.Body.String())
+	}
+}
+
+
+// TestGuardForwardsPassedTraffic: a visitor who already solved the
+// challenge is forwarded to the origin without re-scoring (guard.go).
+func TestGuardForwardsPassedTraffic(t *testing.T) {
+	store := tenant.NewStore()
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -37,20 +127,25 @@ func TestGuardPassesTraffic(t *testing.T) {
 	}, []string{"example.com"}, proxy)
 
 	guard := core.NewGuard(store, c)
+	passed := solveChallenge(t, c, "example.com")
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.AddCookie(passed)
 	rec := httptest.NewRecorder()
 
 	guard.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 OK, got %d", rec.Code)
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := rec.Body.String(); got != "origin" {
+		t.Fatalf("a passed visitor must reach the origin; body=%q", got)
 	}
 }
 
 func TestGuardBlocksMaliciousJA4(t *testing.T) {
 	store := tenant.NewStore()
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -78,6 +173,17 @@ func TestGuardBlocksMaliciousJA4(t *testing.T) {
 	}
 }
 
+// solvePoW returns the smallest counter whose SHA-256 with nonce starts
+// with "00" — the 8-bit proof-of-work the challenge page's JS computes.
+func solvePoW(nonce string) string {
+	for i := 0; ; i++ {
+		sum := sha256.Sum256([]byte(nonce + strconv.Itoa(i)))
+		if hex.EncodeToString(sum[:])[:2] == "00" {
+			return strconv.Itoa(i)
+		}
+	}
+}
+
 // solveChallenge drives the real GET-challenge/POST-verify flow to
 // obtain a genuine "passed" cookie, the same way a real browser would,
 // rather than reaching into challenge internals.
@@ -92,12 +198,13 @@ func solveChallenge(t *testing.T, c *challenge.Challenge, host string) *http.Coo
 	body := getRec.Body.String()
 
 	tm := regexp.MustCompile(`token", "([^"]+)"`).FindStringSubmatch(body)
-	nm := regexp.MustCompile(`encode\("([^"]+)"\)`).FindStringSubmatch(body)
+	// The page's JS feeds the nonce into its PoW loop (`encode("nonce" +
+	// counter)`), so match the string literal, not a parenthesised call.
+	nm := regexp.MustCompile(`encode\("([^"]+)"`).FindStringSubmatch(body)
 	if tm == nil || nm == nil {
 		t.Fatalf("could not extract token/nonce from challenge page: %s", body)
 	}
-	sum := sha256.Sum256([]byte(nm[1]))
-	answer := hex.EncodeToString(sum[:])
+	answer := solvePoW(nm[1])
 
 	form := url.Values{}
 	form.Set("token", tm[1])
@@ -133,7 +240,7 @@ func TestGuardVelocityLimitsPassedSession(t *testing.T) {
 	defer signals.InitRedis(nil)
 
 	store := tenant.NewStore()
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -164,7 +271,7 @@ func TestGuardVelocityLimitsPassedSession(t *testing.T) {
 
 	// Flood past the velocity threshold from the same passed session.
 	var lastCode int
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 25; i++ {
 		lastCode = makeReq().Code
 	}
 	if lastCode != http.StatusTooManyRequests {
@@ -174,7 +281,7 @@ func TestGuardVelocityLimitsPassedSession(t *testing.T) {
 
 func TestGuardDeceptionMode(t *testing.T) {
 	store := tenant.NewStore()
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 
 	var receivedDecision string
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,10 +1,34 @@
 package signals
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+
+	"github.com/ToufiqQureshi/bot-shield/pkg/config"
+)
+
+// realBrowserHeaders is the header set every current real browser sends on
+// a navigation: the Sec-Fetch-* fetch-metadata family plus a client-hint
+// brand. A score test that intends "clean real browser" must pass these,
+// or the header_anomaly check correctly fires on the missing headers.
+func realBrowserHeaders() http.Header {
+	h := http.Header{}
+	h.Set("Sec-Fetch-Dest", "document")
+	h.Set("Sec-Fetch-Mode", "navigate")
+	h.Set("Sec-Fetch-Site", "same-origin")
+	h.Set("Sec-CH-UA", `"Chromium";v="120"`)
+	return h
+}
+
+// facts builds a RequestFacts for a browser-claiming client with real
+// browser headers, so only the signal under test varies.
+func facts(ja4, ua string) RequestFacts {
+	return RequestFacts{JA4: ja4, UA: ua, Header: realBrowserHeaders()}
+}
 
 func TestScoreNoSignals(t *testing.T) {
-	// Real Chrome, modern TLS: nothing should fire.
-	got := Score("", "t13d1516h2_8daaf6152771_e5627efa2ab1", "Mozilla/5.0 Chrome/120.0")
+	// Real Chrome, modern TLS, real browser headers: nothing should fire.
+	got := Score(facts("t13d1516h2_8daaf6152771_e5627efa2ab1", "Mozilla/5.0 Chrome/120.0"))
 	if got != 0 {
 		t.Fatalf("Score() = %d, want 0", got)
 	}
@@ -13,7 +37,7 @@ func TestScoreNoSignals(t *testing.T) {
 func TestScoreFragmentedOnly(t *testing.T) {
 	// curl also trips scripting_tool, so isolate fragmented_handshake
 	// with a UA that isn't a known scripting tool or browser claim.
-	got := Score("", JA4Unreadable, "SomeUnknownClient/1.0")
+	got := Score(RequestFacts{JA4: JA4Unreadable, UA: "SomeUnknownClient/1.0"})
 	want := fragmentedWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
@@ -21,9 +45,8 @@ func TestScoreFragmentedOnly(t *testing.T) {
 }
 
 func TestScoreUAMismatchOnly(t *testing.T) {
-	// Claims Firefox but negotiated TLS 1.0 - a real JA4 whose version
-	// nibble is "10", not JA4Unreadable, so only UAMismatch fires.
-	got := Score("", "t10d1516h2_8daaf6152771_e5627efa2ab1", "Mozilla/5.0 Firefox/120.0")
+	// Claims Firefox but negotiated TLS 1.0, so only UAMismatch fires.
+	got := Score(facts("t10d1516h2_8daaf6152771_e5627efa2ab1", "Mozilla/5.0 Firefox/120.0"))
 	want := uaMismatchWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
@@ -31,8 +54,7 @@ func TestScoreUAMismatchOnly(t *testing.T) {
 }
 
 func TestScoreBothSignals(t *testing.T) {
-	// Fragmented handshake AND claims to be a browser - both layers fire.
-	got := Score("", JA4Unreadable, "Mozilla/5.0 Chrome/120.0")
+	got := Score(facts(JA4Unreadable, "Mozilla/5.0 Chrome/120.0"))
 	want := fragmentedWeight + uaMismatchWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
@@ -41,46 +63,92 @@ func TestScoreBothSignals(t *testing.T) {
 
 func TestScorePlainHTTPFailsOpen(t *testing.T) {
 	// No TLS at all (ja4 == "") - can't fingerprint, must not penalize.
-	got := Score("", "", "Mozilla/5.0 Chrome/120.0")
+	got := Score(facts("", "Mozilla/5.0 Chrome/120.0"))
 	if got != 0 {
 		t.Fatalf("Score() = %d, want 0", got)
 	}
 }
 
 func TestScoreJA4Blocklist(t *testing.T) {
-	// Known malicious JA4 with a non-browser, non-scripting-tool client
-	// should add 100 points from ja4_blocklist alone.
-	got := Score("", "t12d190800_4464c1bd5eb7_b3394627b738", "SomeUnknownClient/1.0")
-	want := 100
-	if got != want {
-		t.Fatalf("Score() = %d, want %d", got, want)
+	got := Score(RequestFacts{JA4: "t12d190800_4464c1bd5eb7_b3394627b738", UA: "SomeUnknownClient/1.0"})
+	if got != 100 {
+		t.Fatalf("Score() = %d, want 100", got)
 	}
 }
 
 func TestScoreJA4BlocklistWithUAMismatch(t *testing.T) {
-	// Known malicious JA4 that also claims to be Chrome fires both blocklist and UA mismatch
-	got := Score("", "t12d190800_4464c1bd5eb7_b3394627b738", "Mozilla/5.0 Chrome/120.0")
+	got := Score(facts("t12d190800_4464c1bd5eb7_b3394627b738", "Mozilla/5.0 Chrome/120.0"))
 	want := 100 + uaMismatchWeight
 	if got != want {
 		t.Fatalf("Score() = %d, want %d", got, want)
 	}
 }
 
-func TestDecideThresholds(t *testing.T) {
-	cases := []struct {
-		score int
-		want  Decision
-	}{
-		{0, DecisionAllow},
-		{challengeThreshold - 1, DecisionAllow},
-		{challengeThreshold, DecisionChallenge},
-		{blockThreshold - 1, DecisionChallenge},
-		{blockThreshold, DecisionBlock},
-		{blockThreshold + 50, DecisionBlock},
+func TestScoreHeaderAnomaly(t *testing.T) {
+	// A client claiming Chrome but sending none of the headers every real
+	// browser sends is the evasion header_anomaly exists to catch.
+	got := Score(RequestFacts{JA4: "t13d1516h2_8daaf6152771_e5627efa2ab1", UA: "Mozilla/5.0 Chrome/120.0", Header: http.Header{}})
+	if got != headerAnomalyWeight {
+		t.Fatalf("Score() = %d, want %d", got, headerAnomalyWeight)
 	}
-	for _, c := range cases {
-		if got := Decide(c.score); got != c.want {
-			t.Errorf("Decide(%d) = %v, want %v", c.score, got, c.want)
+}
+
+func TestScoreHeaderAnomalyUnknownClientStaysQuiet(t *testing.T) {
+	got := Score(RequestFacts{JA4: JA4Unreadable, UA: "SomeUnknownClient/1.0", Header: http.Header{}})
+	if got != fragmentedWeight {
+		t.Fatalf("Score() = %d, want %d", got, fragmentedWeight)
+	}
+}
+
+// TestDecideThresholds verifies outcome contracts for both PolicyBalanced and PolicyStrict modes.
+func TestDecideThresholds(t *testing.T) {
+	t.Run("PolicyBalanced", func(t *testing.T) {
+		cases := []struct {
+			score int
+			want  Decision
+		}{
+			{0, DecisionAllow},
+			{headerAnomalyWeight, DecisionChallenge},
+			{fragmentedWeight, DecisionChallenge},
+			{blockThreshold - 1, DecisionChallenge},
+			{blockThreshold, DecisionBlock},
+			{blockThreshold + 50, DecisionBlock},
+		}
+		for _, c := range cases {
+			if got := DecideWithPolicy(c.score, config.PolicyBalanced); got != c.want {
+				t.Errorf("DecideWithPolicy(%d, Balanced) = %v, want %v", c.score, got, c.want)
+			}
+		}
+	})
+
+	t.Run("PolicyStrict", func(t *testing.T) {
+		cases := []struct {
+			score int
+			want  Decision
+		}{
+			{0, DecisionChallenge},
+			{headerAnomalyWeight, DecisionChallenge},
+			{fragmentedWeight, DecisionChallenge},
+			{blockThreshold - 1, DecisionChallenge},
+			{blockThreshold, DecisionBlock},
+			{blockThreshold + 50, DecisionBlock},
+		}
+		for _, c := range cases {
+			if got := DecideWithPolicy(c.score, config.PolicyStrict); got != c.want {
+				t.Errorf("DecideWithPolicy(%d, Strict) = %v, want %v", c.score, got, c.want)
+			}
+		}
+	})
+}
+
+
+// TestWeakSignalsNeverBlockAlone guards CLAUDE.md Section 6: no single
+// signal may be the only thing between allow and block. The two
+// mid-strength signals must never, on their own, produce a block.
+func TestWeakSignalsNeverBlockAlone(t *testing.T) {
+	for _, w := range []int{headerAnomalyWeight, fragmentedWeight, crawlPatternWeight} {
+		if got := Decide(w); got == DecisionBlock {
+			t.Fatalf("a single signal worth %d must not block, got %v", w, got)
 		}
 	}
 }

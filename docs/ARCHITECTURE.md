@@ -52,11 +52,15 @@ Internet (every visitor, hostile until scored)
    ├── fingerprint  BUILT   handshake → JA4 hash        (proxy/fingerprint.go)
    ├── proxy        BUILT   forward, strip spoofable headers (proxy/proxy.go)
    │
-   ├── score        BUILT    combine signals → risk score (proxy/score.go,
-   │                         proxy/guard.go) — allow/challenge/block
-   ├── challenge    BUILT    JS challenge (proxy/challenge.go), now
+   ├── score        BUILT    combine signals → risk score (signals/score.go,
+   │                         core/guard.go) — challenge/block/deceive.
+   │                         Signals: fragmented_handshake, ua_mismatch,
+   │                         header_anomaly, ja4_blocklist, scripting_tool,
+   │                         velocity_spike, ja4_velocity_spike, crawl_pattern
+   ├── challenge    BUILT    JS challenge (challenge/challenge.go), now
    │                         triggered by score via Guard
-   ├── ratelimit     BUILT   Advanced per-IP rate limiting (velocity.go)
+   ├── ratelimit     BUILT   Asset-aware per-IP velocity + crawl-pattern
+   │                         detection (signals/velocity.go, signals/pattern.go)
    │
    ├──► Redis        BUILT   Distributed global rate counters via INCR (velocity.go)
    │                         and background synchronization for JA4 blocklists (ja4db.go)

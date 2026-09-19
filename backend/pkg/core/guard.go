@@ -3,6 +3,7 @@ package core
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ToufiqQureshi/bot-shield/pkg/challenge"
 	"github.com/ToufiqQureshi/bot-shield/pkg/config"
@@ -32,6 +33,14 @@ func NewGuard(store *tenant.Store, challenge *challenge.Challenge) *Guard {
 // already proved they're a browser would just be a worse experience
 // for no extra signal (CLAUDE.md Section 8).
 func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Health check endpoint for cloud load balancers and container orchestrators.
+	if r.URL.Path == "/__botshield/healthz" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
+		return
+	}
+
 	// Look up the tenant by the incoming Host header.
 	// Strip port if present, as DNS/CNAME doesn't include it.
 	host := r.Host
@@ -55,13 +64,28 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ip = ip[:idx]
 	}
 
+	// SEO & Search Engine Crawler Protection:
+	// Genuine verified search engine bots (Googlebot, Bingbot, Applebot) with matching
+	// reverse-forward DNS are forwarded directly without friction or challenges.
+	if signals.IsVerifiedGoodBot(ip, r.UserAgent()) {
+		tenant.Stats.Record(signals.DecisionAllow)
+		tenant.Trail.Record(evidence.Evidence{
+			JA4:      ja4,
+			Signals:  []string{"good_bot_verified"},
+			Decision: signals.DecisionAllow.String(),
+			Enforced: enforced,
+		})
+		tenant.Origin.ServeHTTP(w, r)
+		return
+	}
+
 	if g.challenge.Passed(r) {
 		// A solved challenge proves this client could run JS once; it
 		// says nothing about the volume of requests after that. Without
 		// this check, one solve buys unlimited-speed access to the
 		// origin for the rest of passedMaxAge (CLAUDE.md Section 15/18 —
 		// bounded resource use, can't let a visitor exhaust the origin).
-		if signals.VelocityExceeded(ip, ja4) {
+		if signals.VelocityExceeded(ip, ja4, r.URL.Path) {
 			tenant.Stats.Record(signals.DecisionBlock)
 			tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"velocity_after_pass"}, Decision: signals.DecisionBlock.String(), Enforced: enforced})
 			if enforced {
@@ -72,7 +96,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tenant.Stats.Record(signals.DecisionAllow)
-		// Recorded as its own reason, not as "scored zero" ?" otherwise
+		// Recorded as its own reason, not as "scored zero", otherwise
 		// the trail would claim this visitor looked clean when really
 		// they had already proven themselves.
 		tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"challenge_solved"}, Decision: signals.DecisionAllow.String(), Enforced: enforced})
@@ -80,14 +104,21 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	score := signals.Score(ip, ja4, r.UserAgent())
-	decision := signals.Decide(score)
+	facts := signals.RequestFacts{
+		IP:     ip,
+		JA4:    ja4,
+		UA:     r.UserAgent(),
+		Header: r.Header,
+		Path:   r.URL.Path,
+	}
+	score := signals.Score(facts)
+	decision := signals.DecideWithPolicy(score, tenant.Config.Policy)
 	if decision == signals.DecisionBlock && tenant.Config.Deception {
 		decision = signals.DecisionDeceive
 	}
 	tenant.Trail.Record(evidence.Evidence{
 		JA4:      ja4,
-		Signals:  signals.Analyze(ip, ja4, r.UserAgent()),
+		Signals:  signals.Analyze(facts),
 		Score:    score,
 		Decision: decision.String(),
 		Enforced: enforced,
@@ -118,3 +149,4 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tenant.Origin.ServeHTTP(w, r)
 	}
 }
+

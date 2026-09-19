@@ -32,8 +32,8 @@ func newStore(t *testing.T) *tenant.Store {
 	proxyA, _ := core.NewOriginProxy(urlA)
 	proxyB, _ := core.NewOriginProxy(urlB)
 
-	store.Add("a", tenant.TenantConfig{Target: urlA, Mode: config.ModeEnforce, EvidenceToken: "tok-a"}, []string{"a.example.com"}, proxyA)
-	store.Add("b", tenant.TenantConfig{Target: urlB, Mode: config.ModeEnforce, EvidenceToken: "tok-b"}, []string{"b.example.com"}, proxyB)
+	store.Add("a", tenant.TenantConfig{Target: urlA, Mode: config.ModeEnforce, Policy: config.PolicyStrict, EvidenceToken: "tok-a"}, []string{"a.example.com"}, proxyA)
+	store.Add("b", tenant.TenantConfig{Target: urlB, Mode: config.ModeEnforce, Policy: config.PolicyStrict, EvidenceToken: "tok-b"}, []string{"b.example.com"}, proxyB)
 	return store
 }
 
@@ -63,7 +63,7 @@ func TestGetByHost_Wildcard(t *testing.T) {
 // TestTenantIsolation: data recorded for tenant A must never appear on tenant B.
 func TestTenantIsolation(t *testing.T) {
 	store := newStore(t)
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	guard := core.NewGuard(store, c)
 
 	// send 5 requests to tenant A
@@ -78,8 +78,11 @@ func TestTenantIsolation(t *testing.T) {
 	if got := tenA.Stats.Total(); got != 5 {
 		t.Errorf("tenant A: want 5 total, got %d", got)
 	}
-	if got := tenA.Stats.Passed(); got != 5 {
-		t.Errorf("tenant A: want 5 passed, got %d", got)
+	// Clean traffic is challenged, not allowed: the interstitial is
+	// mandatory for all traffic (docs/DECISIONS.md, 2026-09-19), so these
+	// scoreless requests are counted as challenged.
+	if got := tenA.Stats.Challenged(); got != 5 {
+		t.Errorf("tenant A: want 5 challenged, got %d", got)
 	}
 	// Tenant B must be untouched
 	if got := tenB.Stats.Total(); got != 0 {
@@ -93,7 +96,7 @@ func TestTenantIsolation(t *testing.T) {
 // TestTenantIsolationConcurrent: concurrent traffic to two tenants must never cross.
 func TestTenantIsolationConcurrent(t *testing.T) {
 	store := newStore(t)
-	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"))
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	guard := core.NewGuard(store, c)
 
 	const workers, perWorker = 20, 100
