@@ -127,7 +127,7 @@ func main() {
 		log.Fatalf("botshield: provisioning default tenant: %v", err)
 	}
 
-	guard := core.NewGuard(store, challengeHandler)
+	guard := core.NewGuard(store, challengeHandler, rdb)
 
 	mux := http.NewServeMux()
 	mux.Handle("/__botshield/", challengeHandler.Handler())

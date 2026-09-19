@@ -4,7 +4,9 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -12,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ToufiqQureshi/bot-shield/pkg/deception"
 	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
 )
 
@@ -110,6 +113,25 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>502 Bad Gateway</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}h1{font-size:2rem;color:#f85149;}p{color:#8b949e;}</style></head><body><div style="text-align:center;"><h1>502 Bad Gateway</h1><p>Origin server connection failed or timed out.</p><small style="color:#484f58;">Protected by BotShield</small></div></body></html>`))
 		},
+		ModifyResponse: func(resp *http.Response) error {
+			if resp.Request != nil {
+				if dec := DecisionFromContext(resp.Request.Context()); dec == signals.DecisionDeceive.String() {
+					body, err := io.ReadAll(resp.Body)
+					if err != nil {
+						return nil
+					}
+					_ = resp.Body.Close()
+
+					contentType := resp.Header.Get("Content-Type")
+					transformed := deception.InjectPoisonPayload(body, contentType)
+
+					resp.Body = io.NopCloser(bytes.NewReader(transformed))
+					resp.ContentLength = int64(len(transformed))
+					resp.Header.Set("Content-Length", strconv.Itoa(len(transformed)))
+				}
+			}
+			return nil
+		},
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(u)
 			// SetURL would point Host at the origin; the origin serves
@@ -148,6 +170,10 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 			if dec := DecisionFromContext(r.In.Context()); dec != "" {
 				r.Out.Header.Set(decisionHeader, dec)
 				r.Out.Header.Set(scoreHeader, strconv.Itoa(ScoreFromContext(r.In.Context())))
+				if dec == signals.DecisionDeceive.String() {
+					// Strip Accept-Encoding so origin returns uncompressed HTML that can be transformed.
+					r.Out.Header.Del("Accept-Encoding")
+				}
 			}
 		},
 	}

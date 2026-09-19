@@ -40,7 +40,7 @@ func TestGuardChallengesCleanTrafficStrict(t *testing.T) {
 		Policy: config.PolicyStrict,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c)
+	guard := core.NewGuard(store, c, nil)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestGuardAllowsCleanTrafficBalanced(t *testing.T) {
 		Policy: config.PolicyBalanced,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c)
+	guard := core.NewGuard(store, c, nil)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	rec := httptest.NewRecorder()
@@ -92,7 +92,7 @@ func TestGuardAllowsCleanTrafficBalanced(t *testing.T) {
 func TestGuardHealthzEndpoint(t *testing.T) {
 	store := tenant.NewStore()
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
-	guard := core.NewGuard(store, c)
+	guard := core.NewGuard(store, c, nil)
 
 	req := httptest.NewRequest("GET", "http://any-host/__botshield/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -126,7 +126,7 @@ func TestGuardForwardsPassedTraffic(t *testing.T) {
 		Mode:   config.ModeEnforce,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c)
+	guard := core.NewGuard(store, c, nil)
 	passed := solveChallenge(t, c, "example.com")
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
@@ -159,7 +159,7 @@ func TestGuardBlocksMaliciousJA4(t *testing.T) {
 		Deception: false,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c)
+	guard := core.NewGuard(store, c, nil)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	ctx := core.WithJA4(req.Context(), "t12d190800_4464c1bd5eb7_b3394627b738") // Known malicious Python requests
@@ -250,7 +250,7 @@ func TestGuardVelocityLimitsPassedSession(t *testing.T) {
 	proxy, _ := core.NewOriginProxy(target.URL)
 	store.Add("default", tenant.TenantConfig{Target: target.URL, Mode: config.ModeEnforce}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c)
+	guard := core.NewGuard(store, c, nil)
 	passedCookie := solveChallenge(t, c, "example.com")
 
 	makeReq := func() *httptest.ResponseRecorder {
@@ -298,7 +298,7 @@ func TestGuardDeceptionMode(t *testing.T) {
 		Deception: true, // Deception enabled!
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c)
+	guard := core.NewGuard(store, c, nil)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	ctx := core.WithJA4(req.Context(), "t12d190800_4464c1bd5eb7_b3394627b738") // Known malicious Python requests

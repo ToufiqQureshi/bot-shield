@@ -10,6 +10,7 @@ import (
 	"github.com/ToufiqQureshi/bot-shield/pkg/evidence"
 	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
 	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/redis/go-redis/v9"
 )
 
 // Guard is the first thing in this codebase that actually acts on a
@@ -19,13 +20,14 @@ import (
 type Guard struct {
 	store     *tenant.Store
 	challenge *challenge.Challenge
+	rdb       *redis.Client
 }
 
 // NewGuard combines the tenant store with a challenge.Challenge instance
 // into the real allow/challenge/block decision. In config.ModeShadow it
 // scores and records exactly the same way but never acts (item 18).
-func NewGuard(store *tenant.Store, challenge *challenge.Challenge) *Guard {
-	return &Guard{store: store, challenge: challenge}
+func NewGuard(store *tenant.Store, challenge *challenge.Challenge, rdb *redis.Client) *Guard {
+	return &Guard{store: store, challenge: challenge, rdb: rdb}
 }
 
 // ServeHTTP decides per request. A visitor who already solved a
@@ -38,6 +40,21 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
+		return
+	}
+
+	ja4 := JA4FromContext(r.Context())
+
+	ip := r.RemoteAddr
+	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
+		ip = ip[:idx]
+	}
+
+	// Autonomous Honeypot Trap endpoint.
+	// Executed when a headless crawler interacts with hidden links.
+	if r.URL.Path == signals.HoneypotPath {
+		signals.RecordHoneypotTrigger(r.Context(), ja4, ip, g.rdb)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
@@ -56,13 +73,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ja4 := JA4FromContext(r.Context())
 	enforced := tenant.Config.Mode == config.ModeEnforce
-
-	ip := r.RemoteAddr
-	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
-		ip = ip[:idx]
-	}
 
 	// SEO & Search Engine Crawler Protection:
 	// Genuine verified search engine bots (Googlebot, Bingbot, Applebot) with matching
@@ -149,4 +160,3 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tenant.Origin.ServeHTTP(w, r)
 	}
 }
-
