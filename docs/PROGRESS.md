@@ -19,6 +19,32 @@ file as the source of truth for history, not git log.
 
 ## Format for new entries
 
+# 2026-09-19 — Enterprise Forensic Engine Implementation
+
+Advanced behavioral forensics engine in `pkg/forensics/` to detect stealth automation tools (Patchright, Scrapling, etc.) that bypass traditional TLS/JA4 fingerprinting.
+
+### New Package: `pkg/forensics/`
+
+**Files created:**
+- `analyzer.go` - Core forensic analysis engine with 5-layer detection
+- `analyzer_test.go` - Comprehensive test suite (9 tests, all passing)
+
+**5-Layer Detection Architecture:**
+
+1. **Canvas & WebGL Noise Analysis** (30-40 points) - Detects synthetic GPU noise patterns
+2. **AudioContext Oscillator Drift** (35 points) - Hardware-level clock drift detection
+3. **Input Event Human Entropy** (25-30 points) - Mouse movement pattern analysis
+4. **Resource Timing Race Conditions** (15-20 points) - Parallel request timing analysis
+5. **Memory Heap & GC Patterns** (20-35 points) - Browser internal memory signatures
+
+**Cost Optimization:** LRU cache (1000 entries, 5min), <5ms analysis, <1ms cached
+
+**Test Results:** All 9 tests PASS, race detector CLEAN, go vet CLEAN, build successful (24MB)
+
+---
+
+## Format for new entries
+
 ```text
 ## <date> — <short title>
 Changed:

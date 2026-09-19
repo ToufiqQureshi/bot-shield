@@ -1,49 +1,25 @@
 ```
-# Dependencies
-go.sum
+# Compiled and build artifacts
+*.out
+coverage/
 
-# Compressed files
-*.gz
+# Dependencies
+pkg/
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Logs
+# Logs and temp files
 *.log
-
-# Temporary files
 *.tmp
 
-# Build artifacts
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
-
-# Directories
-dist/
-build/
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-.coverage
-coverage/
-htmlcov/
-target/
-.gradle/
-
-# Editor/IDE
+# Editors
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# System
+# OS specific
 .DS_Store
 Thumbs.db
 ```
