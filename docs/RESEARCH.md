@@ -399,3 +399,189 @@ rate-limited."
 Sources: [Scrapfly — How to Bypass Anti-Bot Protection in 2026](https://scrapfly.io/blog/posts/how-to-bypass-anti-bot-protection),
 [Evomi — Kasada, Shape, and the Next Generation of Anti-Bot](https://evomi.com/blog/kasada-shape-and-the-next-generation-of-anti-bot-what-scrapers-need-to-know),
 [Scrapfly — HTTP/2 and HTTP/3 Fingerprinting](https://scrapfly.io/blog/posts/http2-http3-fingerprinting-guide).
+
+---
+
+## 2026-09-20 — Open-source anti-bot landscape scan (what to learn from, what to take)
+
+Scanned for currently-maintained open-source projects solving pieces of
+the same problem, specifically to close the Patchright/Scrapling gap
+logged in the 2026-09-18 entry above.
+
+**Scope caveat:** this pass read READMEs, docs sites and package
+metadata — **not source code**. Everything below is the projects' own
+claims plus our assessment of fit. Nothing here has been code-reviewed,
+so treat the technique list as leads to verify, not as verified facts.
+
+### Ranked by usefulness to bot-shield
+
+**1. `okasi/bot-signal`** — TypeScript, MIT, ~555★, ~13.6k npm
+downloads/week, v2.0.14 (Aug 2026), active.
+Closest match to our own architecture: weighted multi-signal scoring
+with per-signal explainability, split across three layers (instant
+browser checks, behavioural over time, server-side IP/TLS/timezone).
+Three things worth lifting as *technique*:
+
+- **CDP detection via `Error` serialization side-effect**, in both the
+  page realm and a dedicated worker realm. This is the interesting one:
+  it detects the Chrome DevTools Protocol itself rather than the
+  globals a stealth tool scrubs, so it is a candidate for catching
+  Patchright-class automation that defeats everything in our current
+  set. Unverified against Patchright specifically — its own docs are
+  careful here, saying generic environment anomalies never identify
+  Patchright on their own and it only ever appears as an *alternative*
+  attribution alongside a Chromium automation pattern.
+- **An explicit false-positive carve-out list** — `isEmptyPlugins`
+  skipped entirely on mobile Chrome (which legitimately reports none);
+  in-app browsers, kiosk/F11 fullscreen and GPU-less VMs weighted
+  0.25–0.45 so they only matter in combination. This is the single
+  most directly useful part for us: we have no measured FP data
+  (see "Known gaps" below), and this is a free list of the cases that
+  bite in production.
+- **Two cheap server-side signals we don't have:** browser-reported
+  timezone vs GeoIP of the source IP, and datacenter IP range
+  membership. Both fit `RequestFacts` directly.
+
+Also notable: it scores `1 - Π(1 - wᵢ)` rather than summing weights,
+with definitive markers at 1.0 and ambiguous ones at 0.25–0.45. Same
+*principle* as our "no weak signal blocks alone" rule (CLAUDE.md §6),
+reached by a different formula. Not a reason to rewrite `score.go` —
+noted only so the next person doesn't think our additive scheme is
+unconsidered.
+
+**2. `WeebDataHoarder/go-away`** — Go, MIT, ~174★, created Apr 2025,
+active. The only one in our language. Stated goal is close to our own
+false-positive posture: "minimize impact to legit users, while
+surgically targeting heavy endpoints or scrapers". Its README carries a
+comparison table of the whole PoW-proxy ecosystem (Anubis, powxy, PoW!
+Bot Deterrent, haproxy-protection) — useful as a landscape map. Its
+rule/condition system is the closest existing art to ROADMAP item 11
+(per-client rules).
+
+**3. `WebDecoy/FCaptcha`** — Go + Node + Python, MIT, ~180★, created
+Dec 2025. Broadest feature overlap with us (behavioural signals + TLS
+fingerprinting + PoW in one system). The part worth studying is
+**Web Bot Auth (RFC 9421)**: verifying a self-declaring agent
+(ClaudeBot, GPTBot, PerplexityBot…) by checking its HTTP message
+signature against the operator's published key directory, rather than
+by reverse+forward DNS as `signals/goodbots.go` does today. That is
+where good-bot verification is heading and it is a published RFC, so it
+can be implemented from the spec with no licence question at all.
+Younger and smaller than the others, so less battle-tested.
+
+**4. `TecharoHQ/anubis`** — Go, MIT. The most production-proven of the
+set (deployed in front of GNOME's GitLab, kernel.org and much of the
+self-hosted FOSS world). Less to take than expected, because we already
+have PoW and a signed challenge cookie. **Its value to us is its
+documented failure:** difficulty was raised from 4 to 5 leading zero
+bits — enough to make phones "uncomfortably warm", per its author — and
+scrapers adapted and kept solving it. GNOME reported ~3.2% of requests
+passing the challenge at all. This is direct evidence that a *fixed*
+difficulty loses over time, which is the argument for the adaptive
+scheme in "Cost asymmetry" below.
+
+**5. `ttlns/brotector`** — JS/Python, MIT, ~277★, **last push Dec 2024
+— not maintained.** Included despite that because it remains the best
+single catalogue of raw webdriver-detection primitives:
+`Runtime.enable`/`Console.enable` CDP leak, `Input.coordinatesLeak`
+(crbug#1477537, bypassable with CDP-Patches), Playwright ≥1.46.1
+init-script detection, injected-JS detection via stack-trace signature.
+**Do not adopt its crash techniques** (popupCrash via crbug#340836884,
+the Selenium script-injection crash): they crash the visitor's browser,
+and a real person with DevTools open can trigger the same paths. That
+is a product-breaking false positive, not a detection (CLAUDE.md §14).
+`bot-signal` has already distilled the usable subset and documents
+which of these it rejected as too noisy or too intrusive — prefer that
+as the reference.
+
+**Adjacent, different category: `Nepenthes`** (and its Python rewrite)
+— an AI-crawler tarpit that serves an infinite maze of deterministic
+Markov-babble pages, drip-fed byte by byte to hold the crawler open.
+Conceptually close to our deception mode. **Not adoptable as-is:** its
+own documentation warns that any site it is applied to will likely
+disappear from all search results, because it cannot distinguish a
+search indexer from an AI trainer. We have `IsVerifiedGoodBot`
+specifically to protect customer SEO, so this is an idea to read, not
+a component to ship.
+
+### Cost asymmetry: bandwidth is the wrong lever, CPU is the right one
+
+Question raised: scrapers must run real browsers, and browsers are
+expensive at scale — so should we make pages *heavier* to tax them,
+since a real visitor only loads the page once or twice?
+
+The instinct (asymmetric cost) is right, the lever is wrong:
+
+- **Egress is our cost, not theirs.** We are an inline hosted proxy;
+  every injected byte is billed to us (CLAUDE.md §19). Deliberately
+  inflating responses is a self-inflicted bill.
+- **Real users are not insensitive to page weight.** Heavier pages hurt
+  Core Web Vitals and therefore the customer's search ranking — the
+  exact thing `IsVerifiedGoodBot` exists to protect — and cost
+  conversions on mobile networks. A protection product that degrades
+  the site it protects is a contradiction (CLAUDE.md §14).
+- **It is trivially sidestepped.** A scraper already declines images,
+  CSS and fonts for cost reasons; heavier pages just make it decline
+  more. (That declining *is* itself a signal — see the asset-fidelity
+  note under "Known gaps".)
+
+CPU is the lever that survives all three: a proof-of-work challenge
+costs us a few bytes of JavaScript, costs a clean visitor nothing
+because they never see it, and costs an attacker real compute that
+cannot be outsourced to a proxy pool. The refinement over what we ship
+today is **difficulty scaled by suspicion and by repeat offence**
+(clean → none; suspicious → light; a caller that keeps coming back →
+rising), which is also the answer to Anubis's documented fixed-
+difficulty failure above. mCaptcha pioneered variable-difficulty PoW
+and Cap now offers a GPU-resistant PoW variant; both are worth reading
+before we design ours.
+
+### Licence position for consuming any of this
+
+All five are MIT, which permits commercial and closed-source use and
+modification — the only condition is preserving the copyright notice.
+For bot-shield (closed-source, commercial, hosted) that means:
+
+- **Techniques, signal lists, weights and known false-positive cases
+  are facts and ideas** — not copyrightable, free to use, no
+  attribution owed. This is where essentially all the value above sits.
+- **Porting a specific file to Go is a derivative work**, not original
+  authorship; the licence and its attribution condition follow the
+  translation. Stripping the notice is the one move that converts a
+  free, permitted use into infringement, and it is the kind of thing
+  that surfaces in enterprise SBOM requests and acquisition IP
+  diligence rather than in a lawsuit.
+- If we ever do want lines rather than ideas (most plausible for
+  `go-away`, being Go), the correct handling is a `NOTICES.md` /
+  third-party licence file. That is cheap and keeps the option open.
+
+Practical consequence: read these for technique, implement into our own
+`RequestFacts`/`checks` shape with our own tests and false-positive
+analysis. That also produces better-fitting code, since none of these
+carry our tenant scoping or evidence-trail requirements.
+
+### Known gaps this scan did not close
+
+- **No source code was read.** Verify the CDP `Error`-serialization
+  technique against a real Patchright session before weighting it.
+- **We still have no measured false-positive rate.** Every threshold in
+  `score.go` is an estimate, and the FP carve-out list above is
+  borrowed rather than observed. A real site in shadow mode for two
+  weeks would be worth more than any single new signal here.
+- **Asset-fidelity correlation is still unbuilt.** A real browser
+  rendering a page fetches its CSS, fonts and images; a scraper
+  declines them to keep cost down. We already classify static assets
+  (`signals/velocity.go`) and already track distinct-path breadth
+  (`signals/pattern.go`), but nothing correlates "many HTML documents,
+  almost no subresources" per session. That is a server-observed
+  signal a real-browser stealth tool cannot fake without giving up the
+  cost advantage that motivates scraping in the first place.
+
+Sources: [okasi/bot-signal](https://github.com/okasi/bot-signal),
+[WeebDataHoarder/go-away](https://github.com/WeebDataHoarder/go-away),
+[WebDecoy/FCaptcha](https://github.com/WebDecoy/FCaptcha),
+[TecharoHQ/anubis](https://github.com/TecharoHQ/anubis),
+[ttlns/brotector](https://github.com/ttlns/brotector),
+[Cap — open-source CAPTCHA comparison](https://github.com/tiagozip/cap),
+[Nepenthes](https://nepenthes.online/),
+[Pinggy — AI crawlers cost more CPU than real traffic](https://pinggy.io/blog/ai_crawlers_cost_more_cpu_than_real_traffic/).
