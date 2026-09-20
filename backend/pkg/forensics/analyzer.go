@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -248,11 +249,20 @@ func (fa *ForensicAnalyzer) calculateHumanLikelihood(score int) float64 {
 	return math.Round(likelihood*1000) / 1000
 }
 
-// generateCacheKey creates a unique key for client data
+// generateCacheKey creates a unique key for client data. Map iteration order
+// in Go is randomized, so keys are sorted first — otherwise identical
+// client data could hash to a different key on every call, and the cache
+// this key feeds would never hit.
 func (fa *ForensicAnalyzer) generateCacheKey(data map[string]interface{}) string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	h := sha256.New()
-	for k, v := range data {
-		fmt.Fprintf(h, "%s=%v;", k, v)
+	for _, k := range keys {
+		_, _ = fmt.Fprintf(h, "%s=%v;", k, data[k])
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

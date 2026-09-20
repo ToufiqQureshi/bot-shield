@@ -2737,6 +2737,42 @@ Tested how:
   - `go test ./...` — all packages pass, including
     `pkg/signals` (ja4db_test.go, now with the dead map's tests
     removed too) and `pkg/forensics`.
+
+Follow-up push, same day: PR #10's CI (golangci-lint) was still red
+after the above — the failure was unrelated to the gitignore/JA4
+cleanup: `pkg/forensics/analyzer.go:255`, an unchecked
+`fmt.Fprintf(h, ...)` return value (errcheck). Fixed by capturing and
+discarding the error explicitly (hash.Hash.Write never actually
+fails, but golangci-lint doesn't know that). While in that function,
+found and fixed a second, more serious bug in the same few lines:
+`generateCacheKey` built the cache key by ranging over the input map
+directly. Go randomizes map iteration order on every range — including
+two ranges over the same map object in the same process — so identical
+client data could (and reliably did, confirmed by temporarily
+reverting the fix and running the new test 5x) hash to a different
+cache key on almost every call. `AnalyzeClient`'s cache
+(`cacheExpiry`/`maxCacheSize`, the whole point of which is documented
+in analyzer.go as "cost optimization") would have missed on nearly
+every request in production, doing full 5-layer analysis every time
+instead of serving from cache. Fixed by sorting the keys before
+hashing.
+Why (this follow-up): CI must actually be green, not just "green on
+  my machine" — `golangci-lint` isn't part of `go build`/`go vet`/
+  `go test` and wasn't run before the first push in this entry. Ran it
+  locally before this push. The cache-key bug was found by re-reading
+  the function golangci-lint flagged, not by a separate audit — the
+  errcheck warning was sitting directly on the line with the real bug.
+Tested how:
+  - `golangci-lint run ./...`: 0 issues (was 1, errcheck).
+  - Added `TestForensicAnalyzer_CacheKeyIsDeterministic`
+    (pkg/forensics/analyzer_test.go): calls `generateCacheKey` on the
+    same map 20x, asserts every result matches the first.
+  - Mutation check: reverted `generateCacheKey` to the unsorted
+    version, ran the new test with `-count=5` — failed on 5/5 runs
+    with visibly different hex digests for the same input. Restored
+    the fix, reran — passes consistently.
+  - `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...` —
+    all clean after the fix.
 Known gaps / follow-up:
   - PR #11 (honeypot trap + prompt-poisoning deception, reviewed at
     the same time) was clean and not touched here.

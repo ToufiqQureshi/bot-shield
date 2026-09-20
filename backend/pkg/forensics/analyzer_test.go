@@ -164,6 +164,30 @@ func TestForensicAnalyzer_Caching(t *testing.T) {
 	}
 }
 
+func TestForensicAnalyzer_CacheKeyIsDeterministic(t *testing.T) {
+	analyzer := NewForensicAnalyzer(100, 5*time.Minute)
+
+	data := map[string]interface{}{
+		"canvas_noise":   0.003,
+		"audio_drift":    0.0004,
+		"mouse_entropy":  0.4,
+		"gc_timing":      1.2,
+		"resource_races": 0,
+	}
+
+	// Go randomizes map iteration order on every range, including two
+	// ranges over the exact same map in the same process. Without
+	// sorting keys first, generateCacheKey would produce a different
+	// string most of the time, and AnalyzeClient's cache would miss on
+	// every call even for identical input.
+	first := analyzer.generateCacheKey(data)
+	for i := 0; i < 20; i++ {
+		if got := analyzer.generateCacheKey(data); got != first {
+			t.Fatalf("generateCacheKey is non-deterministic: call 1 = %q, call %d = %q", first, i+2, got)
+		}
+	}
+}
+
 func TestForensicAnalyzer_EmptyData(t *testing.T) {
 	analyzer := NewForensicAnalyzer(100, 5*time.Minute)
 
