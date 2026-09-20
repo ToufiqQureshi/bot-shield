@@ -40,7 +40,7 @@ func TestGuardChallengesCleanTrafficStrict(t *testing.T) {
 		Policy: config.PolicyStrict,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestGuardAllowsCleanTrafficBalanced(t *testing.T) {
 		Policy: config.PolicyBalanced,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	rec := httptest.NewRecorder()
@@ -92,7 +92,7 @@ func TestGuardAllowsCleanTrafficBalanced(t *testing.T) {
 func TestGuardHealthzEndpoint(t *testing.T) {
 	store := tenant.NewStore()
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	req := httptest.NewRequest("GET", "http://any-host/__botshield/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestGuardForwardsPassedTraffic(t *testing.T) {
 		Mode:   config.ModeEnforce,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 	passed := solveChallenge(t, c, "example.com")
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
@@ -158,7 +158,7 @@ func TestGuardBlocksMaliciousJA4(t *testing.T) {
 		Deception: false,
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	ctx := core.WithJA4(req.Context(), "t12d190800_4464c1bd5eb7_b3394627b738") // Known malicious Python requests
@@ -249,7 +249,7 @@ func TestGuardVelocityLimitsPassedSession(t *testing.T) {
 	proxy, _ := core.NewOriginProxy(target.URL)
 	store.Add("default", tenant.TenantConfig{Target: target.URL, Mode: config.ModeEnforce}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 	passedCookie := solveChallenge(t, c, "example.com")
 
 	makeReq := func() *httptest.ResponseRecorder {
@@ -297,7 +297,7 @@ func TestGuardDeceptionMode(t *testing.T) {
 		Deception: true, // Deception enabled!
 	}, []string{"example.com"}, proxy)
 
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	req := httptest.NewRequest("GET", "http://example.com/", nil)
 	ctx := core.WithJA4(req.Context(), "t12d190800_4464c1bd5eb7_b3394627b738") // Known malicious Python requests
@@ -311,5 +311,82 @@ func TestGuardDeceptionMode(t *testing.T) {
 	}
 	if receivedDecision != "deceive" {
 		t.Errorf("expected origin to receive X-BotShield-Decision: deceive, got %q", receivedDecision)
+	}
+}
+
+// TestHoneypotTrapEndToEnd walks the whole loop the feature exists for:
+// a deceived visitor is served HTML carrying the invisible trap link,
+// fetching that link is recorded, and the recorded trip then shows up
+// in the visitor's evidence on their next request.
+func TestHoneypotTrapEndToEnd(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><body><h1>prices</h1></body></html>"))
+	}))
+	defer origin.Close()
+
+	store := tenant.NewStore()
+	proxy, _ := core.NewOriginProxy(origin.URL)
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+	store.Add("acme", tenant.TenantConfig{
+		Target:    origin.URL,
+		Mode:      config.ModeEnforce,
+		Deception: true,
+	}, []string{"example.com"}, proxy)
+
+	guard := core.NewGuard(store, c)
+
+	// Step 1: a scraper gets the deceived page and is handed the bait.
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.RemoteAddr = "203.0.113.9:44321"
+	ctx := core.WithJA4(req.Context(), "t12d190800_4464c1bd5eb7_b3394627b738") // known Python requests
+	rec := httptest.NewRecorder()
+	guard.ServeHTTP(rec, req.WithContext(ctx))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, signals.HoneypotPath) {
+		t.Fatalf("deceived HTML should carry the trap link, got:\n%s", body)
+	}
+
+	// Step 2: only something walking the DOM follows that link.
+	trapReq := httptest.NewRequest("GET", "http://example.com"+signals.HoneypotPath, nil)
+	trapReq.RemoteAddr = "203.0.113.9:44322"
+	trapCtx := core.WithJA4(trapReq.Context(), "t12d190800_4464c1bd5eb7_b3394627b738")
+	trapRec := httptest.NewRecorder()
+	guard.ServeHTTP(trapRec, trapReq.WithContext(trapCtx))
+
+	if trapRec.Code != http.StatusNotFound {
+		t.Errorf("the trap should give a crawler nothing back: got %d, want 404", trapRec.Code)
+	}
+
+	// Step 3: the trip is now evidence against that caller.
+	if !signals.HoneypotTripped("acme", "203.0.113.9", "t12d190800_4464c1bd5eb7_b3394627b738") {
+		t.Fatal("fetching the trap path should have been recorded against the caller")
+	}
+
+	// ...and only against that caller, not the whole tenant.
+	if signals.HoneypotTripped("acme", "203.0.113.10", "t12d190800_4464c1bd5eb7_b3394627b738") {
+		t.Error("the trip must not spill onto other visitors of the same tenant")
+	}
+}
+
+// TestHoneypotTrapIgnoresUnknownHosts: the trap records into detection
+// state, so it must sit behind the tenant lookup. Otherwise anyone
+// pointing a DNS record at the service could write into it for free.
+func TestHoneypotTrapIgnoresUnknownHosts(t *testing.T) {
+	store := tenant.NewStore()
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+	guard := core.NewGuard(store, c)
+
+	req := httptest.NewRequest("GET", "http://not-a-customer.example"+signals.HoneypotPath, nil)
+	req.RemoteAddr = "203.0.113.11:1234"
+	rec := httptest.NewRecorder()
+	guard.ServeHTTP(rec, req.WithContext(core.WithJA4(req.Context(), "t13d1516h2_8daaf6152771_e5627efa2ab1")))
+
+	if rec.Code != 421 {
+		t.Errorf("an unknown host should be refused before the trap runs: got %d, want 421", rec.Code)
+	}
+	if signals.HoneypotTripped("", "203.0.113.11", "t13d1516h2_8daaf6152771_e5627efa2ab1") {
+		t.Error("a request for a host we do not serve must not reach detection state")
 	}
 }

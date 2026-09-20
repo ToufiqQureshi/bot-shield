@@ -24,7 +24,7 @@ func newBenchGuard(b *testing.B) (http.Handler, *httptest.Server) {
 		Mode:   config.ModeEnforce,
 	}, []string{"*"}, proxy)
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
-	return core.NewGuard(store, c, nil), origin
+	return core.NewGuard(store, c), origin
 }
 
 // BenchmarkGuardServeHTTP measures request throughput through the full guard pipeline.
@@ -67,7 +67,7 @@ func BenchmarkGuardHighConcurrency(b *testing.B) {
 func TestGuardUnknownTenant(t *testing.T) {
 	store := tenant.NewStore()
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	req := httptest.NewRequest("GET", "http://unknown-host.io/", nil)
 	rec := httptest.NewRecorder()
@@ -94,7 +94,7 @@ func TestGuardShadowModeDoesNotBlock(t *testing.T) {
 	}, []string{"shadow.local"}, proxy)
 
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	// Even with a suspicious-looking (unreadable JA4) request, shadow mode must pass.
 	req := httptest.NewRequest("GET", "http://shadow.local/", nil)

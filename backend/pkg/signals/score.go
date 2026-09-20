@@ -49,6 +49,7 @@ const (
 	uaMismatchWeight    = 50
 	headerAnomalyWeight = 25
 	crawlPatternWeight  = 50
+	honeypotWeight      = 50
 	blockThreshold      = 100
 )
 
@@ -72,6 +73,9 @@ type RequestFacts struct {
 	UA     string
 	Header http.Header
 	Path   string
+	// Tenant scopes per-customer state (currently the honeypot trap) so
+	// one customer's traffic can never influence another's decisions.
+	Tenant string
 }
 
 // checks is the single list every scoring check lives in, so a score
@@ -102,6 +106,18 @@ var checks = []struct {
 	// claim: a real browser's requests per page look nothing like a
 	// scraper walking many distinct URLs quickly with no subresources.
 	{"crawl_pattern", crawlPatternWeight, func(f RequestFacts) bool { return CrawlPatternSuspected(f) }},
+	// honeypot_trap fires for a caller that fetched the invisible trap
+	// link (pkg/deception injects it; guard.go records the fetch).
+	// Following a display:none, aria-hidden, nofollow link is strong
+	// evidence of DOM-walking automation — but deliberately not 100.
+	// A screen reader or an over-eager browser prefetch can reach a
+	// hidden link too, and those are real people (CLAUDE.md Section
+	// 14). At 50 a lone trip is challenged, which a human recovers
+	// from, while a real scraper trips this *and* the handshake, UA or
+	// crawl-pattern signals and crosses the block bar on evidence.
+	{"honeypot_trap", honeypotWeight, func(f RequestFacts) bool {
+		return HoneypotTripped(f.Tenant, f.IP, f.JA4)
+	}},
 }
 
 // Score combines a request's known signals into one risk score.

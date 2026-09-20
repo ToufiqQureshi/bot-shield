@@ -64,7 +64,7 @@ func TestGetByHost_Wildcard(t *testing.T) {
 func TestTenantIsolation(t *testing.T) {
 	store := newStore(t)
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	// send 5 requests to tenant A
 	for i := 0; i < 5; i++ {
@@ -97,7 +97,7 @@ func TestTenantIsolation(t *testing.T) {
 func TestTenantIsolationConcurrent(t *testing.T) {
 	store := newStore(t)
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
-	guard := core.NewGuard(store, c, nil)
+	guard := core.NewGuard(store, c)
 
 	const workers, perWorker = 20, 100
 	var wg sync.WaitGroup
