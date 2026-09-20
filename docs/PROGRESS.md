@@ -2686,3 +2686,64 @@ Known gaps / follow-up:
     catches code smells and correctness bugs, not algorithmic cost.
     That needs profiling (`net/http/pprof`) against real traffic, not
     a linter, and is still open.
+
+## 2026-09-20 — Fixed PR #10 (corrupt .gitignore, binary bloat, fabricated JA4 data)
+
+Changed:
+  - `.gitignore`: the file had been overwritten with literal markdown
+    code-fence lines (```` ``` ````) around its content, which also
+    silently dropped `/bin/`, `.gocache/`, `*.exe`, `/scratch/` and
+    added a dangerous `pkg/` line that would have gitignored the
+    entire `backend/pkg/` source tree (every detection package) going
+    forward. Restored the original patterns plus the new ones the
+    broken version was trying to add (`*.out`, `coverage/`,
+    `.env.local`, `.vscode/`, `.idea/`, OS junk files).
+  - Removed 8 committed compiled binaries (`backend/botshield*`,
+    ~24MB each), `backend/go1.23.0.linux-amd64.tar.gz` (~73MB Go
+    toolchain tarball), `backend/coverage.out`, and
+    `backend/PRODUCTION_TEST_REPORT.md` (a self-declared "PRODUCTION
+    READY" report duplicating this file's job, written before the
+    .gitignore bug was even caught) — all committed as a direct
+    consequence of the broken .gitignore above.
+  - `pkg/signals/ja4db.go`: removed `knownBrowserJA4s` (a ~49-entry
+    hardcoded JA4 fingerprint map), `IsKnownBrowserJA4()`, and
+    `ClassifyJA4()`. 32 of the 49 entries (65%) were not valid JA4
+    fingerprints at all — the third hash segment contained non-hex
+    characters (e.g. `..._edge120win`, `..._brave160win`), meaning
+    they could never match real traffic, while comments on the map
+    claimed they were "verified fingerprints from real traffic" and
+    "verified captures from threat intelligence." None of the three
+    removed symbols had any caller outside this file (confirmed via
+    grep across `backend/`) — dead code as well as fabricated data.
+    The real, working browser/scraper matching path
+    (`isCommonBrowserJA4`, `scraperJA4s`, `StartJA4Sync`'s Redis sync)
+    was untouched; it already existed, doesn't rely on hardcoded
+    hashes, and is what `pkg/signals/velocity.go` actually calls.
+Why: the request was to review PR #10, then fix what's broken without
+  deleting anything that's genuinely useful. The forensics engine
+  added in the same PR (`pkg/forensics/analyzer.go`, 298 lines,
+  5-layer canvas/audio/mouse/timing analysis) is real, tested, and
+  unique — left as-is; it isn't wired into the request pipeline yet,
+  but wiring it needs a client-side collection script and a new
+  endpoint, which is a separate feature and out of scope for a
+  broken-PR fix. The JA4 map was different: unlike the forensics
+  engine, it was both disconnected from any caller *and* mostly
+  fabricated data with misleading provenance comments — CLAUDE.md
+  Section 21 (remove genuinely dead code) and the project's own
+  existing rule in `score.go`'s `badJA4Hashes` ("Placeholder hashes
+  without verified captures must never ship") both apply directly.
+Tested how:
+  - `go build ./...`, `go vet ./...`, `gofmt -l .` — all clean.
+  - `go test ./...` — all packages pass, including
+    `pkg/signals` (ja4db_test.go, now with the dead map's tests
+    removed too) and `pkg/forensics`.
+Known gaps / follow-up:
+  - PR #11 (honeypot trap + prompt-poisoning deception, reviewed at
+    the same time) was clean and not touched here.
+  - `pkg/forensics/analyzer.go` still has no caller — an intentional
+    gap, not this fix's scope. Wiring it needs an owner decision on
+    the client-side collection approach before it's worth building.
+  - Did not attempt to source real JA4 captures to replace the
+    removed map; if exact-match browser fingerprinting is wanted
+    later, it should be rebuilt from verified captures, not
+    regenerated placeholder hex.

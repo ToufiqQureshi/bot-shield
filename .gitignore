@@ -1,25 +1,20 @@
-```
-# Compiled and build artifacts
-*.out
-coverage/
-
-# Dependencies
-pkg/
-
-# Environment
+/bin/
+*.log
 .env
 .env.local
 *.env.*
-
-# Logs and temp files
-*.log
-*.tmp
-
-# Editors
+/agentchat/
+/.agents/
+/playwright-test/
+/scripts/
+.gocache/
+*.exe
+/scratch/
+/Scrapling/
+/patchright/
+*.out
+coverage/
 .vscode/
 .idea/
-
-# OS specific
 .DS_Store
 Thumbs.db
-```
