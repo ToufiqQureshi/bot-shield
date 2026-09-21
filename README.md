@@ -119,6 +119,23 @@ Your origin then receives each request with:
 hakaishield strips all of these from the incoming request before setting
 its own, so a visitor can't forge them.
 
+## Dashboard (frontend)
+
+`dashboard/` is a React + Vite UI (19 pages: marketing, auth, billing,
+and the operator dashboard itself — evidence logs, mitigation rules,
+protection settings, domains). It is **not yet wired to the backend
+API** — see `dashboard/BACKEND_WIRING_DOCS.md` for what connecting it
+requires. Treat it as a UI scaffold, not a working product surface,
+until that wiring lands.
+
+```bash
+cd dashboard
+npm install
+npm run dev        # local dev server
+npm run typecheck  # tsc --noEmit
+npm run build      # production build
+```
+
 ## Documentation
 
 Start with `docs/AGENT.md` (why this exists), then

@@ -2836,3 +2836,60 @@ Known gaps / follow-up:
     rename's scope.
   - Same breaking-change caveat as before: `X-HakaiShield-*` header/
     cookie consumers need to move to `X-HakaiShield-*`.
+
+## 2026-09-21 — Brought the untracked dashboard frontend into the repo
+
+Changed:
+  - Found `botshiel-frontend/` sitting in the working tree, untracked
+    (never committed to any branch) — a React 18 + Vite + Tailwind +
+    Supabase dashboard with 19 pages (marketing, auth, billing,
+    onboarding, and the operator surfaces: Overview, Evidence Logs,
+    Mitigation Rules, Protection Settings, Domains & SIEM). It had its
+    own nested `.git/` (a separate, disconnected repo), so a plain
+    `git add` would have created a gitlink/submodule reference instead
+    of tracking its files — removed the nested `.git/` first.
+  - Moved it to `dashboard/`, renamed `package.json`'s name field
+    from the generic `sandbox-workspace` to `hakaishield-dashboard`,
+    and ran the same `[Bb]ot-?[Ss]hield` → HakaiShield rename pass
+    used for the backend across its `.tsx`/`.ts`/`.md`/`.json`/`.css`/
+    `.html` files.
+  - Added a `## Dashboard (frontend)` section to the root `README.md`
+    documenting the dev/build/typecheck commands and, per `CLAUDE.md`
+    Section 27 (avoid misleading empty states), stating plainly that
+    it is **not wired to the backend API yet**.
+
+Why:
+  Owner asked to review the folder, then to bring it into the repo
+  under the HakaiShield name rather than leave working code
+  untracked and unrecoverable.
+
+Tested how:
+  - `npm install` — 147 packages, no install errors.
+  - `npm run typecheck` (`tsc --noEmit`) — clean.
+  - `npm run build` (`vite build`) — succeeds; one non-blocking
+    warning that the main JS chunk is 728 KB minified (193 KB
+    gzipped) — code-splitting is a follow-up, not a correctness
+    issue.
+  - Repo-wide grep for `[Bb]ot-?[Ss]hield` under `dashboard/` returns
+    zero matches after the rename.
+  - `dashboard/.gitignore` already excluded `node_modules/` and
+    `dist/`; confirmed neither was staged.
+
+Known gaps / follow-up:
+  - `npm audit` reports 2 moderate CVEs: `react-router-dom` (open
+    redirect via backslash in `<Link>`/`useNavigate`,
+    CVE-2025-68470-adjacent; GHSA-wrjc-x8rr-h8h6 /
+    GHSA-337j-9hxr-rhxg) and `uuid` (missing buffer bounds check,
+    GHSA-w5hq-g745-h8pq). Both fixes are available only via
+    `npm audit fix --force`, which is a breaking major-version bump
+    (react-router-dom 6→7, uuid 9→14) on code that has no test
+    coverage yet — deliberately not force-upgraded blind. Needs a
+    scoped upgrade + smoke test before it ships, not a blanket
+    `--force`.
+  - The frontend is **not wired to the backend**
+    (`dashboard/BACKEND_WIRING_DOCS.md` describes what that requires:
+    auth, API endpoints, payments, email). Every page currently shows
+    scaffold/mock data. Do not present it as a working dashboard to a
+    customer until that wiring is done — see `CLAUDE.md` Section 27.
+  - No test suite exists for the dashboard (no `test` script in
+    `package.json`).
