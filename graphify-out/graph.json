@@ -689,7 +689,7 @@
       "file_type": "code",
       "norm_label": "payment()",
       "source_file": "dashboard/src/pages/Payment.tsx",
-      "source_location": "L5"
+      "source_location": "L13"
     },
     {
       "id": "dashboard_src_pages_pricing_pricing",
@@ -1271,6 +1271,17 @@
       "source_location": "L19"
     },
     {
+      "id": "ref_react_dom",
+      "label": "react-dom",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "api.ts",
+      "file_type": "concept",
+      "norm_label": "react-dom",
+      "source_file": "dashboard/package.json",
+      "source_location": "L20"
+    },
+    {
       "id": "ref_react_router_dom",
       "label": "react-router-dom",
       "_origin": "ast",
@@ -1304,6 +1315,17 @@
       "norm_label": "p2 \u2014 product-grade",
       "source_file": "docs/ROADMAP.md",
       "source_location": "L532"
+    },
+    {
+      "id": "api_offenderstats",
+      "label": "OffenderStats",
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "guard_test.go",
+      "file_type": "code",
+      "norm_label": "offenderstats",
+      "source_file": "backend/pkg/api/report.go",
+      "source_location": "L17"
     },
     {
       "id": "api_statsresponse",
@@ -1392,6 +1414,17 @@
       "norm_label": "testdashboardstatshandler()",
       "source_file": "backend/pkg/api/handlers_test.go",
       "source_location": "L14"
+    },
+    {
+      "id": "backend_pkg_api_report",
+      "label": "report.go",
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "guard_test.go",
+      "file_type": "code",
+      "norm_label": "report.go",
+      "source_file": "backend/pkg/api/report.go",
+      "source_location": "L1"
     },
     {
       "id": "backend_pkg_api_report_dashboardexporthandler",
@@ -1757,28 +1790,6 @@
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_tenant_tenant",
-      "label": "tenant.go",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": "tenant.go",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_tenant_tenant_go_tenant_store",
-      "label": "Store",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": "store",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L43"
-    },
-    {
       "id": "backend_pkg_tenant_tenant_newstore",
       "label": "NewStore()",
       "_origin": "ast",
@@ -1909,116 +1920,6 @@
       "norm_label": "net/http/httptest.server",
       "source_file": "",
       "source_location": ""
-    },
-    {
-      "id": "go_type_net_http_httputil_reverseproxy",
-      "label": "net/http/httputil.ReverseProxy",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": "net/http/httputil.reverseproxy",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "go_type_sync_rwmutex",
-      "label": "sync.RWMutex",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": "sync.rwmutex",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "tenant_proxyfactory",
-      "label": "ProxyFactory",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": "proxyfactory",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L40"
-    },
-    {
-      "id": "tenant_store_add",
-      "label": ".Add()",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": ".add()",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L59"
-    },
-    {
-      "id": "tenant_store_addfromdbrow",
-      "label": ".addFromDBRow()",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": ".addfromdbrow()",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L116"
-    },
-    {
-      "id": "tenant_store_fetchfromdb",
-      "label": ".fetchFromDB()",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": ".fetchfromdb()",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L95"
-    },
-    {
-      "id": "tenant_store_getbyhost",
-      "label": ".GetByHost()",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": ".getbyhost()",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L79"
-    },
-    {
-      "id": "tenant_store_getbyid",
-      "label": ".GetByID()",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": ".getbyid()",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L148"
-    },
-    {
-      "id": "tenant_tenant",
-      "label": "Tenant",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": "tenant",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L31"
-    },
-    {
-      "id": "tenant_tenantconfig",
-      "label": "TenantConfig",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "file_type": "code",
-      "norm_label": "tenantconfig",
-      "source_file": "backend/pkg/tenant/tenant.go",
-      "source_location": "L21"
     },
     {
       "id": "claude_skills_graphify_skill",
@@ -2985,17 +2886,6 @@
       "norm_label": "framer-motion",
       "source_file": "dashboard/package.json",
       "source_location": "L17"
-    },
-    {
-      "id": "ref_react_dom",
-      "label": "react-dom",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "package.json",
-      "file_type": "concept",
-      "norm_label": "react-dom",
-      "source_file": "dashboard/package.json",
-      "source_location": "L20"
     },
     {
       "id": "ref_recharts",
@@ -4972,6 +4862,18 @@
       "source_location": "L2840"
     },
     {
+      "id": "docs_progress_2026_09_21_playwright_end_to_end_check_found_and_fixed_a_real_cors_bug_plus_fake_billing_ui",
+      "label": "2026-09-21 \u2014 Playwright end-to-end check found and fixed a real CORS bug, plus fake billing UI",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "PROGRESS.md \u2014 What Was Done, When, and Why",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "2026-09-21 \u2014 playwright end-to-end check found and fixed a real cors bug, plus fake billing ui",
+      "source_file": "docs/PROGRESS.md",
+      "source_location": "L3095"
+    },
+    {
       "id": "docs_progress_2026_09_21_ran_backend_frontend_together_against_a_live_postgres_owner_requested_check",
       "label": "2026-09-21 \u2014 Ran backend + frontend together against a live Postgres (owner-requested check)",
       "_origin": "ast",
@@ -5160,6 +5062,17 @@
       "norm_label": "testneworiginproxy_invalidtarget()",
       "source_file": "backend/pkg/core/proxy_test.go",
       "source_location": "L50"
+    },
+    {
+      "id": "backend_pkg_core_proxy_withdecision",
+      "label": "WithDecision()",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "proxy.go",
+      "file_type": "code",
+      "norm_label": "withdecision()",
+      "source_file": "backend/pkg/core/proxy.go",
+      "source_location": "L25"
     },
     {
       "id": "backend_pkg_deception_deception",
@@ -5781,7 +5694,7 @@
       "label": "evidence.go",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "evidence.go",
       "source_file": "backend/pkg/evidence/evidence.go",
@@ -5792,7 +5705,7 @@
       "label": "evidence_bench_test.go",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "evidence_bench_test.go",
       "source_file": "backend/pkg/evidence/evidence_bench_test.go",
@@ -5803,7 +5716,7 @@
       "label": "BenchmarkTrailRecent()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarktrailrecent()",
       "source_file": "backend/pkg/evidence/evidence_bench_test.go",
@@ -5814,7 +5727,7 @@
       "label": "BenchmarkTrailRecord()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarktrailrecord()",
       "source_file": "backend/pkg/evidence/evidence_bench_test.go",
@@ -5825,7 +5738,7 @@
       "label": "BenchmarkTrailRecordAndRead()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarktrailrecordandread()",
       "source_file": "backend/pkg/evidence/evidence_bench_test.go",
@@ -5836,7 +5749,7 @@
       "label": "Trail",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "trail",
       "source_file": "backend/pkg/evidence/evidence.go",
@@ -5847,7 +5760,7 @@
       "label": "NewTrail()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "newtrail()",
       "source_file": "backend/pkg/evidence/evidence.go",
@@ -5858,7 +5771,7 @@
       "label": "newTrail()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "newtrail()",
       "source_file": "backend/pkg/evidence/evidence.go",
@@ -5869,7 +5782,7 @@
       "label": "evidence_test.go",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "evidence_test.go",
       "source_file": "backend/pkg/evidence/evidence_test.go",
@@ -5880,7 +5793,7 @@
       "label": "TestTrailConcurrentRecords()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testtrailconcurrentrecords()",
       "source_file": "backend/pkg/evidence/evidence_test.go",
@@ -5891,7 +5804,7 @@
       "label": "TestTrailLimit()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testtraillimit()",
       "source_file": "backend/pkg/evidence/evidence_test.go",
@@ -5902,7 +5815,7 @@
       "label": "TestTrailRecordAndRecent()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testtrailrecordandrecent()",
       "source_file": "backend/pkg/evidence/evidence_test.go",
@@ -5913,7 +5826,7 @@
       "label": "TestTrailRingBuffer_Overflow()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testtrailringbuffer_overflow()",
       "source_file": "backend/pkg/evidence/evidence_test.go",
@@ -5924,18 +5837,29 @@
       "label": "TestTrailTimestamp()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testtrailtimestamp()",
       "source_file": "backend/pkg/evidence/evidence_test.go",
       "source_location": "L55"
     },
     {
+      "id": "backend_pkg_signals_fingerprint",
+      "label": "fingerprint.go",
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "NewTrail",
+      "file_type": "code",
+      "norm_label": "fingerprint.go",
+      "source_file": "backend/pkg/signals/fingerprint.go",
+      "source_location": "L1"
+    },
+    {
       "id": "backend_pkg_signals_fingerprint_parseja4",
       "label": "ParseJA4()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "parseja4()",
       "source_file": "backend/pkg/signals/fingerprint.go",
@@ -5946,7 +5870,7 @@
       "label": "fingerprint_test.go",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "fingerprint_test.go",
       "source_file": "backend/pkg/signals/fingerprint_test.go",
@@ -5957,7 +5881,7 @@
       "label": "TestJA4FingerprintRejectsGarbage()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testja4fingerprintrejectsgarbage()",
       "source_file": "backend/pkg/signals/fingerprint_test.go",
@@ -5968,326 +5892,18 @@
       "label": "TestParseJA4()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testparseja4()",
       "source_file": "backend/pkg/signals/fingerprint_test.go",
       "source_location": "L16"
     },
     {
-      "id": "backend_pkg_signals_honeypot",
-      "label": "honeypot.go",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "honeypot.go",
-      "source_file": "backend/pkg/signals/honeypot.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_honeypotkey",
-      "label": "honeypotKey()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "honeypotkey()",
-      "source_file": "backend/pkg/signals/honeypot.go",
-      "source_location": "L60"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_honeypottripped",
-      "label": "HoneypotTripped()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "honeypottripped()",
-      "source_file": "backend/pkg/signals/honeypot.go",
-      "source_location": "L119"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_recordhoneypottrip",
-      "label": "RecordHoneypotTrip()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "recordhoneypottrip()",
-      "source_file": "backend/pkg/signals/honeypot.go",
-      "source_location": "L83"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_sweephoneypotlocked",
-      "label": "sweepHoneypotLocked()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "sweephoneypotlocked()",
-      "source_file": "backend/pkg/signals/honeypot.go",
-      "source_location": "L136"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test",
-      "label": "honeypot_test.go",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "honeypot_test.go",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_benchmarkhoneypottrippedempty",
-      "label": "BenchmarkHoneypotTrippedEmpty()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "benchmarkhoneypottrippedempty()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L184"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_resethoneypot",
-      "label": "resetHoneypot()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "resethoneypot()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L11"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypotconcurrentaccess",
-      "label": "TestHoneypotConcurrentAccess()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypotconcurrentaccess()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L126"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypotignoresincompleteidentity",
-      "label": "TestHoneypotIgnoresIncompleteIdentity()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypotignoresincompleteidentity()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L110"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypotisbounded",
-      "label": "TestHoneypotIsBounded()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypotisbounded()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L90"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypotonlyfirsttripisreported",
-      "label": "TestHoneypotOnlyFirstTripIsReported()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypotonlyfirsttripisreported()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L193"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypotrepeattripsdonotgrowthemap",
-      "label": "TestHoneypotRepeatTripsDoNotGrowTheMap()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypotrepeattripsdonotgrowthemap()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L71"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypotscoresbelowblockonitsown",
-      "label": "TestHoneypotScoresBelowBlockOnItsOwn()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypotscoresbelowblockonitsown()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L143"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypottripexpires",
-      "label": "TestHoneypotTripExpires()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypottripexpires()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L55"
-    },
-    {
-      "id": "backend_pkg_signals_honeypot_test_testhoneypottripisscopedtotenantipandja4",
-      "label": "TestHoneypotTripIsScopedToTenantIPAndJA4()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testhoneypottripisscopedtotenantipandja4()",
-      "source_file": "backend/pkg/signals/honeypot_test.go",
-      "source_location": "L19"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db",
-      "label": "ja4db.go",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "ja4db.go",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_addcommonbrowserprefix",
-      "label": "AddCommonBrowserPrefix()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "addcommonbrowserprefix()",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L104"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_addknownscraperja4",
-      "label": "AddKnownScraperJA4()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "addknownscraperja4()",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L93"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_go_redis_client",
-      "label": "redis.Client",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "redis.client",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_init",
-      "label": "init()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "init()",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L19"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_iscommonbrowserja4",
-      "label": "isCommonBrowserJA4()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "iscommonbrowserja4()",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L112"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_isknownscraperja4",
-      "label": "IsKnownScraperJA4()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "isknownscraperja4()",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L127"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_startja4sync",
-      "label": "StartJA4Sync()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "startja4sync()",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L27"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_syncja4fromredis",
-      "label": "syncJA4FromRedis()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "syncja4fromredis()",
-      "source_file": "backend/pkg/signals/ja4db.go",
-      "source_location": "L51"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_test",
-      "label": "ja4db_test.go",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "ja4db_test.go",
-      "source_file": "backend/pkg/signals/ja4db_test.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_test_testja4dynamicdatabase",
-      "label": "TestJA4DynamicDatabase()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testja4dynamicdatabase()",
-      "source_file": "backend/pkg/signals/ja4db_test.go",
-      "source_location": "L12"
-    },
-    {
-      "id": "backend_pkg_signals_ja4db_test_testja4syncfromredisfailures",
-      "label": "TestJA4SyncFromRedisFailures()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testja4syncfromredisfailures()",
-      "source_file": "backend/pkg/signals/ja4db_test.go",
-      "source_location": "L51"
-    },
-    {
       "id": "backend_pkg_signals_signals_bench_test",
       "label": "signals_bench_test.go",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "signals_bench_test.go",
       "source_file": "backend/pkg/signals/signals_bench_test.go",
@@ -6298,7 +5914,7 @@
       "label": "BenchmarkAnalyze()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarkanalyze()",
       "source_file": "backend/pkg/signals/signals_bench_test.go",
@@ -6309,7 +5925,7 @@
       "label": "BenchmarkParseJA4()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarkparseja4()",
       "source_file": "backend/pkg/signals/signals_bench_test.go",
@@ -6320,7 +5936,7 @@
       "label": "BenchmarkScore()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarkscore()",
       "source_file": "backend/pkg/signals/signals_bench_test.go",
@@ -6331,7 +5947,7 @@
       "label": "FuzzParseJA4()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "fuzzparseja4()",
       "source_file": "backend/pkg/signals/signals_bench_test.go",
@@ -6342,84 +5958,18 @@
       "label": "FuzzUAMismatch()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "fuzzuamismatch()",
       "source_file": "backend/pkg/signals/signals_bench_test.go",
       "source_location": "L57"
     },
     {
-      "id": "backend_pkg_signals_useragent",
-      "label": "useragent.go",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "useragent.go",
-      "source_file": "backend/pkg/signals/useragent.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_signals_useragent_claimsbrowser",
-      "label": "claimsBrowser()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "claimsbrowser()",
-      "source_file": "backend/pkg/signals/useragent.go",
-      "source_location": "L18"
-    },
-    {
-      "id": "backend_pkg_signals_useragent_isscriptingtool",
-      "label": "IsScriptingTool()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "isscriptingtool()",
-      "source_file": "backend/pkg/signals/useragent.go",
-      "source_location": "L35"
-    },
-    {
-      "id": "backend_pkg_signals_useragent_test",
-      "label": "useragent_test.go",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "useragent_test.go",
-      "source_file": "backend/pkg/signals/useragent_test.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_signals_useragent_test_testuamismatch",
-      "label": "TestUAMismatch()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "testuamismatch()",
-      "source_file": "backend/pkg/signals/useragent_test.go",
-      "source_location": "L5"
-    },
-    {
-      "id": "backend_pkg_signals_useragent_uamismatch",
-      "label": "UAMismatch()",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "file_type": "code",
-      "norm_label": "uamismatch()",
-      "source_file": "backend/pkg/signals/useragent.go",
-      "source_location": "L50"
-    },
-    {
       "id": "backend_pkg_stats_stats_bench_test",
       "label": "stats_bench_test.go",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "stats_bench_test.go",
       "source_file": "backend/pkg/stats/stats_bench_test.go",
@@ -6430,7 +5980,7 @@
       "label": "BenchmarkStatsRead()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarkstatsread()",
       "source_file": "backend/pkg/stats/stats_bench_test.go",
@@ -6441,7 +5991,7 @@
       "label": "BenchmarkStatsRecord()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "benchmarkstatsrecord()",
       "source_file": "backend/pkg/stats/stats_bench_test.go",
@@ -6452,7 +6002,7 @@
       "label": "Evidence",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "evidence",
       "source_file": "backend/pkg/evidence/evidence.go",
@@ -6463,7 +6013,7 @@
       "label": ".Recent()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": ".recent()",
       "source_file": "backend/pkg/evidence/evidence.go",
@@ -6474,7 +6024,7 @@
       "label": ".Record()",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": ".record()",
       "source_file": "backend/pkg/evidence/evidence.go",
@@ -6485,7 +6035,7 @@
       "label": "sync.Mutex",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "sync.mutex",
       "source_file": "",
@@ -6496,7 +6046,7 @@
       "label": "testing.B",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testing.b",
       "source_file": "",
@@ -6507,7 +6057,7 @@
       "label": "testing.F",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "testing.f",
       "source_file": "",
@@ -6518,7 +6068,7 @@
       "label": "time.Duration",
       "_origin": "ast",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "file_type": "code",
       "norm_label": "time.duration",
       "source_file": "",
@@ -8551,191 +8101,290 @@
       "source_location": "L40"
     },
     {
-      "id": "backend_pkg_settings_settings",
-      "label": "settings/settings.go",
+      "id": "backend_pkg_signals_honeypot",
+      "label": "honeypot.go",
       "_origin": "ast",
       "community": 49,
-      "community_name": "go_pkg_context",
+      "community_name": "honeypot_test.go",
       "file_type": "code",
-      "norm_label": "settings/settings.go",
-      "source_file": "backend/pkg/settings/settings.go",
+      "norm_label": "honeypot.go",
+      "source_file": "backend/pkg/signals/honeypot.go",
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_settings_settings_newstore",
-      "label": "NewStore()",
+      "id": "backend_pkg_signals_honeypot_honeypotkey",
+      "label": "honeypotKey()",
       "_origin": "ast",
       "community": 49,
-      "community_name": "go_pkg_context",
+      "community_name": "honeypot_test.go",
       "file_type": "code",
-      "norm_label": "newstore()",
-      "source_file": "backend/pkg/settings/settings.go",
-      "source_location": "L35"
+      "norm_label": "honeypotkey()",
+      "source_file": "backend/pkg/signals/honeypot.go",
+      "source_location": "L60"
     },
     {
-      "id": "backend_pkg_settings_settings_test",
-      "label": "settings_test.go",
+      "id": "backend_pkg_signals_honeypot_honeypottripped",
+      "label": "HoneypotTripped()",
       "_origin": "ast",
       "community": 49,
-      "community_name": "go_pkg_context",
+      "community_name": "honeypot_test.go",
       "file_type": "code",
-      "norm_label": "settings_test.go",
-      "source_file": "backend/pkg/settings/settings_test.go",
+      "norm_label": "honeypottripped()",
+      "source_file": "backend/pkg/signals/honeypot.go",
+      "source_location": "L119"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_recordhoneypottrip",
+      "label": "RecordHoneypotTrip()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "recordhoneypottrip()",
+      "source_file": "backend/pkg/signals/honeypot.go",
+      "source_location": "L83"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_sweephoneypotlocked",
+      "label": "sweepHoneypotLocked()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "sweephoneypotlocked()",
+      "source_file": "backend/pkg/signals/honeypot.go",
+      "source_location": "L136"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test",
+      "label": "honeypot_test.go",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "honeypot_test.go",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_settings_settings_test_testget_nilpoolfailsclearly",
-      "label": "TestGet_NilPoolFailsClearly()",
+      "id": "backend_pkg_signals_honeypot_test_benchmarkhoneypottrippedempty",
+      "label": "BenchmarkHoneypotTrippedEmpty()",
       "_origin": "ast",
       "community": 49,
-      "community_name": "go_pkg_context",
+      "community_name": "honeypot_test.go",
       "file_type": "code",
-      "norm_label": "testget_nilpoolfailsclearly()",
-      "source_file": "backend/pkg/settings/settings_test.go",
+      "norm_label": "benchmarkhoneypottrippedempty()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L184"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_resethoneypot",
+      "label": "resetHoneypot()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "resethoneypot()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L11"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypotconcurrentaccess",
+      "label": "TestHoneypotConcurrentAccess()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypotconcurrentaccess()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L126"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypotignoresincompleteidentity",
+      "label": "TestHoneypotIgnoresIncompleteIdentity()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypotignoresincompleteidentity()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L110"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypotisbounded",
+      "label": "TestHoneypotIsBounded()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypotisbounded()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L90"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypotonlyfirsttripisreported",
+      "label": "TestHoneypotOnlyFirstTripIsReported()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypotonlyfirsttripisreported()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L193"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypotrepeattripsdonotgrowthemap",
+      "label": "TestHoneypotRepeatTripsDoNotGrowTheMap()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypotrepeattripsdonotgrowthemap()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L71"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypotscoresbelowblockonitsown",
+      "label": "TestHoneypotScoresBelowBlockOnItsOwn()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypotscoresbelowblockonitsown()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L143"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypottripexpires",
+      "label": "TestHoneypotTripExpires()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypottripexpires()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L55"
+    },
+    {
+      "id": "backend_pkg_signals_honeypot_test_testhoneypottripisscopedtotenantipandja4",
+      "label": "TestHoneypotTripIsScopedToTenantIPAndJA4()",
+      "_origin": "ast",
+      "community": 49,
+      "community_name": "honeypot_test.go",
+      "file_type": "code",
+      "norm_label": "testhoneypottripisscopedtotenantipandja4()",
+      "source_file": "backend/pkg/signals/honeypot_test.go",
+      "source_location": "L19"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_newissuer",
+      "label": "NewIssuer()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "newissuer()",
+      "source_file": "backend/pkg/auth/jwt.go",
+      "source_location": "L38"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test",
+      "label": "jwt_test.go",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "jwt_test.go",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testissue_tokenhasthreesegments",
+      "label": "TestIssue_TokenHasThreeSegments()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testissue_tokenhasthreesegments()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L126"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testissueverify_roundtrip",
+      "label": "TestIssueVerify_RoundTrip()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testissueverify_roundtrip()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L20"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testnewissuer_rejectsemptysecret",
+      "label": "TestNewIssuer_RejectsEmptySecret()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testnewissuer_rejectsemptysecret()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L11"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testverify_rejectsalgnone",
+      "label": "TestVerify_RejectsAlgNone()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testverify_rejectsalgnone()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L78"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testverify_rejectsexpiredtoken",
+      "label": "TestVerify_RejectsExpiredToken()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testverify_rejectsexpiredtoken()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L54"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testverify_rejectsgarbage",
+      "label": "TestVerify_RejectsGarbage()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testverify_rejectsgarbage()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L100"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testverify_rejectsmissinguserid",
+      "label": "TestVerify_RejectsMissingUserID()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testverify_rejectsmissinguserid()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
+      "source_location": "L110"
+    },
+    {
+      "id": "backend_pkg_auth_jwt_test_testverify_rejectstamperedsignature",
+      "label": "TestVerify_RejectsTamperedSignature()",
+      "_origin": "ast",
+      "community": 5,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testverify_rejectstamperedsignature()",
+      "source_file": "backend/pkg/auth/jwt_test.go",
       "source_location": "L40"
-    },
-    {
-      "id": "backend_pkg_settings_settings_test_testupsert_rejectsblocknotgreaterthanchallenge",
-      "label": "TestUpsert_RejectsBlockNotGreaterThanChallenge()",
-      "_origin": "ast",
-      "community": 49,
-      "community_name": "go_pkg_context",
-      "file_type": "code",
-      "norm_label": "testupsert_rejectsblocknotgreaterthanchallenge()",
-      "source_file": "backend/pkg/settings/settings_test.go",
-      "source_location": "L9"
-    },
-    {
-      "id": "backend_pkg_settings_settings_test_testupsert_validthresholdsreachdatabasecheck",
-      "label": "TestUpsert_ValidThresholdsReachDatabaseCheck()",
-      "_origin": "ast",
-      "community": 49,
-      "community_name": "go_pkg_context",
-      "file_type": "code",
-      "norm_label": "testupsert_validthresholdsreachdatabasecheck()",
-      "source_file": "backend/pkg/settings/settings_test.go",
-      "source_location": "L24"
-    },
-    {
-      "id": "backend_pkg_signals_fingerprint",
-      "label": "fingerprint.go",
-      "_origin": "ast",
-      "community": 49,
-      "community_name": "go_pkg_context",
-      "file_type": "code",
-      "norm_label": "fingerprint.go",
-      "source_file": "backend/pkg/signals/fingerprint.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_signals_pattern",
-      "label": "pattern.go",
-      "_origin": "ast",
-      "community": 49,
-      "community_name": "go_pkg_context",
-      "file_type": "code",
-      "norm_label": "pattern.go",
-      "source_file": "backend/pkg/signals/pattern.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_account_account_newstore",
-      "label": "NewStore()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "newstore()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L62"
-    },
-    {
-      "id": "backend_pkg_account_account_test",
-      "label": "account_test.go",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "account_test.go",
-      "source_file": "backend/pkg/account/account_test.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "backend_pkg_account_account_test_testgetbyid_nilpoolfailsclearly",
-      "label": "TestGetByID_NilPoolFailsClearly()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "testgetbyid_nilpoolfailsclearly()",
-      "source_file": "backend/pkg/account/account_test.go",
-      "source_location": "L58"
-    },
-    {
-      "id": "backend_pkg_account_account_test_testsignin_nilpoolfailsclearly",
-      "label": "TestSignin_NilPoolFailsClearly()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "testsignin_nilpoolfailsclearly()",
-      "source_file": "backend/pkg/account/account_test.go",
-      "source_location": "L47"
-    },
-    {
-      "id": "backend_pkg_account_account_test_testsignup_rejectsinvalidemail",
-      "label": "TestSignup_RejectsInvalidEmail()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "testsignup_rejectsinvalidemail()",
-      "source_file": "backend/pkg/account/account_test.go",
-      "source_location": "L15"
-    },
-    {
-      "id": "backend_pkg_account_account_test_testsignup_rejectsshortpassword",
-      "label": "TestSignup_RejectsShortPassword()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "testsignup_rejectsshortpassword()",
-      "source_file": "backend/pkg/account/account_test.go",
-      "source_location": "L23"
-    },
-    {
-      "id": "backend_pkg_account_account_test_testsignup_validinputreachesdatabasecheck",
-      "label": "TestSignup_ValidInputReachesDatabaseCheck()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "testsignup_validinputreachesdatabasecheck()",
-      "source_file": "backend/pkg/account/account_test.go",
-      "source_location": "L31"
-    },
-    {
-      "id": "backend_pkg_account_account_test_testvalidemail",
-      "label": "TestValidEmail()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "testvalidemail()",
-      "source_file": "backend/pkg/account/account_test.go",
-      "source_location": "L66"
-    },
-    {
-      "id": "backend_pkg_account_account_validemail",
-      "label": "validEmail()",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "validemail()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L74"
     },
     {
       "id": "backend_pkg_signals_headers",
@@ -8859,147 +8508,136 @@
       "source_location": ""
     },
     {
-      "id": "backend_pkg_db_db",
-      "label": "db.go",
+      "id": "backend_pkg_signals_ja4db",
+      "label": "ja4db.go",
       "_origin": "ast",
       "community": 50,
-      "community_name": "context.Context",
+      "community_name": "go_pkg_time",
       "file_type": "code",
-      "norm_label": "db.go",
-      "source_file": "backend/pkg/db/db.go",
+      "norm_label": "ja4db.go",
+      "source_file": "backend/pkg/signals/ja4db.go",
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_db_db_createdomain",
-      "label": "CreateDomain()",
+      "id": "backend_pkg_signals_ja4db_addcommonbrowserprefix",
+      "label": "AddCommonBrowserPrefix()",
       "_origin": "ast",
       "community": 50,
-      "community_name": "context.Context",
+      "community_name": "go_pkg_time",
       "file_type": "code",
-      "norm_label": "createdomain()",
-      "source_file": "backend/pkg/db/db.go",
-      "source_location": "L147"
+      "norm_label": "addcommonbrowserprefix()",
+      "source_file": "backend/pkg/signals/ja4db.go",
+      "source_location": "L104"
     },
     {
-      "id": "backend_pkg_db_db_gettenant",
-      "label": "GetTenant()",
+      "id": "backend_pkg_signals_ja4db_addknownscraperja4",
+      "label": "AddKnownScraperJA4()",
       "_origin": "ast",
       "community": 50,
-      "community_name": "context.Context",
+      "community_name": "go_pkg_time",
       "file_type": "code",
-      "norm_label": "gettenant()",
-      "source_file": "backend/pkg/db/db.go",
+      "norm_label": "addknownscraperja4()",
+      "source_file": "backend/pkg/signals/ja4db.go",
       "source_location": "L93"
     },
     {
-      "id": "backend_pkg_db_db_gettenantbyid",
-      "label": "GetTenantByID()",
+      "id": "backend_pkg_signals_ja4db_go_redis_client",
+      "label": "redis.Client",
       "_origin": "ast",
       "community": 50,
-      "community_name": "context.Context",
+      "community_name": "go_pkg_time",
       "file_type": "code",
-      "norm_label": "gettenantbyid()",
-      "source_file": "backend/pkg/db/db.go",
-      "source_location": "L106"
-    },
-    {
-      "id": "backend_pkg_db_db_go_db_domain",
-      "label": "Domain",
-      "_origin": "ast",
-      "community": 50,
-      "community_name": "context.Context",
-      "file_type": "code",
-      "norm_label": "domain",
-      "source_file": "backend/pkg/db/db.go",
-      "source_location": "L16"
-    },
-    {
-      "id": "backend_pkg_db_db_init",
-      "label": "Init()",
-      "_origin": "ast",
-      "community": 50,
-      "community_name": "context.Context",
-      "file_type": "code",
-      "norm_label": "init()",
-      "source_file": "backend/pkg/db/db.go",
-      "source_location": "L27"
-    },
-    {
-      "id": "backend_pkg_db_db_initschema",
-      "label": "initSchema()",
-      "_origin": "ast",
-      "community": 50,
-      "community_name": "context.Context",
-      "file_type": "code",
-      "norm_label": "initschema()",
-      "source_file": "backend/pkg/db/db.go",
-      "source_location": "L44"
-    },
-    {
-      "id": "backend_pkg_db_db_listdomains",
-      "label": "ListDomains()",
-      "_origin": "ast",
-      "community": 50,
-      "community_name": "context.Context",
-      "file_type": "code",
-      "norm_label": "listdomains()",
-      "source_file": "backend/pkg/db/db.go",
-      "source_location": "L117"
-    },
-    {
-      "id": "backend_pkg_settings_settings_go_settings_store",
-      "label": "Store",
-      "_origin": "ast",
-      "community": 50,
-      "community_name": "context.Context",
-      "file_type": "code",
-      "norm_label": "store",
-      "source_file": "backend/pkg/settings/settings.go",
-      "source_location": "L31"
-    },
-    {
-      "id": "go_type_context_context",
-      "label": "context.Context",
-      "_origin": "ast",
-      "community": 50,
-      "community_name": "context.Context",
-      "file_type": "code",
-      "norm_label": "context.context",
+      "norm_label": "redis.client",
       "source_file": "",
       "source_location": ""
     },
     {
-      "id": "settings_protection",
-      "label": "Protection",
+      "id": "backend_pkg_signals_ja4db_init",
+      "label": "init()",
       "_origin": "ast",
       "community": 50,
-      "community_name": "context.Context",
+      "community_name": "go_pkg_time",
       "file_type": "code",
-      "norm_label": "protection",
-      "source_file": "backend/pkg/settings/settings.go",
-      "source_location": "L18"
+      "norm_label": "init()",
+      "source_file": "backend/pkg/signals/ja4db.go",
+      "source_location": "L19"
     },
     {
-      "id": "settings_store_get",
-      "label": ".Get()",
+      "id": "backend_pkg_signals_ja4db_iscommonbrowserja4",
+      "label": "isCommonBrowserJA4()",
       "_origin": "ast",
       "community": 50,
-      "community_name": "context.Context",
+      "community_name": "go_pkg_time",
       "file_type": "code",
-      "norm_label": ".get()",
-      "source_file": "backend/pkg/settings/settings.go",
-      "source_location": "L43"
+      "norm_label": "iscommonbrowserja4()",
+      "source_file": "backend/pkg/signals/ja4db.go",
+      "source_location": "L112"
     },
     {
-      "id": "settings_store_upsert",
-      "label": ".Upsert()",
+      "id": "backend_pkg_signals_ja4db_isknownscraperja4",
+      "label": "IsKnownScraperJA4()",
       "_origin": "ast",
       "community": 50,
-      "community_name": "context.Context",
+      "community_name": "go_pkg_time",
       "file_type": "code",
-      "norm_label": ".upsert()",
-      "source_file": "backend/pkg/settings/settings.go",
-      "source_location": "L61"
+      "norm_label": "isknownscraperja4()",
+      "source_file": "backend/pkg/signals/ja4db.go",
+      "source_location": "L127"
+    },
+    {
+      "id": "backend_pkg_signals_ja4db_startja4sync",
+      "label": "StartJA4Sync()",
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "go_pkg_time",
+      "file_type": "code",
+      "norm_label": "startja4sync()",
+      "source_file": "backend/pkg/signals/ja4db.go",
+      "source_location": "L27"
+    },
+    {
+      "id": "backend_pkg_signals_ja4db_syncja4fromredis",
+      "label": "syncJA4FromRedis()",
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "go_pkg_time",
+      "file_type": "code",
+      "norm_label": "syncja4fromredis()",
+      "source_file": "backend/pkg/signals/ja4db.go",
+      "source_location": "L51"
+    },
+    {
+      "id": "backend_pkg_signals_ja4db_test",
+      "label": "ja4db_test.go",
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "go_pkg_time",
+      "file_type": "code",
+      "norm_label": "ja4db_test.go",
+      "source_file": "backend/pkg/signals/ja4db_test.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_signals_ja4db_test_testja4dynamicdatabase",
+      "label": "TestJA4DynamicDatabase()",
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "go_pkg_time",
+      "file_type": "code",
+      "norm_label": "testja4dynamicdatabase()",
+      "source_file": "backend/pkg/signals/ja4db_test.go",
+      "source_location": "L12"
+    },
+    {
+      "id": "backend_pkg_signals_ja4db_test_testja4syncfromredisfailures",
+      "label": "TestJA4SyncFromRedisFailures()",
+      "_origin": "ast",
+      "community": 50,
+      "community_name": "go_pkg_time",
+      "file_type": "code",
+      "norm_label": "testja4syncfromredisfailures()",
+      "source_file": "backend/pkg/signals/ja4db_test.go",
+      "source_location": "L51"
     },
     {
       "id": "api_adddomainrequest",
@@ -9035,17 +8673,6 @@
       "source_location": "L12"
     },
     {
-      "id": "api_offenderstats",
-      "label": "OffenderStats",
-      "_origin": "ast",
-      "community": 51,
-      "community_name": "main",
-      "file_type": "code",
-      "norm_label": "offenderstats",
-      "source_file": "backend/pkg/api/report.go",
-      "source_location": "L17"
-    },
-    {
       "id": "api_signinrequest",
       "label": "signinRequest",
       "_origin": "ast",
@@ -9077,17 +8704,6 @@
       "norm_label": "togglerulerequest",
       "source_file": "backend/pkg/api/rules.go",
       "source_location": "L17"
-    },
-    {
-      "id": "auth_claims",
-      "label": "claims",
-      "_origin": "ast",
-      "community": 51,
-      "community_name": "main",
-      "file_type": "code",
-      "norm_label": "claims",
-      "source_file": "backend/pkg/auth/jwt.go",
-      "source_location": "L25"
     },
     {
       "id": "auth_issuer_issue",
@@ -9431,17 +9047,6 @@
       "source_location": "L45"
     },
     {
-      "id": "backend_pkg_api_report",
-      "label": "report.go",
-      "_origin": "ast",
-      "community": 51,
-      "community_name": "main",
-      "file_type": "code",
-      "norm_label": "report.go",
-      "source_file": "backend/pkg/api/report.go",
-      "source_location": "L1"
-    },
-    {
       "id": "backend_pkg_api_response",
       "label": "response.go",
       "_origin": "ast",
@@ -9563,17 +9168,6 @@
       "source_location": "L12"
     },
     {
-      "id": "backend_pkg_auth_jwt",
-      "label": "jwt.go",
-      "_origin": "ast",
-      "community": 51,
-      "community_name": "main",
-      "file_type": "code",
-      "norm_label": "jwt.go",
-      "source_file": "backend/pkg/auth/jwt.go",
-      "source_location": "L1"
-    },
-    {
       "id": "backend_pkg_auth_jwt_go_auth_issuer",
       "label": "Issuer",
       "_origin": "ast",
@@ -9583,17 +9177,6 @@
       "norm_label": "issuer",
       "source_file": "backend/pkg/auth/jwt.go",
       "source_location": "L32"
-    },
-    {
-      "id": "backend_pkg_core_errors",
-      "label": "errors.go",
-      "_origin": "ast",
-      "community": 51,
-      "community_name": "main",
-      "file_type": "code",
-      "norm_label": "errors.go",
-      "source_file": "backend/pkg/core/errors.go",
-      "source_location": "L1"
     },
     {
       "id": "backend_pkg_observability_sentry",
@@ -9684,17 +9267,6 @@
       "source_location": ""
     },
     {
-      "id": "jwt_registeredclaims",
-      "label": "jwt.RegisteredClaims",
-      "_origin": "ast",
-      "community": 51,
-      "community_name": "main",
-      "file_type": "code",
-      "norm_label": "jwt.registeredclaims",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
       "id": "docs_decisions",
       "label": "DECISIONS.md",
       "_origin": "ast",
@@ -9716,7 +9288,7 @@
       "node_kind": "heading",
       "norm_label": "added 2 competitor-gap items to roadmap, rejected the rest \u2014 2026-09-15",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L559"
+      "source_location": "L643"
     },
     {
       "id": "docs_decisions_agentchat_removed_the_mcp_server_kept_plain_file_manual_relay_2026_09_15",
@@ -9728,7 +9300,7 @@
       "node_kind": "heading",
       "norm_label": "agentchat: removed the mcp server, kept plain file + manual relay \u2014 2026-09-15",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L633"
+      "source_location": "L717"
     },
     {
       "id": "docs_decisions_assemble_proven_open_source_pieces_don_t_reinvent_tls_fingerprint_parsing_2026_09_14",
@@ -9740,7 +9312,7 @@
       "node_kind": "heading",
       "norm_label": "assemble proven open-source pieces, don't reinvent tls/fingerprint parsing \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L968"
+      "source_location": "L1052"
     },
     {
       "id": "docs_decisions_automation_probe_lives_inside_the_js_challenge_not_injected_site_wide_2026_09_16",
@@ -9752,7 +9324,7 @@
       "node_kind": "heading",
       "norm_label": "automation probe lives inside the js challenge, not injected site-wide \u2014 2026-09-16",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L526"
+      "source_location": "L610"
     },
     {
       "id": "docs_decisions_back_to_one_agent_claude_code_owns_the_dashboard_too_2026_09_16",
@@ -9764,7 +9336,7 @@
       "node_kind": "heading",
       "norm_label": "back to one agent; claude code owns the dashboard too \u2014 2026-09-16",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L153"
+      "source_location": "L237"
     },
     {
       "id": "docs_decisions_cap_concurrent_tls_handshakes_at_1000_2026_09_14",
@@ -9776,7 +9348,7 @@
       "node_kind": "heading",
       "norm_label": "cap concurrent tls handshakes at 1000 \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L938"
+      "source_location": "L1022"
     },
     {
       "id": "docs_decisions_consolidating_pr_10_and_pr_11_dropping_the_forensics_analyzer_2026_09_20",
@@ -9788,7 +9360,7 @@
       "node_kind": "heading",
       "norm_label": "consolidating pr #10 and pr #11; dropping the forensics analyzer \u2014 2026-09-20",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L60"
+      "source_location": "L144"
     },
     {
       "id": "docs_decisions_dashboard_wiring_real_account_domains_rules_settings_api_same_binary_no_separate_control_plane_service_2026_09_21",
@@ -9800,7 +9372,7 @@
       "node_kind": "heading",
       "norm_label": "dashboard wiring: real account/domains/rules/settings api, same binary, no separate control-plane service \u2014 2026-09-21",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L13"
+      "source_location": "L97"
     },
     {
       "id": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
@@ -9815,6 +9387,18 @@
       "source_location": "L1"
     },
     {
+      "id": "docs_decisions_dropped_go_1_22_method_prefixed_route_patterns_for_the_dashboard_api_2026_09_21",
+      "label": "Dropped Go 1.22+ method-prefixed route patterns for the dashboard API \u2014 2026-09-21",
+      "_origin": "ast",
+      "community": 52,
+      "community_name": "DECISIONS.md \u2014 Why We Chose What We Chose",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "dropped go 1.22+ method-prefixed route patterns for the dashboard api \u2014 2026-09-21",
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L54"
+    },
+    {
       "id": "docs_decisions_enterprise_hardening_adaptive_policy_modes_verified_good_bots_and_production_transport_2026_09_19",
       "label": "Enterprise Hardening: Adaptive Policy Modes, Verified Good Bots, and Production Transport \u2014 2026-09-19",
       "_origin": "ast",
@@ -9824,7 +9408,7 @@
       "node_kind": "heading",
       "norm_label": "enterprise hardening: adaptive policy modes, verified good bots, and production transport \u2014 2026-09-19",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L74"
+      "source_location": "L158"
     },
     {
       "id": "docs_decisions_evidence_trail_token_gated_in_memory_one_shared_signal_table_2026_09_16",
@@ -9836,7 +9420,7 @@
       "node_kind": "heading",
       "norm_label": "evidence trail: token-gated, in-memory, one shared signal table \u2014 2026-09-16",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L357"
+      "source_location": "L441"
     },
     {
       "id": "docs_decisions_fast_invisible_challenges_and_headful_bot_evasion_2026_09_19",
@@ -9848,7 +9432,7 @@
       "node_kind": "heading",
       "norm_label": "fast, invisible challenges and headful bot evasion \u2014 2026-09-19",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L139"
+      "source_location": "L223"
     },
     {
       "id": "docs_decisions_format_for_new_entries",
@@ -9860,7 +9444,7 @@
       "node_kind": "heading",
       "norm_label": "format for new entries",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L956"
+      "source_location": "L1040"
     },
     {
       "id": "docs_decisions_go_stack_same_as_goscraper_2026_09_14",
@@ -9872,7 +9456,7 @@
       "node_kind": "heading",
       "norm_label": "go stack, same as goscraper \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L1021"
+      "source_location": "L1105"
     },
     {
       "id": "docs_decisions_hakaishield_is_closed_source_commercial_software_not_open_source_2026_09_14",
@@ -9884,7 +9468,7 @@
       "node_kind": "heading",
       "norm_label": "hakaishield is closed-source commercial software, not open source \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L768"
+      "source_location": "L852"
     },
     {
       "id": "docs_decisions_honeypot_trap_scoped_to_tenant_ip_ja4_scored_not_blocked_2026_09_20",
@@ -9896,7 +9480,7 @@
       "node_kind": "heading",
       "norm_label": "honeypot trap: scoped to (tenant, ip, ja4), scored not blocked \u2014 2026-09-20",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L44"
+      "source_location": "L128"
     },
     {
       "id": "docs_decisions_import_only_fingerproxy_s_ja4_package_not_the_whole_library_2026_09_14",
@@ -9908,7 +9492,7 @@
       "node_kind": "heading",
       "norm_label": "import only fingerproxy's `ja4` package, not the whole library \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L897"
+      "source_location": "L981"
     },
     {
       "id": "docs_decisions_js_challenge_secret_random_in_process_not_shared_2026_09_15",
@@ -9920,7 +9504,7 @@
       "node_kind": "heading",
       "norm_label": "js challenge secret: random, in-process, not shared \u2014 2026-09-15",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L713"
+      "source_location": "L797"
     },
     {
       "id": "docs_decisions_js_challenge_sha256_canvas_proof_not_a_math_only_puzzle_2026_09_15",
@@ -9932,7 +9516,7 @@
       "node_kind": "heading",
       "norm_label": "js challenge: sha256+canvas proof, not a math-only puzzle \u2014 2026-09-15",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L681"
+      "source_location": "L765"
     },
     {
       "id": "docs_decisions_large_scale_residential_proxy_networks_fingerprint_pattern_based_not_ip_based_2026_09_14",
@@ -9944,7 +9528,7 @@
       "node_kind": "heading",
       "norm_label": "large-scale residential proxy networks: fingerprint/pattern-based, not ip-based \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L986"
+      "source_location": "L1070"
     },
     {
       "id": "docs_decisions_let_net_http_own_the_tls_handshake_delete_our_hand_rolled_version_2026_09_14",
@@ -9956,7 +9540,7 @@
       "node_kind": "heading",
       "norm_label": "let net/http own the tls handshake; delete our hand-rolled version \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L840"
+      "source_location": "L924"
     },
     {
       "id": "docs_decisions_multi_signal_scoring_no_single_check_verdicts_2026_09_14",
@@ -9968,7 +9552,7 @@
       "node_kind": "heading",
       "norm_label": "multi-signal scoring, no single-check verdicts \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L1035"
+      "source_location": "L1119"
     },
     {
       "id": "docs_decisions_mvp_scope_naive_to_intermediate_bots_not_nation_state_grade_evasion_2026_09_14",
@@ -9980,7 +9564,7 @@
       "node_kind": "heading",
       "norm_label": "mvp scope = naive-to-intermediate bots, not nation-state-grade evasion \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L1052"
+      "source_location": "L1136"
     },
     {
       "id": "docs_decisions_pivot_hosted_saas_is_the_product_self_hosting_becomes_enterprise_2026_09_16",
@@ -9992,7 +9576,7 @@
       "node_kind": "heading",
       "norm_label": "pivot: hosted saas is the product; self-hosting becomes enterprise \u2014 2026-09-16",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L192"
+      "source_location": "L276"
     },
     {
       "id": "docs_decisions_positioning_self_hostable_agent_governance_not_cheap_datadome_2026_09_16",
@@ -10004,7 +9588,7 @@
       "node_kind": "heading",
       "norm_label": "positioning: self-hostable agent governance, not \"cheap datadome\" \u2014 2026-09-16",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L425"
+      "source_location": "L509"
     },
     {
       "id": "docs_decisions_product_is_one_deployable_service_not_a_library_2026_09_14",
@@ -10016,7 +9600,19 @@
       "node_kind": "heading",
       "norm_label": "product is one deployable service, not a library \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L1006"
+      "source_location": "L1090"
+    },
+    {
+      "id": "docs_decisions_removed_the_fake_billing_ui_instead_of_leaving_it_as_a_known_gap_2026_09_21",
+      "label": "Removed the fake billing UI instead of leaving it as a known gap \u2014 2026-09-21",
+      "_origin": "ast",
+      "community": 52,
+      "community_name": "DECISIONS.md \u2014 Why We Chose What We Chose",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "removed the fake billing ui instead of leaving it as a known gap \u2014 2026-09-21",
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L13"
     },
     {
       "id": "docs_decisions_report_an_unreadable_handshake_as_a_signal_not_as_no_fingerprint_2026_09_14",
@@ -10028,7 +9624,7 @@
       "node_kind": "heading",
       "norm_label": "report an unreadable handshake as a signal, not as \"no fingerprint\" \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L796"
+      "source_location": "L880"
     },
     {
       "id": "docs_decisions_scoring_thresholds_additive_weights_no_single_signal_blocks_alone_2026_09_15",
@@ -10040,7 +9636,7 @@
       "node_kind": "heading",
       "norm_label": "scoring thresholds: additive weights, no single signal blocks alone \u2014 2026-09-15",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L592"
+      "source_location": "L676"
     },
     {
       "id": "docs_decisions_server_observed_request_patterns_asset_aware_rate_limiting_2026_09_19",
@@ -10052,7 +9648,7 @@
       "node_kind": "heading",
       "norm_label": "server-observed request patterns; asset-aware rate limiting \u2014 2026-09-19",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L84"
+      "source_location": "L168"
     },
     {
       "id": "docs_decisions_strip_every_client_ip_header_not_just_the_x_forwarded_family_2026_09_14",
@@ -10064,7 +9660,7 @@
       "node_kind": "heading",
       "norm_label": "strip every client-ip header, not just the x-forwarded family \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L821"
+      "source_location": "L905"
     },
     {
       "id": "docs_decisions_target_market_mid_size_companies_priced_out_of_enterprise_bot_management_2026_09_14",
@@ -10076,7 +9672,7 @@
       "node_kind": "heading",
       "norm_label": "target market: mid-size companies priced out of enterprise bot management \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L1072"
+      "source_location": "L1156"
     },
     {
       "id": "docs_decisions_the_moat_is_the_fingerprint_database_not_the_code_2026_09_16",
@@ -10088,7 +9684,7 @@
       "node_kind": "heading",
       "norm_label": "the moat is the fingerprint database, not the code \u2014 2026-09-16",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L279"
+      "source_location": "L363"
     },
     {
       "id": "docs_decisions_tls_capture_listener_http_1_1_only_for_now_no_http_2_2026_09_14",
@@ -10100,7 +9696,7 @@
       "node_kind": "heading",
       "norm_label": "tls capture listener: http/1.1 only for now, no http/2 \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L920"
+      "source_location": "L1004"
     },
     {
       "id": "docs_decisions_ua_consistency_check_structural_heuristics_not_a_browser_fingerprint_database_2026_09_14",
@@ -10112,7 +9708,7 @@
       "node_kind": "heading",
       "norm_label": "ua-consistency check: structural heuristics, not a browser-fingerprint database \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L736"
+      "source_location": "L820"
     },
     {
       "id": "docs_decisions_use_reverseproxy_rewrite_not_director_2026_09_14",
@@ -10124,7 +9720,7 @@
       "node_kind": "heading",
       "norm_label": "use reverseproxy.rewrite, not director \u2014 2026-09-14",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L871"
+      "source_location": "L955"
     },
     {
       "id": "docs_decisions_wire_header_anomaly_into_scoring_drop_the_orphaned_probe_js_2026_09_19",
@@ -10136,7 +9732,7 @@
       "node_kind": "heading",
       "norm_label": "wire header_anomaly into scoring; drop the orphaned probe.js \u2014 2026-09-19",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L103"
+      "source_location": "L187"
     },
     {
       "id": "readme",
@@ -10271,22 +9867,319 @@
       "source_location": "L17"
     },
     {
+      "id": "account_store_completeonboarding",
+      "label": ".CompleteOnboarding()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": ".completeonboarding()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L171"
+    },
+    {
+      "id": "account_store_getbyid",
+      "label": ".GetByID()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": ".getbyid()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L151"
+    },
+    {
+      "id": "account_store_signin",
+      "label": ".Signin()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": ".signin()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L122"
+    },
+    {
+      "id": "account_store_signup",
+      "label": ".Signup()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": ".signup()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L81"
+    },
+    {
+      "id": "account_user",
+      "label": "User",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "user",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L46"
+    },
+    {
       "id": "api_createrulerequest",
       "label": "createRuleRequest",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "createrulerequest",
       "source_file": "backend/pkg/api/rules.go",
       "source_location": "L11"
     },
     {
+      "id": "backend_pkg_account_account",
+      "label": "account.go",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "account.go",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_account_account_go_account_store",
+      "label": "Store",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "store",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L58"
+    },
+    {
+      "id": "backend_pkg_account_account_isuniqueviolation",
+      "label": "isUniqueViolation()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "isuniqueviolation()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L185"
+    },
+    {
+      "id": "backend_pkg_account_account_newstore",
+      "label": "NewStore()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "newstore()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L62"
+    },
+    {
+      "id": "backend_pkg_account_account_newuserid",
+      "label": "newUserID()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "newuserid()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L66"
+    },
+    {
+      "id": "backend_pkg_account_account_test",
+      "label": "account_test.go",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "account_test.go",
+      "source_file": "backend/pkg/account/account_test.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_account_account_test_testgetbyid_nilpoolfailsclearly",
+      "label": "TestGetByID_NilPoolFailsClearly()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testgetbyid_nilpoolfailsclearly()",
+      "source_file": "backend/pkg/account/account_test.go",
+      "source_location": "L58"
+    },
+    {
+      "id": "backend_pkg_account_account_test_testsignin_nilpoolfailsclearly",
+      "label": "TestSignin_NilPoolFailsClearly()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testsignin_nilpoolfailsclearly()",
+      "source_file": "backend/pkg/account/account_test.go",
+      "source_location": "L47"
+    },
+    {
+      "id": "backend_pkg_account_account_test_testsignup_rejectsinvalidemail",
+      "label": "TestSignup_RejectsInvalidEmail()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testsignup_rejectsinvalidemail()",
+      "source_file": "backend/pkg/account/account_test.go",
+      "source_location": "L15"
+    },
+    {
+      "id": "backend_pkg_account_account_test_testsignup_rejectsshortpassword",
+      "label": "TestSignup_RejectsShortPassword()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testsignup_rejectsshortpassword()",
+      "source_file": "backend/pkg/account/account_test.go",
+      "source_location": "L23"
+    },
+    {
+      "id": "backend_pkg_account_account_test_testsignup_validinputreachesdatabasecheck",
+      "label": "TestSignup_ValidInputReachesDatabaseCheck()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testsignup_validinputreachesdatabasecheck()",
+      "source_file": "backend/pkg/account/account_test.go",
+      "source_location": "L31"
+    },
+    {
+      "id": "backend_pkg_account_account_test_testvalidemail",
+      "label": "TestValidEmail()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testvalidemail()",
+      "source_file": "backend/pkg/account/account_test.go",
+      "source_location": "L66"
+    },
+    {
+      "id": "backend_pkg_account_account_validemail",
+      "label": "validEmail()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "validemail()",
+      "source_file": "backend/pkg/account/account.go",
+      "source_location": "L74"
+    },
+    {
+      "id": "backend_pkg_core_errors",
+      "label": "errors.go",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "errors.go",
+      "source_file": "backend/pkg/core/errors.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_db_db",
+      "label": "db.go",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "db.go",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_db_db_createdomain",
+      "label": "CreateDomain()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "createdomain()",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L147"
+    },
+    {
+      "id": "backend_pkg_db_db_gettenant",
+      "label": "GetTenant()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "gettenant()",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L93"
+    },
+    {
+      "id": "backend_pkg_db_db_gettenantbyid",
+      "label": "GetTenantByID()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "gettenantbyid()",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L106"
+    },
+    {
+      "id": "backend_pkg_db_db_go_db_domain",
+      "label": "Domain",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "domain",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L16"
+    },
+    {
+      "id": "backend_pkg_db_db_init",
+      "label": "Init()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "init()",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L27"
+    },
+    {
+      "id": "backend_pkg_db_db_initschema",
+      "label": "initSchema()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "initschema()",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L44"
+    },
+    {
+      "id": "backend_pkg_db_db_listdomains",
+      "label": "ListDomains()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "listdomains()",
+      "source_file": "backend/pkg/db/db.go",
+      "source_location": "L117"
+    },
+    {
       "id": "backend_pkg_rules_rules",
       "label": "rules/rules.go",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "rules/rules.go",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10297,7 +10190,7 @@
       "label": "decodeConditions()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "decodeconditions()",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10308,7 +10201,7 @@
       "label": "encodeConditions()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "encodeconditions()",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10319,7 +10212,7 @@
       "label": "Condition",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "condition",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10330,7 +10223,7 @@
       "label": "CustomRule",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "customrule",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10341,7 +10234,7 @@
       "label": "Store",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "store",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10352,7 +10245,7 @@
       "label": "Managed()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "managed()",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10363,7 +10256,7 @@
       "label": "newRuleID()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "newruleid()",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10374,7 +10267,7 @@
       "label": "NewStore()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "newstore()",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10385,7 +10278,7 @@
       "label": "rules_test.go",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "rules_test.go",
       "source_file": "backend/pkg/rules/rules_test.go",
@@ -10396,7 +10289,7 @@
       "label": "TestDecodeConditions_RejectsMalformedJSON()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "testdecodeconditions_rejectsmalformedjson()",
       "source_file": "backend/pkg/rules/rules_test.go",
@@ -10407,7 +10300,7 @@
       "label": "TestEncodeConditions_NilBecomesEmptyArray()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "testencodeconditions_nilbecomesemptyarray()",
       "source_file": "backend/pkg/rules/rules_test.go",
@@ -10418,7 +10311,7 @@
       "label": "TestEncodeDecodeConditions_RoundTrip()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "testencodedecodeconditions_roundtrip()",
       "source_file": "backend/pkg/rules/rules_test.go",
@@ -10429,7 +10322,7 @@
       "label": "TestManaged_AllEnabledAndNamed()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "testmanaged_allenabledandnamed()",
       "source_file": "backend/pkg/rules/rules_test.go",
@@ -10440,18 +10333,106 @@
       "label": "TestStore_NilPoolFailsClearly()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "teststore_nilpoolfailsclearly()",
       "source_file": "backend/pkg/rules/rules_test.go",
       "source_location": "L60"
     },
     {
+      "id": "backend_pkg_settings_settings",
+      "label": "settings/settings.go",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "settings/settings.go",
+      "source_file": "backend/pkg/settings/settings.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_settings_settings_go_settings_store",
+      "label": "Store",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "store",
+      "source_file": "backend/pkg/settings/settings.go",
+      "source_location": "L31"
+    },
+    {
+      "id": "backend_pkg_settings_settings_newstore",
+      "label": "NewStore()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "newstore()",
+      "source_file": "backend/pkg/settings/settings.go",
+      "source_location": "L35"
+    },
+    {
+      "id": "backend_pkg_settings_settings_test",
+      "label": "settings_test.go",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "settings_test.go",
+      "source_file": "backend/pkg/settings/settings_test.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_settings_settings_test_testget_nilpoolfailsclearly",
+      "label": "TestGet_NilPoolFailsClearly()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testget_nilpoolfailsclearly()",
+      "source_file": "backend/pkg/settings/settings_test.go",
+      "source_location": "L40"
+    },
+    {
+      "id": "backend_pkg_settings_settings_test_testupsert_rejectsblocknotgreaterthanchallenge",
+      "label": "TestUpsert_RejectsBlockNotGreaterThanChallenge()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testupsert_rejectsblocknotgreaterthanchallenge()",
+      "source_file": "backend/pkg/settings/settings_test.go",
+      "source_location": "L9"
+    },
+    {
+      "id": "backend_pkg_settings_settings_test_testupsert_validthresholdsreachdatabasecheck",
+      "label": "TestUpsert_ValidThresholdsReachDatabaseCheck()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "testupsert_validthresholdsreachdatabasecheck()",
+      "source_file": "backend/pkg/settings/settings_test.go",
+      "source_location": "L24"
+    },
+    {
+      "id": "go_type_context_context",
+      "label": "context.Context",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "context.context",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "go_type_github_com_jackc_pgx_v5_pgxpool_pool",
       "label": "github.com/jackc/pgx/v5/pgxpool.Pool",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "github.com/jackc/pgx/v5/pgxpool.pool",
       "source_file": "",
@@ -10462,7 +10443,7 @@
       "label": "ManagedRule",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": "managedrule",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10473,7 +10454,7 @@
       "label": ".Create()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": ".create()",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10484,7 +10465,7 @@
       "label": ".List()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": ".list()",
       "source_file": "backend/pkg/rules/rules.go",
@@ -10495,11 +10476,44 @@
       "label": ".SetEnabled()",
       "_origin": "ast",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "file_type": "code",
       "norm_label": ".setenabled()",
       "source_file": "backend/pkg/rules/rules.go",
       "source_location": "L146"
+    },
+    {
+      "id": "settings_protection",
+      "label": "Protection",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": "protection",
+      "source_file": "backend/pkg/settings/settings.go",
+      "source_location": "L18"
+    },
+    {
+      "id": "settings_store_get",
+      "label": ".Get()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": ".get()",
+      "source_file": "backend/pkg/settings/settings.go",
+      "source_location": "L43"
+    },
+    {
+      "id": "settings_store_upsert",
+      "label": ".Upsert()",
+      "_origin": "ast",
+      "community": 54,
+      "community_name": "context.Context",
+      "file_type": "code",
+      "norm_label": ".upsert()",
+      "source_file": "backend/pkg/settings/settings.go",
+      "source_location": "L61"
     },
     {
       "id": "dashboard_backend_wiring_docs_10_subscription_page_subscription",
@@ -11435,7 +11449,7 @@
       "node_kind": "heading",
       "norm_label": "how to read this list",
       "source_file": "docs/ROADMAP.md",
-      "source_location": "L669"
+      "source_location": "L673"
     },
     {
       "id": "docs_roadmap_p0_mvp_prove_the_core_idea_works",
@@ -11459,7 +11473,7 @@
       "node_kind": "heading",
       "norm_label": "p0-saas \u2014 required before anyone can pay us",
       "source_file": "docs/ROADMAP.md",
-      "source_location": "L622"
+      "source_location": "L626"
     },
     {
       "id": "docs_roadmap_p1_makes_it_meaningfully_harder_to_bypass",
@@ -11798,103 +11812,70 @@
       "source_location": "L2059"
     },
     {
-      "id": "account_store_completeonboarding",
-      "label": ".CompleteOnboarding()",
+      "id": "backend_pkg_signals_useragent",
+      "label": "useragent.go",
       "_origin": "ast",
       "community": 64,
-      "community_name": "account.go",
+      "community_name": "go_pkg_testing",
       "file_type": "code",
-      "norm_label": ".completeonboarding()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L171"
-    },
-    {
-      "id": "account_store_getbyid",
-      "label": ".GetByID()",
-      "_origin": "ast",
-      "community": 64,
-      "community_name": "account.go",
-      "file_type": "code",
-      "norm_label": ".getbyid()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L151"
-    },
-    {
-      "id": "account_store_signin",
-      "label": ".Signin()",
-      "_origin": "ast",
-      "community": 64,
-      "community_name": "account.go",
-      "file_type": "code",
-      "norm_label": ".signin()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L122"
-    },
-    {
-      "id": "account_store_signup",
-      "label": ".Signup()",
-      "_origin": "ast",
-      "community": 64,
-      "community_name": "account.go",
-      "file_type": "code",
-      "norm_label": ".signup()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L81"
-    },
-    {
-      "id": "account_user",
-      "label": "User",
-      "_origin": "ast",
-      "community": 64,
-      "community_name": "account.go",
-      "file_type": "code",
-      "norm_label": "user",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L46"
-    },
-    {
-      "id": "backend_pkg_account_account",
-      "label": "account.go",
-      "_origin": "ast",
-      "community": 64,
-      "community_name": "account.go",
-      "file_type": "code",
-      "norm_label": "account.go",
-      "source_file": "backend/pkg/account/account.go",
+      "norm_label": "useragent.go",
+      "source_file": "backend/pkg/signals/useragent.go",
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_account_account_go_account_store",
-      "label": "Store",
+      "id": "backend_pkg_signals_useragent_claimsbrowser",
+      "label": "claimsBrowser()",
       "_origin": "ast",
       "community": 64,
-      "community_name": "account.go",
+      "community_name": "go_pkg_testing",
       "file_type": "code",
-      "norm_label": "store",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L58"
+      "norm_label": "claimsbrowser()",
+      "source_file": "backend/pkg/signals/useragent.go",
+      "source_location": "L18"
     },
     {
-      "id": "backend_pkg_account_account_isuniqueviolation",
-      "label": "isUniqueViolation()",
+      "id": "backend_pkg_signals_useragent_isscriptingtool",
+      "label": "IsScriptingTool()",
       "_origin": "ast",
       "community": 64,
-      "community_name": "account.go",
+      "community_name": "go_pkg_testing",
       "file_type": "code",
-      "norm_label": "isuniqueviolation()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L185"
+      "norm_label": "isscriptingtool()",
+      "source_file": "backend/pkg/signals/useragent.go",
+      "source_location": "L35"
     },
     {
-      "id": "backend_pkg_account_account_newuserid",
-      "label": "newUserID()",
+      "id": "backend_pkg_signals_useragent_test",
+      "label": "useragent_test.go",
       "_origin": "ast",
       "community": 64,
-      "community_name": "account.go",
+      "community_name": "go_pkg_testing",
       "file_type": "code",
-      "norm_label": "newuserid()",
-      "source_file": "backend/pkg/account/account.go",
-      "source_location": "L66"
+      "norm_label": "useragent_test.go",
+      "source_file": "backend/pkg/signals/useragent_test.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_signals_useragent_test_testuamismatch",
+      "label": "TestUAMismatch()",
+      "_origin": "ast",
+      "community": 64,
+      "community_name": "go_pkg_testing",
+      "file_type": "code",
+      "norm_label": "testuamismatch()",
+      "source_file": "backend/pkg/signals/useragent_test.go",
+      "source_location": "L5"
+    },
+    {
+      "id": "backend_pkg_signals_useragent_uamismatch",
+      "label": "UAMismatch()",
+      "_origin": "ast",
+      "community": 64,
+      "community_name": "go_pkg_testing",
+      "file_type": "code",
+      "norm_label": "uamismatch()",
+      "source_file": "backend/pkg/signals/useragent.go",
+      "source_location": "L50"
     },
     {
       "id": "docs_progress_2026_09_16_answered_why_not_just_build_it_yourself_named_the_moat",
@@ -12212,7 +12193,7 @@
       "label": "mode.go",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "mode.go",
       "source_file": "backend/pkg/config/mode.go",
@@ -12223,7 +12204,7 @@
       "label": "Mode",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "mode",
       "source_file": "backend/pkg/config/mode.go",
@@ -12234,7 +12215,7 @@
       "label": "PolicyMode",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "policymode",
       "source_file": "backend/pkg/config/mode.go",
@@ -12245,7 +12226,7 @@
       "label": "ParseMode()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "parsemode()",
       "source_file": "backend/pkg/config/mode.go",
@@ -12256,7 +12237,7 @@
       "label": "ParsePolicy()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "parsepolicy()",
       "source_file": "backend/pkg/config/mode.go",
@@ -12267,7 +12248,7 @@
       "label": "mode_test.go",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "mode_test.go",
       "source_file": "backend/pkg/config/mode_test.go",
@@ -12278,7 +12259,7 @@
       "label": "TestModeString()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "testmodestring()",
       "source_file": "backend/pkg/config/mode_test.go",
@@ -12289,7 +12270,7 @@
       "label": "TestParseMode()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "testparsemode()",
       "source_file": "backend/pkg/config/mode_test.go",
@@ -12300,84 +12281,40 @@
       "label": "Stats",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "stats",
       "source_file": "backend/pkg/stats/stats.go",
       "source_location": "L14"
     },
     {
-      "id": "backend_pkg_stats_stats_test",
-      "label": "stats_test.go",
+      "id": "backend_pkg_tenant_tenant",
+      "label": "tenant.go",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
-      "norm_label": "stats_test.go",
-      "source_file": "backend/pkg/stats/stats_test.go",
+      "norm_label": "tenant.go",
+      "source_file": "backend/pkg/tenant/tenant.go",
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_stats_stats_test_newstats",
-      "label": "newStats()",
+      "id": "backend_pkg_tenant_tenant_go_tenant_store",
+      "label": "Store",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
-      "norm_label": "newstats()",
-      "source_file": "backend/pkg/stats/stats_test.go",
-      "source_location": "L11"
-    },
-    {
-      "id": "backend_pkg_stats_stats_test_teststats_concurrentrecord",
-      "label": "TestStats_ConcurrentRecord()",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "Stats",
-      "file_type": "code",
-      "norm_label": "teststats_concurrentrecord()",
-      "source_file": "backend/pkg/stats/stats_test.go",
-      "source_location": "L55"
-    },
-    {
-      "id": "backend_pkg_stats_stats_test_teststats_modereported",
-      "label": "TestStats_ModeReported()",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "Stats",
-      "file_type": "code",
-      "norm_label": "teststats_modereported()",
-      "source_file": "backend/pkg/stats/stats_test.go",
-      "source_location": "L48"
-    },
-    {
-      "id": "backend_pkg_stats_stats_test_teststats_record_alldecisions",
-      "label": "TestStats_Record_AllDecisions()",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "Stats",
-      "file_type": "code",
-      "norm_label": "teststats_record_alldecisions()",
-      "source_file": "backend/pkg/stats/stats_test.go",
-      "source_location": "L15"
-    },
-    {
-      "id": "backend_pkg_stats_stats_test_teststats_zerovalues",
-      "label": "TestStats_ZeroValues()",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "Stats",
-      "file_type": "code",
-      "norm_label": "teststats_zerovalues()",
-      "source_file": "backend/pkg/stats/stats_test.go",
-      "source_location": "L41"
+      "norm_label": "store",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L43"
     },
     {
       "id": "config_mode_string",
       "label": ".String()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": ".string()",
       "source_file": "backend/pkg/config/mode.go",
@@ -12388,20 +12325,42 @@
       "label": ".String()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": ".string()",
       "source_file": "backend/pkg/config/mode.go",
       "source_location": "L47"
     },
     {
+      "id": "go_type_net_http_httputil_reverseproxy",
+      "label": "net/http/httputil.ReverseProxy",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": "net/http/httputil.reverseproxy",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "go_type_sync_atomic_int64",
       "label": "sync/atomic.Int64",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": "sync/atomic.int64",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "go_type_sync_rwmutex",
+      "label": "sync.RWMutex",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": "sync.rwmutex",
       "source_file": "",
       "source_location": ""
     },
@@ -12410,7 +12369,7 @@
       "label": ".Blocked()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": ".blocked()",
       "source_file": "backend/pkg/stats/stats.go",
@@ -12421,7 +12380,7 @@
       "label": ".Challenged()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": ".challenged()",
       "source_file": "backend/pkg/stats/stats.go",
@@ -12432,7 +12391,7 @@
       "label": ".Deceived()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": ".deceived()",
       "source_file": "backend/pkg/stats/stats.go",
@@ -12443,7 +12402,7 @@
       "label": ".Passed()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": ".passed()",
       "source_file": "backend/pkg/stats/stats.go",
@@ -12454,18 +12413,117 @@
       "label": ".Total()",
       "_origin": "ast",
       "community": 7,
-      "community_name": "Stats",
+      "community_name": "Store",
       "file_type": "code",
       "norm_label": ".total()",
       "source_file": "backend/pkg/stats/stats.go",
       "source_location": "L41"
     },
     {
+      "id": "tenant_proxyfactory",
+      "label": "ProxyFactory",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": "proxyfactory",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L40"
+    },
+    {
+      "id": "tenant_store_add",
+      "label": ".Add()",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": ".add()",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L59"
+    },
+    {
+      "id": "tenant_store_addfromdbrow",
+      "label": ".addFromDBRow()",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": ".addfromdbrow()",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L116"
+    },
+    {
+      "id": "tenant_store_fetchfromdb",
+      "label": ".fetchFromDB()",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": ".fetchfromdb()",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L95"
+    },
+    {
+      "id": "tenant_store_getbyhost",
+      "label": ".GetByHost()",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": ".getbyhost()",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L79"
+    },
+    {
+      "id": "tenant_store_getbyid",
+      "label": ".GetByID()",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": ".getbyid()",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L148"
+    },
+    {
+      "id": "tenant_tenant",
+      "label": "Tenant",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": "tenant",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L31"
+    },
+    {
+      "id": "tenant_tenantconfig",
+      "label": "TenantConfig",
+      "_origin": "ast",
+      "community": 7,
+      "community_name": "Store",
+      "file_type": "code",
+      "norm_label": "tenantconfig",
+      "source_file": "backend/pkg/tenant/tenant.go",
+      "source_location": "L21"
+    },
+    {
+      "id": "backend_pkg_signals_pattern",
+      "label": "pattern.go",
+      "_origin": "ast",
+      "community": 70,
+      "community_name": "CrawlPatternSuspected",
+      "file_type": "code",
+      "norm_label": "pattern.go",
+      "source_file": "backend/pkg/signals/pattern.go",
+      "source_location": "L1"
+    },
+    {
       "id": "backend_pkg_signals_pattern_crawlpatternsuspected",
       "label": "CrawlPatternSuspected()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "crawlpatternsuspected()",
       "source_file": "backend/pkg/signals/pattern.go",
@@ -12476,7 +12534,7 @@
       "label": "isStaticAsset()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "isstaticasset()",
       "source_file": "backend/pkg/signals/pattern.go",
@@ -12487,7 +12545,7 @@
       "label": "pattern_test.go",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "pattern_test.go",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12498,7 +12556,7 @@
       "label": "TestCrawlPatternExemptsAssets()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testcrawlpatternexemptsassets()",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12509,7 +12567,7 @@
       "label": "TestCrawlPatternExemptsNonBrowser()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testcrawlpatternexemptsnonbrowser()",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12520,7 +12578,7 @@
       "label": "TestCrawlPatternFiresOnManyDistinctPaths()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testcrawlpatternfiresonmanydistinctpaths()",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12531,7 +12589,7 @@
       "label": "TestCrawlPatternIsolatedPerIP()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testcrawlpatternisolatedperip()",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12542,7 +12600,7 @@
       "label": "TestCrawlPatternNoRedisFailsOpen()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testcrawlpatternnoredisfailsopen()",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12553,7 +12611,7 @@
       "label": "TestCrawlPatternRepeatedSamePathDoesNotFire()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testcrawlpatternrepeatedsamepathdoesnotfire()",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12564,7 +12622,7 @@
       "label": "TestCrawlPatternUnderLimit()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testcrawlpatternunderlimit()",
       "source_file": "backend/pkg/signals/pattern_test.go",
@@ -12575,22 +12633,11 @@
       "label": "TestIsStaticAsset()",
       "_origin": "ast",
       "community": 70,
-      "community_name": "newTestRedis",
+      "community_name": "CrawlPatternSuspected",
       "file_type": "code",
       "norm_label": "testisstaticasset()",
       "source_file": "backend/pkg/signals/pattern_test.go",
       "source_location": "L8"
-    },
-    {
-      "id": "backend_pkg_signals_velocity_test_newtestredis",
-      "label": "newTestRedis()",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "newTestRedis",
-      "file_type": "code",
-      "norm_label": "newtestredis()",
-      "source_file": "backend/pkg/signals/velocity_test.go",
-      "source_location": "L14"
     },
     {
       "id": "dashboard_backend_wiring_docs_authentication_system",
@@ -12889,121 +12936,44 @@
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_auth_jwt_newissuer",
-      "label": "NewIssuer()",
+      "id": "auth_claims",
+      "label": "claims",
       "_origin": "ast",
       "community": 79,
-      "community_name": "NewIssuer",
+      "community_name": "jwt.go",
       "file_type": "code",
-      "norm_label": "newissuer()",
+      "norm_label": "claims",
       "source_file": "backend/pkg/auth/jwt.go",
-      "source_location": "L38"
+      "source_location": "L25"
     },
     {
-      "id": "backend_pkg_auth_jwt_test",
-      "label": "jwt_test.go",
+      "id": "backend_pkg_auth_jwt",
+      "label": "jwt.go",
       "_origin": "ast",
       "community": 79,
-      "community_name": "NewIssuer",
+      "community_name": "jwt.go",
       "file_type": "code",
-      "norm_label": "jwt_test.go",
-      "source_file": "backend/pkg/auth/jwt_test.go",
+      "norm_label": "jwt.go",
+      "source_file": "backend/pkg/auth/jwt.go",
       "source_location": "L1"
     },
     {
-      "id": "backend_pkg_auth_jwt_test_testissue_tokenhasthreesegments",
-      "label": "TestIssue_TokenHasThreeSegments()",
+      "id": "jwt_registeredclaims",
+      "label": "jwt.RegisteredClaims",
       "_origin": "ast",
       "community": 79,
-      "community_name": "NewIssuer",
+      "community_name": "jwt.go",
       "file_type": "code",
-      "norm_label": "testissue_tokenhasthreesegments()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L126"
-    },
-    {
-      "id": "backend_pkg_auth_jwt_test_testissueverify_roundtrip",
-      "label": "TestIssueVerify_RoundTrip()",
-      "_origin": "ast",
-      "community": 79,
-      "community_name": "NewIssuer",
-      "file_type": "code",
-      "norm_label": "testissueverify_roundtrip()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L20"
-    },
-    {
-      "id": "backend_pkg_auth_jwt_test_testnewissuer_rejectsemptysecret",
-      "label": "TestNewIssuer_RejectsEmptySecret()",
-      "_origin": "ast",
-      "community": 79,
-      "community_name": "NewIssuer",
-      "file_type": "code",
-      "norm_label": "testnewissuer_rejectsemptysecret()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L11"
-    },
-    {
-      "id": "backend_pkg_auth_jwt_test_testverify_rejectsalgnone",
-      "label": "TestVerify_RejectsAlgNone()",
-      "_origin": "ast",
-      "community": 79,
-      "community_name": "NewIssuer",
-      "file_type": "code",
-      "norm_label": "testverify_rejectsalgnone()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L78"
-    },
-    {
-      "id": "backend_pkg_auth_jwt_test_testverify_rejectsexpiredtoken",
-      "label": "TestVerify_RejectsExpiredToken()",
-      "_origin": "ast",
-      "community": 79,
-      "community_name": "NewIssuer",
-      "file_type": "code",
-      "norm_label": "testverify_rejectsexpiredtoken()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L54"
-    },
-    {
-      "id": "backend_pkg_auth_jwt_test_testverify_rejectsgarbage",
-      "label": "TestVerify_RejectsGarbage()",
-      "_origin": "ast",
-      "community": 79,
-      "community_name": "NewIssuer",
-      "file_type": "code",
-      "norm_label": "testverify_rejectsgarbage()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L100"
-    },
-    {
-      "id": "backend_pkg_auth_jwt_test_testverify_rejectsmissinguserid",
-      "label": "TestVerify_RejectsMissingUserID()",
-      "_origin": "ast",
-      "community": 79,
-      "community_name": "NewIssuer",
-      "file_type": "code",
-      "norm_label": "testverify_rejectsmissinguserid()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L110"
-    },
-    {
-      "id": "backend_pkg_auth_jwt_test_testverify_rejectstamperedsignature",
-      "label": "TestVerify_RejectsTamperedSignature()",
-      "_origin": "ast",
-      "community": 79,
-      "community_name": "NewIssuer",
-      "file_type": "code",
-      "norm_label": "testverify_rejectstamperedsignature()",
-      "source_file": "backend/pkg/auth/jwt_test.go",
-      "source_location": "L40"
+      "norm_label": "jwt.registeredclaims",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "backend_pkg_signals_velocity",
       "label": "velocity.go",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "velocity.go",
       "source_file": "backend/pkg/signals/velocity.go",
@@ -13014,7 +12984,7 @@
       "label": "checkJA4VelocitySpike()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "checkja4velocityspike()",
       "source_file": "backend/pkg/signals/velocity.go",
@@ -13025,7 +12995,7 @@
       "label": "checkVelocitySpike()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "checkvelocityspike()",
       "source_file": "backend/pkg/signals/velocity.go",
@@ -13036,7 +13006,7 @@
       "label": "redis.Client",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "redis.client",
       "source_file": "",
@@ -13047,7 +13017,7 @@
       "label": "InitRedis()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "initredis()",
       "source_file": "backend/pkg/signals/velocity.go",
@@ -13058,18 +13028,29 @@
       "label": "velocity_test.go",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "velocity_test.go",
       "source_file": "backend/pkg/signals/velocity_test.go",
       "source_location": "L1"
     },
     {
+      "id": "backend_pkg_signals_velocity_test_newtestredis",
+      "label": "newTestRedis()",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "newTestRedis",
+      "file_type": "code",
+      "norm_label": "newtestredis()",
+      "source_file": "backend/pkg/signals/velocity_test.go",
+      "source_location": "L14"
+    },
+    {
       "id": "backend_pkg_signals_velocity_test_testcheckja4velocityspikeexemptscommonbrowsers",
       "label": "TestCheckJA4VelocitySpikeExemptsCommonBrowsers()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testcheckja4velocityspikeexemptscommonbrowsers()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13080,7 +13061,7 @@
       "label": "TestCheckJA4VelocitySpikeOverLimit()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testcheckja4velocityspikeoverlimit()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13091,7 +13072,7 @@
       "label": "TestCheckVelocitySpikeExemptsAssets()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testcheckvelocityspikeexemptsassets()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13102,7 +13083,7 @@
       "label": "TestCheckVelocitySpikeIsolatedPerIP()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testcheckvelocityspikeisolatedperip()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13113,7 +13094,7 @@
       "label": "TestCheckVelocitySpikeNoRedisFailsOpen()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testcheckvelocityspikenoredisfailsopen()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13124,7 +13105,7 @@
       "label": "TestCheckVelocitySpikeOverLimit()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testcheckvelocityspikeoverlimit()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13135,7 +13116,7 @@
       "label": "TestCheckVelocitySpikeUnderLimit()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testcheckvelocityspikeunderlimit()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13146,7 +13127,7 @@
       "label": "TestVelocityBucketClassifies()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testvelocitybucketclassifies()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13157,7 +13138,7 @@
       "label": "TestVelocityExceededCombinesBothChecks()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "testvelocityexceededcombinesbothchecks()",
       "source_file": "backend/pkg/signals/velocity_test.go",
@@ -13168,7 +13149,7 @@
       "label": "velocityBucket()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "velocitybucket()",
       "source_file": "backend/pkg/signals/velocity.go",
@@ -13179,7 +13160,7 @@
       "label": "VelocityExceeded()",
       "_origin": "ast",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "file_type": "code",
       "norm_label": "velocityexceeded()",
       "source_file": "backend/pkg/signals/velocity.go",
@@ -13296,17 +13277,6 @@
       "source_location": ""
     },
     {
-      "id": "signals_botcacheentry",
-      "label": "botCacheEntry",
-      "_origin": "ast",
-      "community": 80,
-      "community_name": "time.Time",
-      "file_type": "code",
-      "norm_label": "botcacheentry",
-      "source_file": "backend/pkg/signals/goodbots.go",
-      "source_location": "L44"
-    },
-    {
       "id": "backend_pkg_signals_goodbots",
       "label": "goodbots.go",
       "_origin": "ast",
@@ -13395,6 +13365,17 @@
       "source_location": "L113"
     },
     {
+      "id": "signals_botcacheentry",
+      "label": "botCacheEntry",
+      "_origin": "ast",
+      "community": 81,
+      "community_name": "goodbots.go",
+      "file_type": "code",
+      "norm_label": "botcacheentry",
+      "source_file": "backend/pkg/signals/goodbots.go",
+      "source_location": "L44"
+    },
+    {
       "id": "signals_goodbotfamily",
       "label": "GoodBotFamily",
       "_origin": "ast",
@@ -13428,6 +13409,72 @@
       "norm_label": "2026-09-19 \u2014 repair the broken test suite left behind by the pow/theme change; wire header_anomaly; remove dead probe endpoint",
       "source_file": "docs/PROGRESS.md",
       "source_location": "L76"
+    },
+    {
+      "id": "backend_pkg_stats_stats_test",
+      "label": "stats_test.go",
+      "_origin": "ast",
+      "community": 83,
+      "community_name": "stats_test.go",
+      "file_type": "code",
+      "norm_label": "stats_test.go",
+      "source_file": "backend/pkg/stats/stats_test.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "backend_pkg_stats_stats_test_newstats",
+      "label": "newStats()",
+      "_origin": "ast",
+      "community": 83,
+      "community_name": "stats_test.go",
+      "file_type": "code",
+      "norm_label": "newstats()",
+      "source_file": "backend/pkg/stats/stats_test.go",
+      "source_location": "L11"
+    },
+    {
+      "id": "backend_pkg_stats_stats_test_teststats_concurrentrecord",
+      "label": "TestStats_ConcurrentRecord()",
+      "_origin": "ast",
+      "community": 83,
+      "community_name": "stats_test.go",
+      "file_type": "code",
+      "norm_label": "teststats_concurrentrecord()",
+      "source_file": "backend/pkg/stats/stats_test.go",
+      "source_location": "L55"
+    },
+    {
+      "id": "backend_pkg_stats_stats_test_teststats_modereported",
+      "label": "TestStats_ModeReported()",
+      "_origin": "ast",
+      "community": 83,
+      "community_name": "stats_test.go",
+      "file_type": "code",
+      "norm_label": "teststats_modereported()",
+      "source_file": "backend/pkg/stats/stats_test.go",
+      "source_location": "L48"
+    },
+    {
+      "id": "backend_pkg_stats_stats_test_teststats_record_alldecisions",
+      "label": "TestStats_Record_AllDecisions()",
+      "_origin": "ast",
+      "community": 83,
+      "community_name": "stats_test.go",
+      "file_type": "code",
+      "norm_label": "teststats_record_alldecisions()",
+      "source_file": "backend/pkg/stats/stats_test.go",
+      "source_location": "L15"
+    },
+    {
+      "id": "backend_pkg_stats_stats_test_teststats_zerovalues",
+      "label": "TestStats_ZeroValues()",
+      "_origin": "ast",
+      "community": 83,
+      "community_name": "stats_test.go",
+      "file_type": "code",
+      "norm_label": "teststats_zerovalues()",
+      "source_file": "backend/pkg/stats/stats_test.go",
+      "source_location": "L41"
     },
     {
       "id": "backend_pkg_challenge_challenge",
@@ -13494,17 +13541,6 @@
       "norm_label": "validpow()",
       "source_file": "backend/pkg/challenge/challenge.go",
       "source_location": "L131"
-    },
-    {
-      "id": "backend_pkg_core_proxy_withdecision",
-      "label": "WithDecision()",
-      "_origin": "ast",
-      "community": 9,
-      "community_name": "challenge.go",
-      "file_type": "code",
-      "norm_label": "withdecision()",
-      "source_file": "backend/pkg/core/proxy.go",
-      "source_location": "L25"
     },
     {
       "id": "challenge_challenge_handler",
@@ -13674,6 +13710,18 @@
       "type": "external"
     },
     {
+      "id": "go_pkg_encoding_csv",
+      "label": "go_pkg_encoding_csv",
+      "_origin": "semantic",
+      "community": 1,
+      "community_name": "guard_test.go",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_encoding_csv",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_challenge",
       "label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_challenge",
       "_origin": "semantic",
@@ -13710,14 +13758,14 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_evidence",
-      "label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_evidence",
+      "id": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_signals",
+      "label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_signals",
       "_origin": "semantic",
       "community": 1,
       "community_name": "guard_test.go",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_evidence",
+      "norm_label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_signals",
       "source_file": "",
       "type": "external"
     },
@@ -13734,14 +13782,26 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_regexp",
-      "label": "go_pkg_regexp",
+      "id": "go_pkg_net_http_httptest",
+      "label": "go_pkg_net_http_httptest",
       "_origin": "semantic",
       "community": 1,
       "community_name": "guard_test.go",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_regexp",
+      "norm_label": "go_pkg_net_http_httptest",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_sort",
+      "label": "go_pkg_sort",
+      "_origin": "semantic",
+      "community": 1,
+      "community_name": "guard_test.go",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_sort",
       "source_file": "",
       "type": "external"
     },
@@ -13754,18 +13814,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_strconv",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "go_pkg_sync_atomic",
-      "label": "go_pkg_sync_atomic",
-      "_origin": "semantic",
-      "community": 1,
-      "community_name": "guard_test.go",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_sync_atomic",
       "source_file": "",
       "type": "external"
     },
@@ -13866,18 +13914,6 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_signals",
-      "label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_signals",
-      "_origin": "semantic",
-      "community": 2,
-      "community_name": "proxy.go",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_signals",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "go_pkg_io",
       "label": "go_pkg_io",
       "_origin": "semantic",
@@ -13902,6 +13938,18 @@
       "type": "external"
     },
     {
+      "id": "go_pkg_net_url",
+      "label": "go_pkg_net_url",
+      "_origin": "semantic",
+      "community": 2,
+      "community_name": "proxy.go",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_net_url",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "go_pkg_runtime",
       "label": "go_pkg_runtime",
       "_origin": "semantic",
@@ -13918,10 +13966,22 @@
       "label": "go_pkg_encoding_hex",
       "_origin": "semantic",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_encoding_hex",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_evidence",
+      "label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_evidence",
+      "_origin": "semantic",
+      "community": 3,
+      "community_name": "NewTrail",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_evidence",
       "source_file": "",
       "type": "external"
     },
@@ -13930,7 +13990,7 @@
       "label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_stats",
       "_origin": "semantic",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_github_com_toufiqqureshi_hakaishield_pkg_stats",
@@ -13938,38 +13998,14 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_sync",
-      "label": "go_pkg_sync",
+      "id": "go_pkg_github_com_wi1dcard_fingerproxy_pkg_ja4",
+      "label": "go_pkg_github_com_wi1dcard_fingerproxy_pkg_ja4",
       "_origin": "semantic",
       "community": 3,
-      "community_name": "go_pkg_testing",
+      "community_name": "NewTrail",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_sync",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "go_pkg_testing",
-      "label": "go_pkg_testing",
-      "_origin": "semantic",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_testing",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "go_pkg_time",
-      "label": "go_pkg_time",
-      "_origin": "semantic",
-      "community": 3,
-      "community_name": "go_pkg_testing",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_time",
+      "norm_label": "go_pkg_github_com_wi1dcard_fingerproxy_pkg_ja4",
       "source_file": "",
       "type": "external"
     },
@@ -13998,86 +14034,74 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_context",
-      "label": "go_pkg_context",
+      "id": "go_pkg_net",
+      "label": "go_pkg_net",
       "_origin": "semantic",
-      "community": 49,
-      "community_name": "go_pkg_context",
+      "community": 4,
+      "community_name": "capture.go",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_context",
+      "norm_label": "go_pkg_net",
       "source_file": "",
       "type": "external"
     },
     {
-      "id": "go_pkg_fmt",
-      "label": "go_pkg_fmt",
+      "id": "go_pkg_regexp",
+      "label": "go_pkg_regexp",
       "_origin": "semantic",
-      "community": 49,
-      "community_name": "go_pkg_context",
+      "community": 44,
+      "community_name": "challenge_test.go",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_fmt",
+      "norm_label": "go_pkg_regexp",
       "source_file": "",
       "type": "external"
     },
     {
-      "id": "go_pkg_github_com_jackc_pgx_v5",
-      "label": "go_pkg_github_com_jackc_pgx_v5",
+      "id": "go_pkg_sync_atomic",
+      "label": "go_pkg_sync_atomic",
       "_origin": "semantic",
       "community": 49,
-      "community_name": "go_pkg_context",
+      "community_name": "honeypot_test.go",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_github_com_jackc_pgx_v5",
+      "norm_label": "go_pkg_sync_atomic",
       "source_file": "",
       "type": "external"
     },
     {
-      "id": "go_pkg_github_com_jackc_pgx_v5_pgxpool",
-      "label": "go_pkg_github_com_jackc_pgx_v5_pgxpool",
+      "id": "go_pkg_sync",
+      "label": "go_pkg_sync",
       "_origin": "semantic",
-      "community": 49,
-      "community_name": "go_pkg_context",
+      "community": 50,
+      "community_name": "go_pkg_time",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_github_com_jackc_pgx_v5_pgxpool",
+      "norm_label": "go_pkg_sync",
       "source_file": "",
       "type": "external"
     },
     {
-      "id": "go_pkg_github_com_wi1dcard_fingerproxy_pkg_ja4",
-      "label": "go_pkg_github_com_wi1dcard_fingerproxy_pkg_ja4",
+      "id": "go_pkg_time",
+      "label": "go_pkg_time",
       "_origin": "semantic",
-      "community": 49,
-      "community_name": "go_pkg_context",
+      "community": 50,
+      "community_name": "go_pkg_time",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_github_com_wi1dcard_fingerproxy_pkg_ja4",
+      "norm_label": "go_pkg_time",
       "source_file": "",
       "type": "external"
     },
     {
-      "id": "go_pkg_path",
-      "label": "go_pkg_path",
-      "_origin": "semantic",
-      "community": 49,
-      "community_name": "go_pkg_context",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_path",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "go_pkg_encoding_csv",
-      "label": "go_pkg_encoding_csv",
+      "id": "go_pkg_crypto_rand",
+      "label": "go_pkg_crypto_rand",
       "_origin": "semantic",
       "community": 51,
       "community_name": "main",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_encoding_csv",
+      "norm_label": "go_pkg_crypto_rand",
       "source_file": "",
       "type": "external"
     },
@@ -14090,18 +14114,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_encoding_json",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "go_pkg_errors",
-      "label": "go_pkg_errors",
-      "_origin": "semantic",
-      "community": 51,
-      "community_name": "main",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_errors",
       "source_file": "",
       "type": "external"
     },
@@ -14238,30 +14250,6 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_net_http_httptest",
-      "label": "go_pkg_net_http_httptest",
-      "_origin": "semantic",
-      "community": 51,
-      "community_name": "main",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_net_http_httptest",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "go_pkg_net_url",
-      "label": "go_pkg_net_url",
-      "_origin": "semantic",
-      "community": 51,
-      "community_name": "main",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_net_url",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "go_pkg_os",
       "label": "go_pkg_os",
       "_origin": "semantic",
@@ -14286,18 +14274,6 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_sort",
-      "label": "go_pkg_sort",
-      "_origin": "semantic",
-      "community": 51,
-      "community_name": "main",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_sort",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "go_pkg_syscall",
       "label": "go_pkg_syscall",
       "_origin": "semantic",
@@ -14310,26 +14286,62 @@
       "type": "external"
     },
     {
-      "id": "go_pkg_reflect",
-      "label": "go_pkg_reflect",
+      "id": "go_pkg_context",
+      "label": "go_pkg_context",
       "_origin": "semantic",
       "community": 54,
-      "community_name": "rules/rules.go",
+      "community_name": "context.Context",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_reflect",
+      "norm_label": "go_pkg_context",
       "source_file": "",
       "type": "external"
     },
     {
-      "id": "go_pkg_crypto_rand",
-      "label": "go_pkg_crypto_rand",
+      "id": "go_pkg_errors",
+      "label": "go_pkg_errors",
       "_origin": "semantic",
-      "community": 64,
-      "community_name": "account.go",
+      "community": 54,
+      "community_name": "context.Context",
       "external": true,
       "file_type": "concept",
-      "norm_label": "go_pkg_crypto_rand",
+      "norm_label": "go_pkg_errors",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_fmt",
+      "label": "go_pkg_fmt",
+      "_origin": "semantic",
+      "community": 54,
+      "community_name": "context.Context",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_fmt",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_github_com_jackc_pgx_v5",
+      "label": "go_pkg_github_com_jackc_pgx_v5",
+      "_origin": "semantic",
+      "community": 54,
+      "community_name": "context.Context",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_github_com_jackc_pgx_v5",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_github_com_jackc_pgx_v5_pgxpool",
+      "label": "go_pkg_github_com_jackc_pgx_v5_pgxpool",
+      "_origin": "semantic",
+      "community": 54,
+      "community_name": "context.Context",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_github_com_jackc_pgx_v5_pgxpool",
       "source_file": "",
       "type": "external"
     },
@@ -14337,8 +14349,8 @@
       "id": "go_pkg_golang_org_x_crypto_bcrypt",
       "label": "go_pkg_golang_org_x_crypto_bcrypt",
       "_origin": "semantic",
-      "community": 64,
-      "community_name": "account.go",
+      "community": 54,
+      "community_name": "context.Context",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_golang_org_x_crypto_bcrypt",
@@ -14349,11 +14361,23 @@
       "id": "go_pkg_net_mail",
       "label": "go_pkg_net_mail",
       "_origin": "semantic",
-      "community": 64,
-      "community_name": "account.go",
+      "community": 54,
+      "community_name": "context.Context",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_net_mail",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_reflect",
+      "label": "go_pkg_reflect",
+      "_origin": "semantic",
+      "community": 54,
+      "community_name": "context.Context",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_reflect",
       "source_file": "",
       "type": "external"
     },
@@ -14362,10 +14386,34 @@
       "label": "go_pkg_strings",
       "_origin": "semantic",
       "community": 64,
-      "community_name": "account.go",
+      "community_name": "go_pkg_testing",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_strings",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_testing",
+      "label": "go_pkg_testing",
+      "_origin": "semantic",
+      "community": 64,
+      "community_name": "go_pkg_testing",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_testing",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "go_pkg_path",
+      "label": "go_pkg_path",
+      "_origin": "semantic",
+      "community": 70,
+      "community_name": "CrawlPatternSuspected",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "go_pkg_path",
       "source_file": "",
       "type": "external"
     },
@@ -14386,7 +14434,7 @@
       "label": "go_pkg_github_com_golang_jwt_jwt_v5",
       "_origin": "semantic",
       "community": 79,
-      "community_name": "NewIssuer",
+      "community_name": "jwt.go",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_github_com_golang_jwt_jwt_v5",
@@ -14398,7 +14446,7 @@
       "label": "go_pkg_github_com_alicebob_miniredis_v2",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_github_com_alicebob_miniredis_v2",
@@ -14410,22 +14458,10 @@
       "label": "go_pkg_github_com_redis_go_redis_v9",
       "_origin": "semantic",
       "community": 8,
-      "community_name": "velocity_test.go",
+      "community_name": "newTestRedis",
       "external": true,
       "file_type": "concept",
       "norm_label": "go_pkg_github_com_redis_go_redis_v9",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "go_pkg_net",
-      "label": "go_pkg_net",
-      "_origin": "semantic",
-      "community": 81,
-      "community_name": "goodbots.go",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "go_pkg_net",
       "source_file": "",
       "type": "external"
     },
@@ -14668,7 +14704,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L163",
+      "source_location": "L171",
       "weight": 1.0
     },
     {
@@ -14680,7 +14716,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L164",
+      "source_location": "L172",
       "weight": 1.0
     },
     {
@@ -14692,7 +14728,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L165",
+      "source_location": "L173",
       "weight": 1.0
     },
     {
@@ -14704,7 +14740,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L166",
+      "source_location": "L174",
       "weight": 1.0
     },
     {
@@ -14716,7 +14752,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L167",
+      "source_location": "L175",
       "weight": 1.0
     },
     {
@@ -14728,7 +14764,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L168",
+      "source_location": "L176",
       "weight": 1.0
     },
     {
@@ -14740,7 +14776,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L169",
+      "source_location": "L177",
       "weight": 1.0
     },
     {
@@ -14752,7 +14788,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L170",
+      "source_location": "L178",
       "weight": 1.0
     },
     {
@@ -14764,7 +14800,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L171",
+      "source_location": "L179",
       "weight": 1.0
     },
     {
@@ -14776,7 +14812,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L172",
+      "source_location": "L180",
       "weight": 1.0
     },
     {
@@ -14788,7 +14824,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L173",
+      "source_location": "L181",
       "weight": 1.0
     },
     {
@@ -14800,7 +14836,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L180",
+      "source_location": "L188",
       "weight": 1.0
     },
     {
@@ -14812,7 +14848,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/main.go",
-      "source_location": "L201",
+      "source_location": "L209",
       "weight": 1.0
     },
     {
@@ -18124,7 +18160,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "dashboard/src/pages/Payment.tsx",
-      "source_location": "L6",
+      "source_location": "L14",
       "weight": 1.0
     },
     {
@@ -19732,7 +19768,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "dashboard/src/pages/Payment.tsx",
-      "source_location": "L2",
+      "source_location": "L1",
       "weight": 1.0
     },
     {
@@ -24924,7 +24960,7 @@
     },
     {
       "source": "dashboard_src_pages_payment",
-      "target": "ref_react",
+      "target": "dashboard_src_context_themecontext",
       "relation": "imports_from",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -24936,18 +24972,6 @@
     },
     {
       "source": "dashboard_src_pages_payment",
-      "target": "dashboard_src_context_themecontext",
-      "relation": "imports_from",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "dashboard/src/pages/Payment.tsx",
-      "source_location": "L2",
-      "weight": 1.0
-    },
-    {
-      "source": "dashboard_src_pages_payment",
       "target": "ref_lucide_react",
       "relation": "imports_from",
       "_origin": "ast",
@@ -24955,7 +24979,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "dashboard/src/pages/Payment.tsx",
-      "source_location": "L3",
+      "source_location": "L2",
       "weight": 1.0
     },
     {
@@ -37364,7 +37388,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "dashboard/src/pages/Payment.tsx",
-      "source_location": "L5",
+      "source_location": "L13",
       "weight": 1.0
     },
     {
@@ -37996,343 +38020,13 @@
     },
     {
       "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_product_is_one_deployable_service_not_a_library_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L1006",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_go_stack_same_as_goscraper_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L1021",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_wire_header_anomaly_into_scoring_drop_the_orphaned_probe_js_2026_09_19",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L103",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_multi_signal_scoring_no_single_check_verdicts_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L1035",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_mvp_scope_naive_to_intermediate_bots_not_nation_state_grade_evasion_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L1052",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_target_market_mid_size_companies_priced_out_of_enterprise_bot_management_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L1072",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_dashboard_wiring_real_account_domains_rules_settings_api_same_binary_no_separate_control_plane_service_2026_09_21",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L13",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_fast_invisible_challenges_and_headful_bot_evasion_2026_09_19",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L139",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_back_to_one_agent_claude_code_owns_the_dashboard_too_2026_09_16",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L153",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_pivot_hosted_saas_is_the_product_self_hosting_becomes_enterprise_2026_09_16",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L192",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_the_moat_is_the_fingerprint_database_not_the_code_2026_09_16",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L279",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_evidence_trail_token_gated_in_memory_one_shared_signal_table_2026_09_16",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L357",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_positioning_self_hostable_agent_governance_not_cheap_datadome_2026_09_16",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L425",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_honeypot_trap_scoped_to_tenant_ip_ja4_scored_not_blocked_2026_09_20",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L44",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_automation_probe_lives_inside_the_js_challenge_not_injected_site_wide_2026_09_16",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L526",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_added_2_competitor_gap_items_to_roadmap_rejected_the_rest_2026_09_15",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L559",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_scoring_thresholds_additive_weights_no_single_signal_blocks_alone_2026_09_15",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L592",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_consolidating_pr_10_and_pr_11_dropping_the_forensics_analyzer_2026_09_20",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L60",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_agentchat_removed_the_mcp_server_kept_plain_file_manual_relay_2026_09_15",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L633",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_js_challenge_sha256_canvas_proof_not_a_math_only_puzzle_2026_09_15",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L681",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_js_challenge_secret_random_in_process_not_shared_2026_09_15",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L713",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_ua_consistency_check_structural_heuristics_not_a_browser_fingerprint_database_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L736",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_enterprise_hardening_adaptive_policy_modes_verified_good_bots_and_production_transport_2026_09_19",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L74",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_hakaishield_is_closed_source_commercial_software_not_open_source_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L768",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_report_an_unreadable_handshake_as_a_signal_not_as_no_fingerprint_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L796",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_strip_every_client_ip_header_not_just_the_x_forwarded_family_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L821",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_server_observed_request_patterns_asset_aware_rate_limiting_2026_09_19",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L84",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_let_net_http_own_the_tls_handshake_delete_our_hand_rolled_version_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L840",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_use_reverseproxy_rewrite_not_director_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L871",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
-      "target": "docs_decisions_import_only_fingerproxy_s_ja4_package_not_the_whole_library_2026_09_14",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/DECISIONS.md",
-      "source_location": "L897",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
       "target": "docs_decisions_tls_capture_listener_http_1_1_only_for_now_no_http_2_2026_09_14",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L920",
+      "source_location": "L1004",
       "weight": 1.0
     },
     {
@@ -38343,7 +38037,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L938",
+      "source_location": "L1022",
       "weight": 1.0
     },
     {
@@ -38354,7 +38048,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L956",
+      "source_location": "L1040",
       "weight": 1.0
     },
     {
@@ -38365,7 +38059,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L968",
+      "source_location": "L1052",
       "weight": 1.0
     },
     {
@@ -38376,7 +38070,359 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L986",
+      "source_location": "L1070",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_product_is_one_deployable_service_not_a_library_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L1090",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_go_stack_same_as_goscraper_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L1105",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_multi_signal_scoring_no_single_check_verdicts_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L1119",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_mvp_scope_naive_to_intermediate_bots_not_nation_state_grade_evasion_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L1136",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_target_market_mid_size_companies_priced_out_of_enterprise_bot_management_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L1156",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_honeypot_trap_scoped_to_tenant_ip_ja4_scored_not_blocked_2026_09_20",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L128",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_removed_the_fake_billing_ui_instead_of_leaving_it_as_a_known_gap_2026_09_21",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_consolidating_pr_10_and_pr_11_dropping_the_forensics_analyzer_2026_09_20",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L144",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_enterprise_hardening_adaptive_policy_modes_verified_good_bots_and_production_transport_2026_09_19",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L158",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_server_observed_request_patterns_asset_aware_rate_limiting_2026_09_19",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L168",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_wire_header_anomaly_into_scoring_drop_the_orphaned_probe_js_2026_09_19",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L187",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_fast_invisible_challenges_and_headful_bot_evasion_2026_09_19",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L223",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_back_to_one_agent_claude_code_owns_the_dashboard_too_2026_09_16",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L237",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_pivot_hosted_saas_is_the_product_self_hosting_becomes_enterprise_2026_09_16",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L276",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_the_moat_is_the_fingerprint_database_not_the_code_2026_09_16",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L363",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_evidence_trail_token_gated_in_memory_one_shared_signal_table_2026_09_16",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L441",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_positioning_self_hostable_agent_governance_not_cheap_datadome_2026_09_16",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L509",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_dropped_go_1_22_method_prefixed_route_patterns_for_the_dashboard_api_2026_09_21",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L54",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_automation_probe_lives_inside_the_js_challenge_not_injected_site_wide_2026_09_16",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L610",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_added_2_competitor_gap_items_to_roadmap_rejected_the_rest_2026_09_15",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L643",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_scoring_thresholds_additive_weights_no_single_signal_blocks_alone_2026_09_15",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L676",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_agentchat_removed_the_mcp_server_kept_plain_file_manual_relay_2026_09_15",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L717",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_js_challenge_sha256_canvas_proof_not_a_math_only_puzzle_2026_09_15",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L765",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_js_challenge_secret_random_in_process_not_shared_2026_09_15",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L797",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_ua_consistency_check_structural_heuristics_not_a_browser_fingerprint_database_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L820",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_hakaishield_is_closed_source_commercial_software_not_open_source_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L852",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_report_an_unreadable_handshake_as_a_signal_not_as_no_fingerprint_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L880",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_strip_every_client_ip_header_not_just_the_x_forwarded_family_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L905",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_let_net_http_own_the_tls_handshake_delete_our_hand_rolled_version_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L924",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_use_reverseproxy_rewrite_not_director_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L955",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_dashboard_wiring_real_account_domains_rules_settings_api_same_binary_no_separate_control_plane_service_2026_09_21",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L97",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_decisions_md_why_we_chose_what_we_chose",
+      "target": "docs_decisions_import_only_fingerproxy_s_ja4_package_not_the_whole_library_2026_09_14",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L981",
       "weight": 1.0
     },
     {
@@ -39327,6 +39373,17 @@
     },
     {
       "source": "docs_progress_progress_md_what_was_done_when_and_why",
+      "target": "docs_progress_2026_09_21_playwright_end_to_end_check_found_and_fixed_a_real_cors_bug_plus_fake_billing_ui",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/PROGRESS.md",
+      "source_location": "L3095",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_progress_progress_md_what_was_done_when_and_why",
       "target": "docs_progress_2026_09_14_fixed_2_real_production_bugs_in_the_capture_listener",
       "relation": "contains",
       "_origin": "ast",
@@ -39542,7 +39599,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/ROADMAP.md",
-      "source_location": "L622",
+      "source_location": "L626",
       "weight": 1.0
     },
     {
@@ -39564,7 +39621,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/ROADMAP.md",
-      "source_location": "L669",
+      "source_location": "L673",
       "weight": 1.0
     },
     {
@@ -42452,7 +42509,7 @@
       "confidence_score": 0.95,
       "context": "Layout",
       "source_file": "docs/ROADMAP.md",
-      "source_location": "L580",
+      "source_location": "L584",
       "weight": 1.0
     },
     {
@@ -42536,7 +42593,31 @@
       "confidence_score": 0.95,
       "context": "RequireAuth",
       "source_file": "docs/DECISIONS.md",
-      "source_location": "L36",
+      "source_location": "L120",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_decisions_dropped_go_1_22_method_prefixed_route_patterns_for_the_dashboard_api_2026_09_21",
+      "target": "dashboard_src_components_requireauth_requireauth",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "context": "RequireAuth",
+      "source_file": "docs/DECISIONS.md",
+      "source_location": "L77",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_progress_2026_09_21_playwright_end_to_end_check_found_and_fixed_a_real_cors_bug_plus_fake_billing_ui",
+      "target": "dashboard_src_components_requireauth_requireauth",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "context": "RequireAuth",
+      "source_file": "docs/PROGRESS.md",
+      "source_location": "L3114",
       "weight": 1.0
     },
     {
@@ -42697,5 +42778,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "f4093b41fb2fe88b53b37f70c92cb20be6d229e5"
+  "built_at_commit": "23d0745ea3cc86e3d5a18fe3d161dc3eca1b295e"
 }

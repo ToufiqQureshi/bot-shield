@@ -3206,3 +3206,121 @@ Known gaps / follow-up:
     marketing funnel. Not changed, since deciding *whether* to surface
     a "not available yet" billing page in the funnel is a product
     call, not a bug fix.
+
+## 2026-09-21 — Migrated auth to Supabase (created the project, deleted custom bcrypt+JWT)
+
+Changed:
+  - Created a new Supabase project (`hakaishield`, `ap-south-1`,
+    project ref `oxvwvzthqnttehqwfgux`) via the Supabase MCP tools
+    after the org's free-tier 2-project limit blocked the first
+    attempt — owner freed up a slot, retried, succeeded.
+  - Applied migration `hakaishield_core_schema` to it: `tenants`
+    (extended, `owner_user_id` now `UUID REFERENCES auth.users(id)`),
+    `mitigation_rules`, `protection_settings` — no `users` table,
+    since `auth.users` (Supabase-managed) replaces it. RLS enabled
+    with owner-read policies on all three tables (this backend's own
+    connection bypasses RLS as the privileged role; the policies exist
+    for defense-in-depth / to satisfy Supabase's security linter,
+    confirmed clean via `get_advisors(type: "security")` after
+    applying).
+  - Deleted `backend/pkg/account` entirely (bcrypt signup/signin
+    logic, now Supabase's job) and rewrote `backend/pkg/auth` from an
+    HMAC token *issuer* to a JWKS-based token *verifier* — it no
+    longer creates sessions, only validates the ES256-signed ones
+    Supabase already created. Confirmed via direct `curl` that this
+    project serves ES256/JWKS (not the legacy shared-HS256-secret
+    model some older Supabase projects use) before writing the
+    verifier.
+  - Deleted `backend/pkg/api/auth.go` (Signup/Signin/Me/
+    OnboardingComplete handlers) — no longer this backend's job.
+    Renamed every handler's `*auth.Issuer` parameter to
+    `*auth.Verifier` (`domains.go`, `rules.go`, `settings.go`,
+    `dashboard_extra.go`, `middleware.go`).
+  - `backend/main.go`: replaced the `-jwt-secret` flag with
+    `-supabase-url`; removed the `account` import and its route
+    registrations (`/auth/signup`, `/auth/signin`, `/auth/me`,
+    `/onboarding/complete`); the domains/rules/settings API now gates
+    on `-db-url` + `-supabase-url` instead of `-db-url` + `-jwt-secret`.
+  - New `dashboard/src/lib/supabaseClient.ts` (fails loudly at import
+    time if `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` are unset,
+    rather than every auth call failing with a confusing error later).
+  - `dashboard/src/lib/api.ts`: removed `signup`/`signin`/`signout`/
+    `me`/`completeOnboarding`/token-localStorage functions;
+    `request()` now pulls the bearer token from
+    `supabase.auth.getSession()` instead of `localStorage`.
+  - Rewired `SignIn.tsx` (`supabase.auth.signInWithPassword`),
+    `SignUp.tsx` (`supabase.auth.signUp`, with a real "check your
+    email" state when Supabase returns no session because
+    confirmation is pending — previously this always redirected
+    straight into onboarding since there was no confirmation step to
+    wait for), `ForgotPassword.tsx` (`supabase.auth.
+    resetPasswordForEmail` — previously a fake `console.log`, same
+    class of problem as the Payment.tsx issue found earlier this
+    session), `Onboarding.tsx` (`supabase.auth.updateUser({data:
+    {onboarding_complete: true}})` instead of a backend call),
+    `Layout.tsx` (real `supabase.auth.getUser()`/`signOut()`),
+    `RequireAuth.tsx` (checks `supabase.auth.getSession()` +
+    `onAuthStateChange` instead of a `localStorage` token, with a
+    brief "checking" state instead of flashing the sign-in page during
+    the async session check).
+  - `.env.example` gained `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`.
+
+Why: see `docs/DECISIONS.md`'s matching entry — short version, this
+closes the "email verification and password reset are blocked, no
+email service configured" gap from the previous session's remaining-
+work list, for free, using infrastructure the owner already had
+tooling access to.
+
+Tested how:
+  - `go build ./...`, `go vet ./...`, `gofmt -l .`, `go clean
+    -testcache && go test ./...` — all 14 packages pass, including
+    `pkg/auth`'s new suite (ES256 round-trip against a real key pair
+    via a fake JWKS `httptest.Server`, expired/wrong-key/unknown-kid/
+    alg-none rejection, key-rotation recovery) and `pkg/api/
+    middleware_test.go`'s equivalent `RequireAuth` coverage.
+  - Mutation check: removed `jwt.WithValidMethods` and the explicit
+    `*jwt.SigningMethodECDSA` type-assertion from `Verify`'s keyfunc
+    — `TestVerify_RejectsAlgNone` still passed, meaning golang-jwt/v5
+    itself already refuses to select an "alg":"none" key at the
+    library level regardless of these extra checks (confirmed the
+    same behavior in the earlier bot-shield→HakaiShield-era JWT work
+    too). The checks stay as defense-in-depth and documentation of
+    intent, but this session's mutation attempt didn't "kill" via
+    those specific lines — recorded honestly rather than claiming a
+    kill that didn't happen.
+  - Caught and fixed a real bug in the *test* code itself while
+    writing `TestVerify_RecoversFromKeyRotation`: the fake JWKS
+    handler's closure captured the local `priv` variable from
+    `newTestJWKS` instead of reading `tj.priv`, so rotating the test
+    struct's key didn't change what the mock server actually served.
+    First run failed with a real, correct error; fixed the closure to
+    read `tj.priv`/`tj.kid`, reran, passed.
+  - `npm run typecheck` and `npm run build` clean after every frontend
+    file changed.
+  - **Real signup against the live Supabase project**, Playwright +
+    visible Chrome: see `docs/DECISIONS.md` for the full result
+    (200, real UUID, confirmation email queued, honest "check your
+    email" UI state, zero console errors after retrying with a
+    non-`example.com` address Supabase's abuse filter didn't reject).
+
+Known gaps / follow-up (see `docs/DECISIONS.md` for the full
+reasoning on each):
+  - **The Go backend has never actually run against the new Supabase
+    Postgres.** This session does not have that database's connection
+    password. The owner needs to get it from the Supabase dashboard
+    (Project Settings → Database) and supply it as `-db-url` before
+    `pkg/rules`/`pkg/settings`/domain CRUD can be exercised for real
+    against this project.
+  - **No live signed-in session was tested against the real project**
+    — confirming a Supabase test account's email via direct SQL was
+    blocked by this session's own auto-mode security classifier
+    (correctly, as an auth-bypass-shaped action) and the block was
+    respected. The owner needs to verify one real email address to
+    close this loop themselves.
+  - Supabase's built-in email sender has low rate limits on the free
+    tier; fine for the testing done, not for production signup volume.
+    Custom SMTP is a follow-up, configured in the Supabase dashboard,
+    not code.
+  - `dashboard/BACKEND_WIRING_DOCS.md` (the original aspirational
+    Node.js backend spec) still describes auth endpoints that no
+    longer exist on this backend. Not updated this session.

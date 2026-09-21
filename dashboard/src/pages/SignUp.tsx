@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowRight } from 'lucide-react';
-import { signup, signin, ApiError } from '../lib/api';
+import { supabase } from '../lib/supabaseClient';
 
 export default function SignUp() {
   const { theme, toggleTheme } = useTheme();
@@ -15,21 +15,32 @@ export default function SignUp() {
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      await signup(formData.name, formData.email, formData.password, formData.company || undefined);
-      // The backend doesn't send a verification email (no email
-      // service configured yet), so a fresh account is usable
-      // immediately — sign in right after signup instead of making
-      // the user retype what they just entered.
-      await signin(formData.email, formData.password);
-      navigate('/onboarding');
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: { name: formData.name, company: formData.company || undefined },
+        },
+      });
+      if (signUpError) throw signUpError;
+      if (data.session) {
+        // Email confirmation is off for this project, or Supabase
+        // auto-confirmed — a usable session came back immediately.
+        navigate('/onboarding');
+      } else {
+        // Confirmation email sent; there's no session until the user
+        // clicks the link, so there's nothing to redirect into yet.
+        setCheckEmail(true);
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not create account. Try again.');
+      setError(err instanceof Error ? err.message : 'Could not create account. Try again.');
     } finally {
       setSubmitting(false);
     }
@@ -47,6 +58,16 @@ export default function SignUp() {
         </div>
 
         <div className="card p-8">
+          {checkEmail ? (
+            <>
+              <h1 className="text-2xl font-bold mb-2 tracking-tight">Check your email</h1>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                We sent a confirmation link to <strong>{formData.email}</strong>. Click it to activate your
+                account, then <a href="/sign-in" className="underline" style={{ color: 'var(--accent-blue)' }}>sign in</a>.
+              </p>
+            </>
+          ) : (
+          <>
           <h1 className="text-2xl font-bold mb-2 tracking-tight">Create your account</h1>
           <p className="text-sm mb-8" style={{ color: 'var(--text-secondary)' }}>
             Start protecting your site in minutes
@@ -135,6 +156,8 @@ export default function SignUp() {
               <a href="/sign-in" className="font-medium" style={{ color: 'var(--accent-blue)' }}>Sign in</a>
             </p>
           </div>
+          </>
+          )}
         </div>
 
         <div className="mt-6 text-center">

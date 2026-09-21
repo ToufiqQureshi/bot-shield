@@ -6,6 +6,13 @@ import (
 	"net/http"
 )
 
+// decodeJSON decodes a request body into v, capped at 1 MiB so a
+// visitor can't hand an authenticated handler an unbounded body to
+// buffer into memory.
+func decodeJSON(r *http.Request, v any) error {
+	return json.NewDecoder(http.MaxBytesReader(nil, r.Body, 1<<20)).Decode(v)
+}
+
 // envelope matches the {"success", "data"|"message"|"error"} shape
 // dashboard/BACKEND_WIRING_DOCS.md specifies for every JWT-authenticated
 // endpoint, so the frontend's existing expectations don't have to change.

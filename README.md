@@ -76,8 +76,8 @@ cd backend && go build -o hakaishield .
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — hakaishield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
 | `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
-| `-db-url` | PostgreSQL URL (e.g. `postgres://user:pass@host:5432/hakaishield`). Required, along with `-jwt-secret`, for the dashboard's account/domains/rules/settings API. |
-| `-jwt-secret` | HMAC secret for dashboard session JWTs. Required, along with `-db-url`, for that same API. Deliberately not auto-generated (unlike the challenge secret) — sessions signed with a random per-restart secret would all invalidate on every restart. |
+| `-db-url` | PostgreSQL URL for your Supabase project's database (Project Settings → Database in the Supabase dashboard). Required, along with `-supabase-url`, for the dashboard's domains/rules/settings API. |
+| `-supabase-url` | Your Supabase project URL (e.g. `https://xxxx.supabase.co`). Used to verify dashboard session JWTs against that project's published JWKS — no shared secret needed. Required, along with `-db-url`, for that same API. |
 
 | Env var | Meaning |
 |---|---|
@@ -127,27 +127,34 @@ its own, so a visitor can't forge them.
 and the operator dashboard itself — evidence logs, mitigation rules,
 protection settings, domains).
 
-**Wired to a real backend**, over `dashboard/src/lib/api.ts`:
-account signup/signin (JWT), domains, mitigation rules, protection
-settings, live dashboard stats, top-offender JA4s, and evidence logs.
-See `docs/DECISIONS.md`'s 2026-09-21 dashboard-wiring entry for exactly
-what's real vs. still a placeholder — in short: payments, email
-(so no verification/reset emails), SIEM export, WAF toggles, and the
-traffic-over-time chart are not built. Those sections say so in the UI
-rather than showing fake data.
+**Auth runs on Supabase.** Signup, signin, sign-out, email
+verification, and password reset all go straight from
+`dashboard/src/lib/supabaseClient.ts` to Supabase Auth — this backend
+never sees a password. It only verifies the session JWT Supabase
+already issued (`pkg/auth`, against that project's published JWKS)
+before serving domains, mitigation rules, protection settings, live
+dashboard stats, top-offender JA4s, and evidence logs over
+`dashboard/src/lib/api.ts`.
+
+See `docs/DECISIONS.md`'s 2026-09-21 Supabase-migration entry for
+exactly what's real vs. still a placeholder — in short: payments,
+SIEM export, WAF toggles, and the traffic-over-time chart are not
+built. Those sections say so in the UI rather than showing fake data.
 
 ```bash
 cd dashboard
 npm install
-npm run dev        # local dev server (set VITE_API_BASE_URL — see .env.example)
+npm run dev        # local dev server — set VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
+                    # and VITE_API_BASE_URL (see .env.example)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
 
-The backend side needs `-db-url` and `-jwt-secret` set to serve this
-API at all (see `docs/PROGRESS.md`'s dashboard-wiring entry); without
-both, `hakaishield` still runs as a proxy, just without the account
-API.
+The backend side needs `-db-url` (your Supabase project's Postgres
+connection string) and `-supabase-url` set to serve the domains/rules/
+settings API at all (see `docs/PROGRESS.md`'s Supabase-migration
+entry); without both, `hakaishield` still runs as a proxy, just
+without that API.
 
 ## Documentation
 

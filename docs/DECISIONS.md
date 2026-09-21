@@ -10,6 +10,150 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Migrated dashboard auth from custom bcrypt+JWT to Supabase Auth — 2026-09-21
+
+**Decision:** deleted `backend/pkg/account` (bcrypt signup/signin, a
+`users` table) and the custom HMAC `pkg/auth` issuer entirely.
+Signup, signin, sign-out, email verification, and password reset now
+go straight from the frontend (`dashboard/src/lib/supabaseClient.ts`)
+to Supabase Auth. `pkg/auth` still exists but now does one thing:
+verify the session JWT Supabase already issued, by fetching that
+project's public JWKS (`<url>/auth/v1/.well-known/jwks.json`) and
+checking the ES256 signature — no shared secret, no password ever
+touches this backend. `owner_user_id` on `tenants` /
+`mitigation_rules` / `protection_settings` changed from this backend's
+own `usr_`-prefixed string IDs to Supabase's `auth.users.id` (UUID),
+with a real foreign key.
+
+**Why:** the owner asked directly ("Supabase chahiye for db and auth")
+after the earlier session's remaining-work list flagged "email
+verification and password reset are blocked — no email service
+configured" as the biggest concrete gap. Supabase Auth's built-in
+email flow (verification on signup, reset-password emails) solves
+that gap for free, without standing up a separate SendGrid/SES
+integration this project has no credentials for. It also deletes an
+entire class of code this backend has no business owning — password
+hashing, session issuance, email delivery — in favor of a managed
+service built for exactly that.
+
+**Why ES256/JWKS instead of the project's shared HS256 JWT secret:**
+Supabase exposes both (legacy projects use a shared HS256 secret;
+this project, created 2026-09-21, defaults to per-project ES256 asymmetric
+keys with a public JWKS endpoint). JWKS verification needs nothing
+secret at all on this backend's side — confirmed via
+`curl https://<project>.supabase.co/auth/v1/.well-known/jwks.json`
+before writing any code, rather than assumed. A leaked backend config
+under the shared-secret model can forge sessions; under JWKS
+verification it can't, because the backend only ever holds a public
+key. The `-supabase-url` flag replaces the old `-jwt-secret` flag
+entirely — there's no secret to configure.
+
+**What moved to Supabase, concretely:**
+- `POST /auth/signup`, `POST /auth/signin`, `GET /auth/me`,
+  `POST /onboarding/complete` (this backend's own endpoints) — all
+  deleted. The frontend calls `supabase.auth.signUp()`,
+  `signInWithPassword()`, `getUser()`, and stores
+  `onboarding_complete` in Supabase's own `user_metadata` via
+  `updateUser()` instead of a dedicated backend call.
+- `ForgotPassword.tsx` — previously a fake `console.log` (same shape
+  of problem as the Payment.tsx issue found earlier this session);
+  now calls `supabase.auth.resetPasswordForEmail()` for real.
+- The `users` Postgres table — deleted; `auth.users` (Supabase-managed)
+  is the only user table now.
+
+**What did NOT move, and stayed on this backend:** domains, mitigation
+rules, and protection settings CRUD — none of that is an auth concern,
+and Supabase's Postgres is used as *a database*, not as a reason to
+move unrelated business logic into Supabase's own tooling (Edge
+Functions, PostgREST). The Go backend keeps its own direct `pgx`
+connection to that same Postgres instance for those tables.
+
+**Alternatives considered:**
+- *Route domains/rules/settings through Supabase's PostgREST/RLS
+  instead of a direct Go/pgx connection.* Rejected for this pass: it
+  would mean re-deriving this backend's existing, tested query logic
+  as RLS policies, and mixing two different access patterns (direct
+  SQL for the proxy's own tenant lookups, PostgREST for the dashboard)
+  for the same tables. RLS policies were still added (see the
+  `hakaishield_core_schema` migration) as defense-in-depth even though
+  this backend's own connection bypasses them (connects as the
+  privileged role) — Supabase's advisor linter expects them on any
+  public-schema table.
+- *Keep the custom JWT issuer and only add Supabase for the database.*
+  Rejected: that would mean maintaining a second, parallel auth system
+  (this backend's own signup/signin) *and* Supabase's, for no benefit
+  — the whole point was solving the email-verification gap, which only
+  Supabase's own Auth flow (not just its Postgres) provides.
+
+**Verified how:**
+- Backend: full `go build`/`go vet`/`gofmt`/`go test ./...` pass.
+  `pkg/auth`'s new JWKS-based `Verifier` has its own test suite
+  (round-trip against a real ES256 key pair via a fake JWKS server,
+  expired-token rejection, wrong-key rejection, unknown-`kid`
+  rejection, alg=none rejection, key-rotation recovery — the rotation
+  test itself caught a bug in the *test's own* mock JWKS handler
+  closing over the wrong variable, fixed before trusting the result).
+  Confirmed the deployed project really serves an ES256/JWKS endpoint
+  via a direct `curl` against
+  `https://oxvwvzthqnttehqwfgux.supabase.co/auth/v1/.well-known/jwks.json`
+  before writing the verifier, rather than assuming Supabase's default.
+- Frontend: `npm run typecheck` and `npm run build` clean.
+- **Real signup against the live Supabase project** via Playwright,
+  visible Chrome: `supabase.auth.signUp()` returned 200 with a real
+  user UUID and `confirmation_sent_at` timestamp, and the frontend
+  correctly showed a "check your email" state (no session yet, since
+  the project has email confirmation on by default). Note: the first
+  attempt used an `@example.com` address and Supabase rejected it
+  (`email_address_invalid`) — Supabase blocks known placeholder
+  domains; retried with a plausible real domain and it went through
+  normally, which is expected production behavior, not a bug.
+- **Not verified end-to-end with a live signed-in session**: manually
+  confirming the test account's email via SQL
+  (`UPDATE auth.users SET email_confirmed_at = ...`) was blocked by
+  this session's own auto-mode safety classifier as an
+  auth-bypass-shaped action, and that block was respected rather than
+  worked around. So the full loop — sign in with a real Supabase
+  session → call the Go backend's `/domains`, `/rules`,
+  `/settings/protection` with that real token → confirm the backend's
+  `Verifier` accepts it — is proven correct in two *separate* pieces
+  (Supabase issues real ES256 tokens; this backend's `Verifier`
+  correctly validates ES256 tokens against a JWKS server in tests) but
+  not as one continuous live path. See Known gaps.
+- **Not verified at all**: the actual Go backend running against the
+  new Supabase Postgres — this session does not have that database's
+  connection password (Supabase doesn't expose it via the MCP tools
+  used to create the project; only the dashboard shows it, and only
+  right after a manual password reset). The `hakaishield_core_schema`
+  migration was applied and confirmed clean by
+  `get_advisors(type: "security")`, but `backend/pkg/db`,
+  `pkg/rules`, `pkg/settings` were never run against it this session.
+
+**Known gaps / follow-up:**
+- **The owner needs to get the Supabase Postgres connection string**
+  (Supabase dashboard → Project Settings → Database → Connection
+  string, or reset the DB password there) and supply it as `-db-url`
+  before the domains/rules/settings API can run for real.
+- **The owner needs to verify one real email** (their own, or confirm
+  a test account) to prove the full signed-in loop end-to-end, since
+  this session couldn't bypass email confirmation.
+- Supabase's project-level email sending (the built-in "Inbucket"-style
+  sender used before custom SMTP is configured) has low rate limits
+  on the free tier — fine for the testing done here, not meant for
+  production volume. Configuring a custom SMTP provider in the
+  Supabase dashboard is a follow-up before real signups scale.
+- The `dashboard/BACKEND_WIRING_DOCS.md` file (the original
+  aspirational Node.js backend spec this dashboard was scaffolded
+  against) is now further out of date — it still describes this
+  backend's own auth endpoints, which no longer exist. Not rewritten
+  this session; it was already noted as aspirational/superseded in
+  earlier entries and updating it further wasn't asked for.
+
+**Revisit when:** the owner has supplied the Supabase DB connection
+string and verified a real signed-in session end-to-end; at that point
+this entry's "not verified" gaps close.
+
+---
+
 ## Removed the fake billing UI instead of leaving it as a known gap — 2026-09-21
 
 **Decision:** `Subscription.tsx` and `Payment.tsx` no longer show

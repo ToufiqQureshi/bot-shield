@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { listDomains, me, signout, type Domain, type AuthUser } from '../lib/api';
+import { listDomains, type Domain } from '../lib/api';
+import { supabase } from '../lib/supabaseClient';
+import type { User } from '@supabase/supabase-js';
 
 const tabs = [
   { path: '/', label: 'Overview' },
@@ -27,7 +29,7 @@ export default function Layout() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(true);
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -46,19 +48,20 @@ export default function Layout() {
         // blocking the whole layout on one failed request.
       })
       .finally(() => !cancelled && setDomainsLoading(false));
-    me().then((u) => !cancelled && setUser(u)).catch(() => {});
+    supabase.auth.getUser().then(({ data }) => !cancelled && setUser(data.user)).catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const handleSignOut = () => {
-    signout();
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
     navigate('/sign-in');
   };
 
-  const initials = user?.name
-    ? user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
+  const displayName = (user?.user_metadata?.name as string | undefined) || user?.email || '';
+  const initials = displayName
+    ? displayName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
     : '..';
 
   return (

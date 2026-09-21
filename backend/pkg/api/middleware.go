@@ -16,7 +16,7 @@ type ctxKeyUserID struct{}
 // rather than per-handler because every authenticated dashboard route
 // needs the same ones, including on the OPTIONS preflight this
 // function answers before the wrapped handler ever runs.
-func RequireAuth(issuer *auth.Issuer, next http.HandlerFunc) http.HandlerFunc {
+func RequireAuth(verifier *auth.Verifier, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
@@ -30,7 +30,7 @@ func RequireAuth(issuer *auth.Issuer, next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "missing bearer token")
 			return
 		}
-		userID, err := issuer.Verify(tokenStr)
+		userID, err := verifier.Verify(tokenStr)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
 			return

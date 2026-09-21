@@ -62,8 +62,8 @@ func normalizeOrigin(origin string) (string, error) {
 // A newly added domain is not yet taking live traffic — see
 // db.CreateDomain's comment on why it needs the proxy process to pick
 // the row up before enforcement actually starts for that host.
-func DomainsHandler(issuer *auth.Issuer) http.HandlerFunc {
-	return RequireAuth(issuer, func(w http.ResponseWriter, r *http.Request) {
+func DomainsHandler(verifier *auth.Verifier) http.HandlerFunc {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		userID := UserIDFromContext(r.Context())
 
 		switch r.Method {

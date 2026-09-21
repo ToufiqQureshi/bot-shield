@@ -19,8 +19,8 @@ import (
 // Real IP is deliberately not in this response: evidence.Evidence
 // never captured it (see its own doc comment), so there is nothing to
 // leak here that visitor privacy didn't already exclude upstream.
-func TopOffendersHandler(store *tenant.Store, issuer *auth.Issuer) http.HandlerFunc {
-	return RequireAuth(issuer, func(w http.ResponseWriter, r *http.Request) {
+func TopOffendersHandler(store *tenant.Store, verifier *auth.Verifier) http.HandlerFunc {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
@@ -87,8 +87,8 @@ func TopOffendersHandler(store *tenant.Store, issuer *auth.Issuer) http.HandlerF
 // backend/pkg/api/handlers.go's DashboardEvidenceHandler) rather than
 // merged, since they answer to different trust boundaries: one static
 // operator token for the whole deployment vs. one account's own data.
-func EvidenceLogsHandler(store *tenant.Store, issuer *auth.Issuer) http.HandlerFunc {
-	return RequireAuth(issuer, func(w http.ResponseWriter, r *http.Request) {
+func EvidenceLogsHandler(store *tenant.Store, verifier *auth.Verifier) http.HandlerFunc {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return

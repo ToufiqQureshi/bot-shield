@@ -9,8 +9,8 @@ import (
 )
 
 // ProtectionSettingsHandler serves GET/PUT /settings/protection.
-func ProtectionSettingsHandler(store *settings.Store, issuer *auth.Issuer) http.HandlerFunc {
-	return RequireAuth(issuer, func(w http.ResponseWriter, r *http.Request) {
+func ProtectionSettingsHandler(store *settings.Store, verifier *auth.Verifier) http.HandlerFunc {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		userID := UserIDFromContext(r.Context())
 
 		switch r.Method {

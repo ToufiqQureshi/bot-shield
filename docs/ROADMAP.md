@@ -553,11 +553,17 @@ always the operator.
          fabricated plan/usage/invoice data and a card form that
          falsely claimed to be processed by Stripe; see
          `docs/DECISIONS.md`) rather than being unwired silently.
-      2. **Email (SendGrid/SES).** Blocked on a real API key. Needs
-         `POST /auth/verify-email`, `POST /auth/forgot-password`,
-         `POST /auth/reset-password` — none of the three exist in the
-         backend yet. Without this, signup has no verification step
-         and there is no password-reset flow.
+      2. ~~**Email (SendGrid/SES).**~~ **Done differently, 2026-09-21:**
+         auth (including email verification and password reset)
+         moved to Supabase Auth instead of building a SendGrid/SES
+         integration — see `docs/DECISIONS.md`'s Supabase-migration
+         entry. `backend/pkg/account` and the custom JWT issuer are
+         deleted; `pkg/auth` now only verifies Supabase-issued session
+         JWTs via that project's JWKS. **Not yet fully verified**: the
+         Go backend needs the new Supabase project's DB connection
+         string (`-db-url`) from the owner, and one real email needs
+         verifying to confirm the full signed-in loop end-to-end —
+         both still open, see `docs/PROGRESS.md`.
       3. **Enforce custom mitigation rules.** Rules are real CRUD
          today but have zero effect on live traffic — nothing in
          `pkg/core`/`pkg/signals` reads `mitigation_rules`. No

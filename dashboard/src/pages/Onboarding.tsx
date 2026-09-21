@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
-import { completeOnboarding, ApiError } from '../lib/api';
+import { supabase } from '../lib/supabaseClient';
 
 export default function Onboarding() {
   const { theme } = useTheme();
@@ -24,13 +24,17 @@ export default function Onboarding() {
     setSubmitting(true);
     try {
       // The questionnaire answers (useCase, monthlyVisitors, teamSize,
-      // botProblem) aren't persisted server-side yet — no table for
-      // them exists (see docs/PROGRESS.md). Only the completion flag
-      // is saved, which is what actually gates the redirect below.
-      await completeOnboarding();
+      // botProblem) aren't persisted — no table for them exists (see
+      // docs/PROGRESS.md). Only the completion flag is saved, in
+      // Supabase's own user_metadata, which is what actually gates
+      // the redirect in SignIn/RequireAuth.
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { onboarding_complete: true },
+      });
+      if (updateError) throw updateError;
       navigate('/domains-siem');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save onboarding. Try again.');
+      setError(err instanceof Error ? err.message : 'Could not save onboarding. Try again.');
     } finally {
       setSubmitting(false);
     }

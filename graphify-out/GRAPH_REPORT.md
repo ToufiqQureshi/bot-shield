@@ -1,17 +1,17 @@
 # Graph Report - bot-shield  (2026-09-21)
 
 ## Corpus Check
-- 134 files · ~128,948 words
+- 134 files · ~129,928 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 7 file(s) not represented in the graph (top: (none) 5, .example 1, .css 1)
 
 ## Summary
-- 1253 nodes · 2435 edges · 83 communities (70 shown, 13 thin omitted)
-- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 202 edges (avg confidence: 0.86)
+- 1256 nodes · 2439 edges · 84 communities (71 shown, 13 thin omitted)
+- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 204 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f4093b41`
+- Built from commit: `23d0745e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -19,12 +19,12 @@
 - api.ts
 - guard_test.go
 - proxy.go
-- go_pkg_testing
+- NewTrail
 - capture.go
 - testing.T
 - CLAUDE.md
-- Stats
-- velocity_test.go
+- Store
+- newTestRedis
 - challenge.go
 - What You Must Do When Invoked
 - HakaiShield: Complete Pages Overview
@@ -64,12 +64,12 @@
 - dependencies
 - compilerOptions
 - HakaiShield Dashboard - Light Mode Implementation
-- go_pkg_context
-- context.Context
+- honeypot_test.go
+- go_pkg_time
 - main
 - DECISIONS.md — Why We Chose What We Chose
 - hakaishield
-- rules/rules.go
+- context.Context
 - Page-by-Page Wiring Guide
 - devDependencies
 - 2026-09-16 — Market scan; repositioned the product away from "affordable alternative"
@@ -79,12 +79,12 @@
 - Data Models
 - 2026-09-16 — Decision evidence trail (ROADMAP item 12a, done)
 - 2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now
-- account.go
+- go_pkg_testing
 - 2026-09-16 — Answered "why not just build it yourself?"; named the moat
 - 2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed
 - 2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it
 - 1. Landing Page (`/landing`)
-- newTestRedis
+- CrawlPatternSuspected
 - Authentication System
 - Deployment Checklist
 - Error Handling
@@ -93,14 +93,15 @@
 - 2. Pricing Page (`/pricing`)
 - dashboard/README.md
 - botshiel_frontend_src_index
-- NewIssuer
+- jwt.go
 - time.Time
 - goodbots.go
 - Decision
+- stats_test.go
 
 ## God Nodes (most connected - your core abstractions)
-1. `PROGRESS.md — What Was Done, When, and Why` - 50 edges
-2. `DECISIONS.md — Why We Chose What We Chose` - 36 edges
+1. `PROGRESS.md — What Was Done, When, and Why` - 51 edges
+2. `DECISIONS.md — Why We Chose What We Chose` - 38 edges
 3. `useTheme()` - 33 edges
 4. `main()` - 30 edges
 5. `NewOriginProxy()` - 21 edges
@@ -108,64 +109,64 @@
 7. `Store` - 20 edges
 8. `NewGuard()` - 19 edges
 9. `lucide-react` - 18 edges
-10. `react` - 18 edges
+10. `NewChallenge()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Where things stand` --references--> `main()`  [INFERRED]
-  docs/PROGRESS.md → patchright_test.py
+- `Dropped Go 1.22+ method-prefixed route patterns for the dashboard API — 2026-09-21` --references--> `RequireAuth()`  [INFERRED]
+  docs/DECISIONS.md → dashboard/src/components/RequireAuth.tsx
 - `Dashboard wiring: real account/domains/rules/settings API, same binary, no separate control-plane service — 2026-09-21` --references--> `RequireAuth()`  [INFERRED]
   docs/DECISIONS.md → dashboard/src/components/RequireAuth.tsx
+- `Where things stand` --references--> `main()`  [INFERRED]
+  docs/PROGRESS.md → patchright_test.py
+- `2026-09-21 — Playwright end-to-end check found and fixed a real CORS bug, plus fake billing UI` --references--> `RequireAuth()`  [INFERRED]
+  docs/PROGRESS.md → dashboard/src/components/RequireAuth.tsx
 - `2026-09-14 — Zip landed in real repo; PR merged` --references--> `main()`  [INFERRED]
-  docs/PROGRESS.md → patchright_test.py
-- `2026-09-15 — Session handoff: item 3 done, item 4 next, PR #2 about to be merged` --references--> `main()`  [INFERRED]
-  docs/PROGRESS.md → patchright_test.py
-- `2026-09-16 — Dashboard wired to the real backend; dead code removed; merged a landed upstream PR` --references--> `main()`  [INFERRED]
   docs/PROGRESS.md → patchright_test.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (83 total, 13 thin omitted)
+## Communities (84 total, 13 thin omitted)
 
 ### Community 0 - "api.ts"
 Cohesion: 0.06
-Nodes (73): App(), Layout(), LayoutContext, tabs, RequireAuth(), Theme, ThemeContext, ThemeContextType (+65 more)
+Nodes (74): App(), Layout(), LayoutContext, tabs, RequireAuth(), Theme, ThemeContext, ThemeContextType (+66 more)
 
 ### Community 1 - "guard_test.go"
-Cohesion: 0.07
-Nodes (60): statsResponse, authorized(), DashboardEvidenceHandler(), DashboardStatsHandler(), TestDashboardEvidenceHandler(), TestDashboardStatsHandler(), DashboardExportHandler(), DashboardTopOffendersHandler() (+52 more)
+Cohesion: 0.08
+Nodes (56): OffenderStats, statsResponse, authorized(), DashboardEvidenceHandler(), DashboardStatsHandler(), TestDashboardEvidenceHandler(), TestDashboardStatsHandler(), DashboardExportHandler() (+48 more)
 
 ### Community 2 - "proxy.go"
 Cohesion: 0.09
-Nodes (33): deceiveResponse(), DecisionFromContext(), readBody(), ScoreFromContext(), deceiveResp(), TestDeceiveResponseDoesNotBufferLargeBodies(), TestDeceiveResponseIgnoresUndeceivedTraffic(), TestDeceiveResponseInjectsIntoHTML() (+25 more)
+Nodes (34): deceiveResponse(), DecisionFromContext(), readBody(), ScoreFromContext(), deceiveResp(), TestDeceiveResponseDoesNotBufferLargeBodies(), TestDeceiveResponseIgnoresUndeceivedTraffic(), TestDeceiveResponseInjectsIntoHTML() (+26 more)
 
-### Community 3 - "go_pkg_testing"
-Cohesion: 0.05
-Nodes (57): BenchmarkTrailRecent(), BenchmarkTrailRecord(), BenchmarkTrailRecordAndRead(), Trail, NewTrail(), newTrail(), TestTrailConcurrentRecords(), TestTrailLimit() (+49 more)
+### Community 3 - "NewTrail"
+Cohesion: 0.08
+Nodes (30): BenchmarkTrailRecent(), BenchmarkTrailRecord(), BenchmarkTrailRecordAndRead(), Trail, NewTrail(), newTrail(), TestTrailConcurrentRecords(), TestTrailLimit() (+22 more)
 
 ### Community 4 - "capture.go"
 Cohesion: 0.16
-Nodes (13): ConnContext(), JA4FromContext(), NewCaptureListener(), TestJA4FromContext(), TestNewCaptureListener(), captureListener, ctxKeyConn, ctxKeyJA4 (+5 more)
+Nodes (14): ConnContext(), JA4FromContext(), NewCaptureListener(), TestJA4FromContext(), TestNewCaptureListener(), captureListener, ctxKeyConn, ctxKeyJA4 (+6 more)
 
 ### Community 5 - "testing.T"
-Cohesion: 0.21
-Nodes (17): NewStore(), TestGetByID_NilPoolFailsClearly(), TestSignin_NilPoolFailsClearly(), TestSignup_RejectsInvalidEmail(), TestSignup_RejectsShortPassword(), TestSignup_ValidInputReachesDatabaseCheck(), TestValidEmail(), validEmail() (+9 more)
+Cohesion: 0.22
+Nodes (18): NewIssuer(), TestIssue_TokenHasThreeSegments(), TestIssueVerify_RoundTrip(), TestNewIssuer_RejectsEmptySecret(), TestVerify_RejectsAlgNone(), TestVerify_RejectsExpiredToken(), TestVerify_RejectsGarbage(), TestVerify_RejectsMissingUserID() (+10 more)
 
 ### Community 6 - "CLAUDE.md"
 Cohesion: 0.08
 Nodes (24): 10. Detection Architecture, 12. Mutation Verification, 14. False Positives Are a Production Problem, 16. Multi-Tenant Security, 17. Visitor-Controlled Input, 18. Security Review, 19. Resource and Cost Awareness, 1. Autonomous Engineering Rule (+16 more)
 
-### Community 7 - "Stats"
-Cohesion: 0.11
-Nodes (13): Mode, PolicyMode, ParseMode(), ParsePolicy(), TestModeString(), TestParseMode(), Stats, newStats() (+5 more)
+### Community 7 - "Store"
+Cohesion: 0.12
+Nodes (14): Mode, PolicyMode, ParseMode(), ParsePolicy(), TestModeString(), TestParseMode(), Stats, Store (+6 more)
 
-### Community 8 - "velocity_test.go"
-Cohesion: 0.18
-Nodes (17): checkJA4VelocitySpike(), checkVelocitySpike(), redis.Client, InitRedis(), TestCheckJA4VelocitySpikeExemptsCommonBrowsers(), TestCheckJA4VelocitySpikeOverLimit(), TestCheckVelocitySpikeExemptsAssets(), TestCheckVelocitySpikeIsolatedPerIP() (+9 more)
+### Community 8 - "newTestRedis"
+Cohesion: 0.20
+Nodes (18): checkJA4VelocitySpike(), checkVelocitySpike(), redis.Client, InitRedis(), newTestRedis(), TestCheckJA4VelocitySpikeExemptsCommonBrowsers(), TestCheckJA4VelocitySpikeOverLimit(), TestCheckVelocitySpikeExemptsAssets() (+10 more)
 
 ### Community 9 - "challenge.go"
-Cohesion: 0.16
-Nodes (14): Challenge, randomNonce(), safeRedirectPath(), validCanvasProof(), validPoW(), WithDecision(), challengeData, Guard (+6 more)
+Cohesion: 0.17
+Nodes (13): Challenge, randomNonce(), safeRedirectPath(), validCanvasProof(), validPoW(), challengeData, Guard, go_pkg_crypto_hmac (+5 more)
 
 ### Community 10 - "What You Must Do When Invoked"
 Cohesion: 0.08
@@ -176,8 +177,8 @@ Cohesion: 0.04
 Nodes (45): About Page (`/about`), 📄 All Pages (19 Total), Analytics, Authentication, Authentication Flow, Authentication Pages, Backend Integration, ✅ Build Status (+37 more)
 
 ### Community 12 - "package.json"
-Cohesion: 0.10
-Nodes (19): name, private, type, canvas-confetti, date-fns, @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities (+11 more)
+Cohesion: 0.11
+Nodes (18): name, private, type, canvas-confetti, date-fns, @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities (+10 more)
 
 ### Community 13 - "HakaiShield: Fake Content Removed & Honest Positioning Added"
 Cohesion: 0.05
@@ -201,7 +202,7 @@ Nodes (7): index(), route, report(), home(), route, flask, json
 
 ### Community 19 - "PROGRESS.md — What Was Done, When, and Why"
 Cohesion: 0.06
-Nodes (34): 2026-09-14 — Audited against the standard library; deleted ~60 lines we shouldn't have written, 2026-09-14 — Backfilled RESEARCH.md and DECISIONS.md, 2026-09-14 — Comments simplified; CLAUDE.md comment rule tightened, 2026-09-14 — Corrected a real licensing mistake: MIT → proprietary, 2026-09-14 — Docs audit: fixed 5 defects, brought every file back in sync, 2026-09-14 — Fixed 2 real production bugs in the capture listener, 2026-09-14 — Independent security review found 2 issues I'd missed, 2026-09-14 — JA4 fingerprint computation (ROADMAP P0 item 2, partial) (+26 more)
+Nodes (35): 2026-09-14 — Audited against the standard library; deleted ~60 lines we shouldn't have written, 2026-09-14 — Backfilled RESEARCH.md and DECISIONS.md, 2026-09-14 — Comments simplified; CLAUDE.md comment rule tightened, 2026-09-14 — Corrected a real licensing mistake: MIT → proprietary, 2026-09-14 — Docs audit: fixed 5 defects, brought every file back in sync, 2026-09-14 — Fixed 2 real production bugs in the capture listener, 2026-09-14 — Independent security review found 2 issues I'd missed, 2026-09-14 — JA4 fingerprint computation (ROADMAP P0 item 2, partial) (+27 more)
 
 ### Community 20 - "vite.config.js"
 Cohesion: 0.50
@@ -264,8 +265,8 @@ Cohesion: 0.13
 Nodes (14): 10. **Code-Style Comments**, 1. **Removed Excessive Icons**, 2. **Simplified Navigation**, 3. **Metrics Cards - Less Visual Noise**, 4. **Shadow Mode Banner**, 5. **Section Headers**, 6. **Landing Page - Complete Rewrite**, 7. **Pricing Page - Stripped Down** (+6 more)
 
 ### Community 44 - "challenge_test.go"
-Cohesion: 0.32
-Nodes (17): fetchPage(), newChallenge(), postVerify(), solvePoW(), TestChallengeHandlerMethodNotAllowed(), TestChallengePageDetectsAdvancedAutomation(), TestChallengePageObfuscatesAutomationTells(), TestChallengeRealFlowPasses() (+9 more)
+Cohesion: 0.29
+Nodes (18): fetchPage(), newChallenge(), postVerify(), solvePoW(), TestChallengeHandlerMethodNotAllowed(), TestChallengePageDetectsAdvancedAutomation(), TestChallengePageObfuscatesAutomationTells(), TestChallengeRealFlowPasses() (+10 more)
 
 ### Community 45 - "HakaiShield Backend Wiring Documentation"
 Cohesion: 0.14
@@ -283,29 +284,29 @@ Nodes (13): compilerOptions, allowImportingTsExtensions, esModuleInterop, isolat
 Cohesion: 0.11
 Nodes (17): 1. Theme System (`src/context/ThemeContext.tsx`), 2. CSS Variables (`src/index.css`), 3. Layout Component (`src/components/Layout.tsx`), 4. All Pages Updated, Build Status, Changes Made, Component Updates, CSS Variables Structure (+9 more)
 
-### Community 49 - "go_pkg_context"
-Cohesion: 0.19
-Nodes (10): NewStore(), TestGet_NilPoolFailsClearly(), TestUpsert_RejectsBlockNotGreaterThanChallenge(), TestUpsert_ValidThresholdsReachDatabaseCheck(), go_pkg_context, go_pkg_fmt, go_pkg_github_com_jackc_pgx_v5, go_pkg_github_com_jackc_pgx_v5_pgxpool (+2 more)
+### Community 49 - "honeypot_test.go"
+Cohesion: 0.29
+Nodes (15): honeypotKey(), HoneypotTripped(), RecordHoneypotTrip(), sweepHoneypotLocked(), BenchmarkHoneypotTrippedEmpty(), resetHoneypot(), TestHoneypotConcurrentAccess(), TestHoneypotIgnoresIncompleteIdentity() (+7 more)
 
-### Community 50 - "context.Context"
-Cohesion: 0.27
-Nodes (10): CreateDomain(), GetTenant(), GetTenantByID(), Domain, Init(), initSchema(), ListDomains(), Store (+2 more)
+### Community 50 - "go_pkg_time"
+Cohesion: 0.26
+Nodes (11): AddCommonBrowserPrefix(), AddKnownScraperJA4(), redis.Client, isCommonBrowserJA4(), IsKnownScraperJA4(), StartJA4Sync(), syncJA4FromRedis(), TestJA4DynamicDatabase() (+3 more)
 
 ### Community 51 - "main"
-Cohesion: 0.06
-Nodes (66): addDomainRequest, ctxKeyUserID, envelope, OffenderStats, signinRequest, signupRequest, toggleRuleRequest, claims (+58 more)
+Cohesion: 0.07
+Nodes (59): addDomainRequest, ctxKeyUserID, envelope, signinRequest, signupRequest, toggleRuleRequest, main(), decodeJSON() (+51 more)
 
 ### Community 52 - "DECISIONS.md — Why We Chose What We Chose"
 Cohesion: 0.05
-Nodes (36): Added 2 competitor-gap items to roadmap, rejected the rest — 2026-09-15, agentchat: removed the MCP server, kept plain file + manual relay — 2026-09-15, Assemble proven open-source pieces, don't reinvent TLS/fingerprint parsing — 2026-09-14, Automation probe lives inside the JS challenge, not injected site-wide — 2026-09-16, Back to one agent; Claude Code owns the dashboard too — 2026-09-16, Cap concurrent TLS handshakes at 1000 — 2026-09-14, Consolidating PR #10 and PR #11; dropping the forensics analyzer — 2026-09-20, Dashboard wiring: real account/domains/rules/settings API, same binary, no separate control-plane service — 2026-09-21 (+28 more)
+Nodes (38): Added 2 competitor-gap items to roadmap, rejected the rest — 2026-09-15, agentchat: removed the MCP server, kept plain file + manual relay — 2026-09-15, Assemble proven open-source pieces, don't reinvent TLS/fingerprint parsing — 2026-09-14, Automation probe lives inside the JS challenge, not injected site-wide — 2026-09-16, Back to one agent; Claude Code owns the dashboard too — 2026-09-16, Cap concurrent TLS handshakes at 1000 — 2026-09-14, Consolidating PR #10 and PR #11; dropping the forensics analyzer — 2026-09-20, Dashboard wiring: real account/domains/rules/settings API, same binary, no separate control-plane service — 2026-09-21 (+30 more)
 
 ### Community 53 - "hakaishield"
 Cohesion: 0.18
 Nodes (10): Dashboard (frontend), Documentation, hakaishield, Key Capabilities:, License, Responsible use, Shadow mode, Try it locally (+2 more)
 
-### Community 54 - "rules/rules.go"
-Cohesion: 0.16
-Nodes (17): createRuleRequest, decodeConditions(), encodeConditions(), Condition, CustomRule, Store, Managed(), newRuleID() (+9 more)
+### Community 54 - "context.Context"
+Cohesion: 0.06
+Nodes (50): User, createRuleRequest, Store, isUniqueViolation(), NewStore(), newUserID(), TestGetByID_NilPoolFailsClearly(), TestSignin_NilPoolFailsClearly() (+42 more)
 
 ### Community 55 - "Page-by-Page Wiring Guide"
 Cohesion: 0.20
@@ -343,9 +344,9 @@ Nodes (8): 2026-09-16 — Decision evidence trail (ROADMAP item 12a, done), Hone
 Cohesion: 0.25
 Nodes (8): 2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now, A pre-existing lie I found and fixed, Antigravity ended, Honest gaps, Next session should, Shadow mode — what was built, Tested how — eight mutations, all caught, What NO test covers
 
-### Community 64 - "account.go"
-Cohesion: 0.22
-Nodes (8): User, Store, isUniqueViolation(), newUserID(), go_pkg_crypto_rand, go_pkg_golang_org_x_crypto_bcrypt, go_pkg_net_mail, go_pkg_strings
+### Community 64 - "go_pkg_testing"
+Cohesion: 0.29
+Nodes (5): claimsBrowser(), TestUAMismatch(), UAMismatch(), go_pkg_strings, go_pkg_testing
 
 ### Community 65 - "2026-09-16 — Answered "why not just build it yourself?"; named the moat"
 Cohesion: 0.29
@@ -363,8 +364,8 @@ Nodes (6): 2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break 
 Cohesion: 0.40
 Nodes (5): 1. Landing Page (`/landing`), "Apply for founding access" button, "Get started" button (nav), Interactive demo "Run through hakaishield" button, "Start free trial" button (hero)
 
-### Community 70 - "newTestRedis"
-Cohesion: 0.35
+### Community 70 - "CrawlPatternSuspected"
+Cohesion: 0.26
 Nodes (11): CrawlPatternSuspected(), isStaticAsset(), TestCrawlPatternExemptsAssets(), TestCrawlPatternExemptsNonBrowser(), TestCrawlPatternFiresOnManyDistinctPaths(), TestCrawlPatternIsolatedPerIP(), TestCrawlPatternNoRedisFailsOpen(), TestCrawlPatternRepeatedSamePathDoesNotFire() (+3 more)
 
 ### Community 71 - "Authentication System"
@@ -391,41 +392,45 @@ Nodes (4): 2026-09-20 — Consolidated PR #10 + PR #11 into one hardened change,
 Cohesion: 0.67
 Nodes (3): 2. Pricing Page (`/pricing`), "Start free trial" buttons (all plans), "Talk to sales" button (Enterprise)
 
-### Community 79 - "NewIssuer"
-Cohesion: 0.31
-Nodes (10): NewIssuer(), TestIssue_TokenHasThreeSegments(), TestIssueVerify_RoundTrip(), TestNewIssuer_RejectsEmptySecret(), TestVerify_RejectsAlgNone(), TestVerify_RejectsExpiredToken(), TestVerify_RejectsGarbage(), TestVerify_RejectsMissingUserID() (+2 more)
+### Community 79 - "jwt.go"
+Cohesion: 0.50
+Nodes (3): claims, go_pkg_github_com_golang_jwt_jwt_v5, jwt.RegisteredClaims
 
 ### Community 80 - "time.Time"
-Cohesion: 0.24
-Nodes (4): mockConn, net.Addr, time.Time, botCacheEntry
+Cohesion: 0.27
+Nodes (3): mockConn, net.Addr, time.Time
 
 ### Community 81 - "goodbots.go"
-Cohesion: 0.31
-Nodes (8): IsGoodBotClaim(), IsVerifiedGoodBot(), TestIsGoodBotClaim(), TestIsVerifiedGoodBot_Spoofed(), TestIsVerifiedGoodBot_Success(), verifyDNS(), go_pkg_net, GoodBotFamily
+Cohesion: 0.29
+Nodes (8): IsGoodBotClaim(), IsVerifiedGoodBot(), TestIsGoodBotClaim(), TestIsVerifiedGoodBot_Spoofed(), TestIsVerifiedGoodBot_Success(), verifyDNS(), botCacheEntry, GoodBotFamily
 
 ### Community 82 - "Decision"
 Cohesion: 0.67
 Nodes (3): Decision, 2026-09-15 — Scoring engine v1 (ROADMAP P0 item 5, done); Antigravity joins the project, 2026-09-19 — Repair the broken test suite left behind by the PoW/theme change; wire header_anomaly; remove dead probe endpoint
 
+### Community 83 - "stats_test.go"
+Cohesion: 0.60
+Nodes (5): newStats(), TestStats_ConcurrentRecord(), TestStats_ModeReported(), TestStats_Record_AllDecisions(), TestStats_ZeroValues()
+
 ## Knowledge Gaps
-- **499 isolated node(s):** `Format for new entries`, `2026-09-19 — Enterprise Hardening: Adaptive Policy Modes, Verified Good Bot Engine, and Upstream Transport Resilience`, `2026-09-19 — Server-side request-pattern layer; fix the velocity false positive that 429s real browsers`, `2026-09-19 — Implemented JS Challenge Engine, Headful Bot Evasion, and Theme Customization`, `2026-09-14 — Backfilled RESEARCH.md and DECISIONS.md` (+494 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 574 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **500 isolated node(s):** `Removed the fake billing UI instead of leaving it as a known gap — 2026-09-21`, `Honeypot trap: scoped to (tenant, IP, JA4), scored not blocked — 2026-09-20`, `Consolidating PR #10 and PR #11; dropping the forensics analyzer — 2026-09-20`, `Enterprise Hardening: Adaptive Policy Modes, Verified Good Bots, and Production Transport — 2026-09-19`, `Server-observed request patterns; asset-aware rate limiting — 2026-09-19` (+495 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 575 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `PROGRESS.md — What Was Done, When, and Why` connect `PROGRESS.md — What Was Done, When, and Why` to `api.ts`, `2026-09-16 — Answered "why not just build it yourself?"; named the moat`, `2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed`, `2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it`, `2026-09-20 — Consolidated PR #10 + PR #11 into one hardened change`, `main`, `Decision`, `2026-09-16 — Market scan; repositioned the product away from "affordable alternative"`, `2026-09-16 — Pivot to hosted SaaS; self-hosting becomes Enterprise`, `2026-09-16 — Decision evidence trail (ROADMAP item 12a, done)`, `2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now`?**
-  _High betweenness centrality (0.046) - this node is a cross-community bridge._
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
 - **Why does `2026-09-21 — Wired the dashboard to a real account/domains/rules/settings API` connect `api.ts` to `PROGRESS.md — What Was Done, When, and Why`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
-- **Why does `useTheme()` connect `api.ts` to `HakaiShield Dashboard - Light Mode Implementation`?**
-  _High betweenness centrality (0.016) - this node is a cross-community bridge._
+  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `RequireAuth()` connect `api.ts` to `PROGRESS.md — What Was Done, When, and Why`, `DECISIONS.md — Why We Chose What We Chose`?**
+  _High betweenness centrality (0.013) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `useTheme()` (e.g. with `1. Theme System (`src/context/ThemeContext.tsx`)` and `3. Layout Component (`src/components/Layout.tsx`)`) actually correct?**
   _`useTheme()` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Format for new entries`, `2026-09-19 — Enterprise Hardening: Adaptive Policy Modes, Verified Good Bot Engine, and Upstream Transport Resilience`, `2026-09-19 — Server-side request-pattern layer; fix the velocity false positive that 429s real browsers` to the rest of the system?**
-  _499 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Removed the fake billing UI instead of leaving it as a known gap — 2026-09-21`, `Honeypot trap: scoped to (tenant, IP, JA4), scored not blocked — 2026-09-20`, `Consolidating PR #10 and PR #11; dropping the forensics analyzer — 2026-09-20` to the rest of the system?**
+  _500 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `api.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.06101834673263245 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0597979797979798 - nodes in this community are weakly interconnected._
 - **Should `guard_test.go` be split into smaller, more focused modules?**
-  _Cohesion score 0.07330618289522399 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08461538461538462 - nodes in this community are weakly interconnected._

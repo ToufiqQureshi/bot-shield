@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ToufiqQureshi/hakaishield/pkg/account"
 	"github.com/ToufiqQureshi/hakaishield/pkg/api"
 	"github.com/ToufiqQureshi/hakaishield/pkg/auth"
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
@@ -43,8 +42,8 @@ func main() {
 	policyFlag := flag.String("policy", "balanced", `policy strategy: "balanced" (allow clean score 0, challenge suspicious) or "strict" (mandatory challenge)`)
 	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-HakaiShield-Decision: deceive instead of 403)")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
-	dbURL := flag.String("db-url", "", "PostgreSQL URL for Supabase integration (e.g. postgres://user:pass@host:5432/db)")
-	jwtSecret := flag.String("jwt-secret", "", "HMAC secret for dashboard session JWTs; required to enable the account/domains/rules/settings API (unset disables it)")
+	dbURL := flag.String("db-url", "", "PostgreSQL URL for the Supabase project's database (Project Settings > Database in the Supabase dashboard)")
+	supabaseURL := flag.String("supabase-url", "", "Supabase project URL (e.g. https://xxxx.supabase.co); used to verify dashboard session JWTs against the project's published JWKS. Required, with -db-url, to enable the domains/rules/settings API.")
 	flag.Parse()
 
 	mode, err := config.ParseMode(*modeFlag)
@@ -145,18 +144,17 @@ func main() {
 		log.Print("hakaishield: -evidence-token not set, evidence endpoint disabled")
 	}
 
-	// The account/domains/rules/settings dashboard API needs both a
-	// database (it's the only durable store any of it has) and a JWT
-	// secret (without one, sessions can't be signed at all). Requiring
-	// both explicitly rather than falling back to a random secret means
-	// a misconfigured deployment fails loudly at startup instead of
-	// silently minting sessions no restart can verify.
-	if *dbURL != "" && *jwtSecret != "" {
-		issuer, err := auth.NewIssuer([]byte(*jwtSecret))
+	// The domains/rules/settings dashboard API needs both a database
+	// (the only durable store any of it has) and a Supabase project URL
+	// (to verify session JWTs Supabase Auth issued, against that
+	// project's published JWKS — see pkg/auth). Requiring both
+	// explicitly means a misconfigured deployment fails loudly at
+	// startup instead of silently accepting no sessions at all.
+	if *dbURL != "" && *supabaseURL != "" {
+		verifier, err := auth.NewVerifier(*supabaseURL)
 		if err != nil {
 			log.Fatalf("hakaishield: %v", err)
 		}
-		accountStore := account.NewStore(db.DB)
 		rulesStore := rules.NewStore(db.DB)
 		settingsStore := settings.NewStore(db.DB)
 
@@ -168,20 +166,21 @@ func main() {
 		// run — see docs/PROGRESS.md). Every handler below already
 		// checks r.Method itself (directly, or via RequireAuth), so
 		// the mux doesn't need to gate on method too.
-		mux.HandleFunc("/api/v1/auth/signup", api.SignupHandler(accountStore))
-		mux.HandleFunc("/api/v1/auth/signin", api.SigninHandler(accountStore, issuer))
-		mux.HandleFunc("/api/v1/auth/me", api.MeHandler(accountStore, issuer))
-		mux.HandleFunc("/api/v1/onboarding/complete", api.OnboardingCompleteHandler(accountStore, issuer))
-		mux.HandleFunc("/api/v1/domains", api.DomainsHandler(issuer))
-		mux.HandleFunc("/api/v1/rules", api.RulesListHandler(rulesStore, issuer))
-		mux.HandleFunc("/api/v1/rules/custom", api.CreateRuleHandler(rulesStore, issuer))
-		mux.HandleFunc("/api/v1/rules/{id}/toggle", api.ToggleRuleHandler(rulesStore, issuer))
-		mux.HandleFunc("/api/v1/settings/protection", api.ProtectionSettingsHandler(settingsStore, issuer))
-		mux.HandleFunc("/api/v1/dashboard/top-offenders", api.TopOffendersHandler(store, issuer))
-		mux.HandleFunc("/api/v1/dashboard/evidence-logs", api.EvidenceLogsHandler(store, issuer))
-		log.Print("hakaishield: account/domains/rules/settings API enabled")
+		//
+		// Signup/signin/session-management are no longer this
+		// backend's job — the frontend talks to Supabase Auth
+		// directly (see dashboard/src/lib/supabaseClient.ts). This
+		// backend only verifies the JWT Supabase already issued.
+		mux.HandleFunc("/api/v1/domains", api.DomainsHandler(verifier))
+		mux.HandleFunc("/api/v1/rules", api.RulesListHandler(rulesStore, verifier))
+		mux.HandleFunc("/api/v1/rules/custom", api.CreateRuleHandler(rulesStore, verifier))
+		mux.HandleFunc("/api/v1/rules/{id}/toggle", api.ToggleRuleHandler(rulesStore, verifier))
+		mux.HandleFunc("/api/v1/settings/protection", api.ProtectionSettingsHandler(settingsStore, verifier))
+		mux.HandleFunc("/api/v1/dashboard/top-offenders", api.TopOffendersHandler(store, verifier))
+		mux.HandleFunc("/api/v1/dashboard/evidence-logs", api.EvidenceLogsHandler(store, verifier))
+		log.Print("hakaishield: domains/rules/settings API enabled (Supabase-authenticated)")
 	} else {
-		log.Print("hakaishield: -db-url and/or -jwt-secret not set, account/domains/rules/settings API disabled")
+		log.Print("hakaishield: -db-url and/or -supabase-url not set, domains/rules/settings API disabled")
 	}
 
 	srv := &http.Server{

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowRight } from 'lucide-react';
-import { signin, ApiError } from '../lib/api';
+import { supabase } from '../lib/supabaseClient';
 
 export default function SignIn() {
   const { theme, toggleTheme } = useTheme();
@@ -19,10 +19,15 @@ export default function SignIn() {
     setError(null);
     setSubmitting(true);
     try {
-      const user = await signin(formData.email, formData.password);
-      navigate(user.onboardingComplete ? '/' : '/onboarding');
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+      if (signInError) throw signInError;
+      const onboardingComplete = data.user?.user_metadata?.onboarding_complete === true;
+      navigate(onboardingComplete ? '/' : '/onboarding');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Sign in failed. Try again.');
+      setError(err instanceof Error ? err.message : 'Sign in failed. Try again.');
     } finally {
       setSubmitting(false);
     }

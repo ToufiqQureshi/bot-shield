@@ -1,11 +1,17 @@
-// Thin fetch client for the hakaishield backend. Every JWT-authenticated
-// endpoint returns {"success": boolean, "data"|"message"|"error"} (see
-// dashboard/BACKEND_WIRING_DOCS.md and backend/pkg/api/response.go) —
-// this file is the one place that unwraps that envelope, so a page
-// component only ever deals with plain data or a thrown ApiError.
+// Thin fetch client for the hakaishield backend's domains/rules/settings
+// API. Every endpoint returns {"success": boolean, "data"|"message"|"error"}
+// (see backend/pkg/api/response.go) — this file is the one place that
+// unwraps that envelope, so a page component only ever deals with plain
+// data or a thrown ApiError.
+//
+// Auth itself (signup, signin, sign-out, password reset, email
+// verification) is not here — it goes straight to Supabase via
+// supabaseClient.ts. This file only attaches whatever session token
+// Supabase already issued when calling the Go backend.
+
+import { supabase } from './supabaseClient';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-const TOKEN_KEY = 'hakaishield-token';
 
 export class ApiError extends Error {
   status: number;
@@ -15,35 +21,9 @@ export class ApiError extends Error {
   }
 }
 
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function setToken(token: string) {
-  try {
-    localStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // Private browsing / blocked storage: the session just won't
-    // survive a reload. Nothing here can recover from that, and the
-    // caller's next authenticated request will fail loudly with a 401
-    // instead of silently pretending to be signed in.
-  }
-}
-
-export function clearToken() {
-  try {
-    localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // See setToken.
-  }
-}
-
-export function isSignedIn(): boolean {
-  return !!getToken();
+export async function isSignedIn(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  return !!data.session;
 }
 
 interface Envelope<T> {
@@ -54,7 +34,9 @@ interface Envelope<T> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> | undefined),
@@ -68,10 +50,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   } catch {
     throw new ApiError(0, 'Could not reach the server. Check your connection and try again.');
-  }
-
-  if (res.status === 401) {
-    clearToken();
   }
 
   let body: Envelope<T> | null = null;
@@ -88,44 +66,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   return (body?.data ?? body?.message ?? null) as T;
-}
-
-// ---- Auth ----
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  company?: string;
-  onboardingComplete: boolean;
-}
-
-export async function signup(name: string, email: string, password: string, company?: string) {
-  return request<{ userId: string; email: string }>('/auth/signup', {
-    method: 'POST',
-    body: JSON.stringify({ name, email, password, company }),
-  });
-}
-
-export async function signin(email: string, password: string) {
-  const data = await request<{ token: string; user: AuthUser }>('/auth/signin', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-  setToken(data.token);
-  return data.user;
-}
-
-export function signout() {
-  clearToken();
-}
-
-export async function me() {
-  return request<AuthUser>('/auth/me');
-}
-
-export async function completeOnboarding() {
-  return request<string>('/onboarding/complete', { method: 'POST' });
 }
 
 // ---- Domains ----

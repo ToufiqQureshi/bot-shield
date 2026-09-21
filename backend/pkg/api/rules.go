@@ -34,8 +34,8 @@ func customRuleJSON(r rules.CustomRule) map[string]any {
 // no allowlist-by-visitor feature exists yet — returned as [] rather
 // than omitted so the frontend's existing shape doesn't need a
 // conditional for a key that might not be there.
-func RulesListHandler(store *rules.Store, issuer *auth.Issuer) http.HandlerFunc {
-	return RequireAuth(issuer, func(w http.ResponseWriter, r *http.Request) {
+func RulesListHandler(store *rules.Store, verifier *auth.Verifier) http.HandlerFunc {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
@@ -60,8 +60,8 @@ func RulesListHandler(store *rules.Store, issuer *auth.Issuer) http.HandlerFunc 
 }
 
 // CreateRuleHandler serves POST /rules/custom.
-func CreateRuleHandler(store *rules.Store, issuer *auth.Issuer) http.HandlerFunc {
-	return RequireAuth(issuer, func(w http.ResponseWriter, r *http.Request) {
+func CreateRuleHandler(store *rules.Store, verifier *auth.Verifier) http.HandlerFunc {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
@@ -87,8 +87,8 @@ func CreateRuleHandler(store *rules.Store, issuer *auth.Issuer) http.HandlerFunc
 }
 
 // ToggleRuleHandler serves PUT /rules/{id}/toggle.
-func ToggleRuleHandler(store *rules.Store, issuer *auth.Issuer) http.HandlerFunc {
-	return RequireAuth(issuer, func(w http.ResponseWriter, r *http.Request) {
+func ToggleRuleHandler(store *rules.Store, verifier *auth.Verifier) http.HandlerFunc {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return

@@ -1,17 +1,30 @@
 import { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowRight } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 export default function ForgotPassword() {
   const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, this would send reset email
-    console.log('Reset password for:', email);
-    setSubmitted(true);
+    setError(null);
+    setSubmitting(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/sign-in`,
+      });
+      if (resetError) throw resetError;
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send reset email. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -76,8 +89,12 @@ export default function ForgotPassword() {
               />
             </div>
 
-            <button type="submit" className="group btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2">
-              Send reset link
+            {error && (
+              <p className="text-sm" style={{ color: 'var(--accent-red, #ef4444)' }}>{error}</p>
+            )}
+
+            <button type="submit" disabled={submitting} className="group btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+              {submitting ? 'Sending…' : 'Send reset link'}
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
             </button>
           </form>
