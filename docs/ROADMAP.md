@@ -539,12 +539,59 @@ always the operator.
       CRUD, protection settings, live stats
       (`/api/v1/dashboard/stats`), top-offending JA4 fingerprints
       (`/api/v1/dashboard/top-offenders`), and evidence logs
-      (`/api/v1/dashboard/evidence-logs`) — see `docs/PROGRESS.md`
-      2026-09-21 dashboard-wiring entry. Missing: history over time
-      (the backend only keeps a running total, no time series — the
-      dashboard says so rather than faking a chart), the
-      false-positive report button, payments, email (so no
-      verification/reset-password emails), and SIEM export.
+      (`/api/v1/dashboard/evidence-logs`) — verified running
+      end-to-end (backend on real Postgres + Redis, frontend `npm run
+      dev`, live signup/signin/domain-add against it) — see
+      `docs/PROGRESS.md` 2026-09-21 entries. Remaining work, in
+      priority order:
+      1. **Payments (Stripe).** Blocked on real Stripe credentials —
+         nobody has provided an account/API key yet. Needs
+         `POST /payment/create-intent`, `POST /payment/webhook`,
+         `POST /subscription/upgrade` and Stripe SDK integration.
+         `Subscription`/`Payment` pages are unwired until this exists.
+      2. **Email (SendGrid/SES).** Blocked on a real API key. Needs
+         `POST /auth/verify-email`, `POST /auth/forgot-password`,
+         `POST /auth/reset-password` — none of the three exist in the
+         backend yet. Without this, signup has no verification step
+         and there is no password-reset flow.
+      3. **Enforce custom mitigation rules.** Rules are real CRUD
+         today but have zero effect on live traffic — nothing in
+         `pkg/core`/`pkg/signals` reads `mitigation_rules`. No
+         external dependency; needs a design decision on how an
+         arbitrary JA4/score/path condition composes with the
+         existing signal-based scoring in `pkg/signals/score.go`.
+      4. **Enforce protection settings.** Same shape of gap as #3:
+         `protection_settings` is real CRUD but `pkg/signals/score.go`
+         still uses fixed thresholds in code. No external dependency.
+      5. **Traffic-over-time chart.** `stats.Stats` is a running total
+         only, no time series — the dashboard shows an explicit "not
+         available" notice instead of a fake chart. Needs a
+         time-bucketed store (e.g. hourly buckets in Postgres or
+         Redis) and a retention policy.
+      6. **Immediate domain enforcement.** A domain added via the
+         dashboard is picked up by `tenant.Store` lazily (on the next
+         request or dashboard read that touches it), not the instant
+         it's created. Small fix: push it into the in-memory store at
+         creation time instead of waiting for the next lookup.
+      7. **Multi-domain scoping on `/dashboard/top-offenders` and
+         `/dashboard/evidence-logs`.** Both implicitly use the
+         caller's first-created domain; no `?domain=` parameter yet,
+         and the frontend has no per-domain selector wired to these
+         two calls (though `Layout`'s domain switcher already exists
+         and could drive one).
+      8. **SIEM integrations** (Datadog/Splunk/S3/webhooks) — entirely
+         unbuilt. Needs a vendor priority decision, then that vendor's
+         API/SDK and credentials. The dashboard shows a "not built"
+         notice in place of the old fake toggle state.
+      9. **WAF** (SQLi/XSS detection, configurable rate limiting) — a
+         separate, large detection feature; the dashboard already
+         marked it "Coming Soon" before this session and still does.
+      10. **False-positive report button** — never built.
+      11. **`npm audit`: 2 moderate CVEs** (react-router-dom open
+          redirect, uuid buffer bounds) — fix requires a breaking
+          major-version bump on code with no test coverage; not
+          force-upgraded blind (see `docs/PROGRESS.md` 2026-09-21
+          "Brought the untracked dashboard frontend into the repo").
 - [x] ~~**12a. Decision evidence trail**~~ — done, see "Done" section.
 - [ ] **13. Real-time scoring API** — for clients who want to call
       hakaishield from their own app instead of routing all traffic

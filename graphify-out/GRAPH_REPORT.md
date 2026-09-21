@@ -1,30 +1,30 @@
 # Graph Report - bot-shield  (2026-09-21)
 
 ## Corpus Check
-- 113 files · ~114,387 words
+- 134 files · ~128,306 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 6 file(s) not represented in the graph (top: (none) 5, .css 1)
+- Unclassified: 7 file(s) not represented in the graph (top: (none) 5, .example 1, .css 1)
 
 ## Summary
-- 1046 nodes · 1863 edges · 79 communities (66 shown, 13 thin omitted)
-- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 111 edges (avg confidence: 0.86)
+- 1252 nodes · 2431 edges · 78 communities (65 shown, 13 thin omitted)
+- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 199 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `dae91366`
+- Built from commit: `0af6552a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- App.tsx
+- api.ts
 - guard_test.go
 - proxy.go
-- NewTrail
+- go_pkg_testing
 - capture.go
 - testing.T
 - CLAUDE.md
 - Store
-- honeypot_test.go
+- go_pkg_time
 - challenge.go
 - What You Must Do When Invoked
 - HakaiShield: Complete Pages Overview
@@ -59,33 +59,31 @@
 - extraction-spec.md
 - score_test.go
 - Changes Made to Remove AI-Generated Feel
-- ja4db.go
+- go_pkg_context
 - HakaiShield Backend Wiring Documentation
 - dependencies
 - compilerOptions
 - HakaiShield Dashboard - Light Mode Implementation
-- go_pkg_strings
+- go_pkg_errors
 - context.Context
-- go_pkg_testing
-- mockConn
+- main
+- DECISIONS.md — Why We Chose What We Chose
 - hakaishield
-- Mode
+- rules/rules.go
 - Page-by-Page Wiring Guide
 - devDependencies
 - 2026-09-16 — Market scan; repositioned the product away from "affordable alternative"
 - 2026-09-16 — Pivot to hosted SaaS; self-hosting becomes Enterprise
-- Trail
-- Stats
+- mockData.ts
+- Upcoming Enterprise Innovations
 - Data Models
 - 2026-09-16 — Decision evidence trail (ROADMAP item 12a, done)
 - 2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now
-- go_pkg_time
+- account.go
 - 2026-09-16 — Answered "why not just build it yourself?"; named the moat
 - 2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed
-- stats_test.go
 - 2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it
 - 1. Landing Page (`/landing`)
-- stats_bench_test.go
 - Authentication System
 - Deployment Checklist
 - Error Handling
@@ -96,18 +94,20 @@
 - botshiel_frontend_src_index
 
 ## God Nodes (most connected - your core abstractions)
-1. `PROGRESS.md — What Was Done, When, and Why` - 48 edges
-2. `useTheme()` - 33 edges
-3. `NewOriginProxy()` - 21 edges
-4. `NewStore()` - 21 edges
-5. `NewGuard()` - 19 edges
-6. `react` - 18 edges
-7. `NewChallenge()` - 18 edges
-8. `lucide-react` - 17 edges
-9. `Store` - 17 edges
-10. `main()` - 15 edges
+1. `PROGRESS.md — What Was Done, When, and Why` - 49 edges
+2. `DECISIONS.md — Why We Chose What We Chose` - 36 edges
+3. `useTheme()` - 33 edges
+4. `main()` - 30 edges
+5. `NewStore()` - 21 edges
+6. `NewOriginProxy()` - 21 edges
+7. `Store` - 20 edges
+8. `NewGuard()` - 19 edges
+9. `RequireAuth()` - 18 edges
+10. `lucide-react` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `Dashboard wiring: real account/domains/rules/settings API, same binary, no separate control-plane service — 2026-09-21` --references--> `RequireAuth()`  [INFERRED]
+  docs/DECISIONS.md → dashboard/src/components/RequireAuth.tsx
 - `Where things stand` --references--> `main()`  [INFERRED]
   docs/PROGRESS.md → patchright_test.py
 - `2026-09-14 — Zip landed in real repo; PR merged` --references--> `main()`  [INFERRED]
@@ -116,53 +116,51 @@
   docs/PROGRESS.md → patchright_test.py
 - `2026-09-16 — Dashboard wired to the real backend; dead code removed; merged a landed upstream PR` --references--> `main()`  [INFERRED]
   docs/PROGRESS.md → patchright_test.py
-- `2026-09-18 — CI pipeline added (there was none); panic recovery + optional Sentry reporting` --references--> `main()`  [INFERRED]
-  docs/PROGRESS.md → patchright_test.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (79 total, 13 thin omitted)
+## Communities (78 total, 13 thin omitted)
 
-### Community 0 - "App.tsx"
-Cohesion: 0.05
-Nodes (65): 1. Theme System (`src/context/ThemeContext.tsx`), 2. CSS Variables (`src/index.css`), 3. Layout Component (`src/components/Layout.tsx`), 4. All Pages Updated, Changes Made, App(), Layout(), tabs (+57 more)
+### Community 0 - "api.ts"
+Cohesion: 0.06
+Nodes (72): App(), Layout(), LayoutContext, tabs, RequireAuth(), Theme, ThemeContext, ThemeContextType (+64 more)
 
 ### Community 1 - "guard_test.go"
-Cohesion: 0.06
-Nodes (80): OffenderStats, statsResponse, main(), authorized(), DashboardEvidenceHandler(), DashboardStatsHandler(), TestDashboardEvidenceHandler(), TestDashboardStatsHandler() (+72 more)
+Cohesion: 0.11
+Nodes (41): NewChallenge(), WithJA4(), BenchmarkGuardHighConcurrency(), BenchmarkGuardServeHTTP(), newBenchGuard(), TestGuardShadowModeDoesNotBlock(), TestGuardUnknownTenant(), NewGuard() (+33 more)
 
 ### Community 2 - "proxy.go"
-Cohesion: 0.16
-Nodes (19): deceiveResponse(), readBody(), deceiveResp(), TestDeceiveResponseDoesNotBufferLargeBodies(), TestDeceiveResponseIgnoresUndeceivedTraffic(), TestDeceiveResponseInjectsIntoHTML(), TestDeceiveResponseLeavesNonHTMLUntouched(), TestDeceiveResponseSkipsCompressedAndPartial() (+11 more)
+Cohesion: 0.15
+Nodes (20): deceiveResponse(), DecisionFromContext(), readBody(), ScoreFromContext(), deceiveResp(), TestDeceiveResponseDoesNotBufferLargeBodies(), TestDeceiveResponseIgnoresUndeceivedTraffic(), TestDeceiveResponseInjectsIntoHTML() (+12 more)
 
-### Community 3 - "NewTrail"
-Cohesion: 0.26
-Nodes (11): BenchmarkTrailRecent(), BenchmarkTrailRecord(), BenchmarkTrailRecordAndRead(), NewTrail(), TestTrailConcurrentRecords(), TestTrailLimit(), TestTrailRecordAndRecent(), TestTrailRingBuffer_Overflow() (+3 more)
+### Community 3 - "go_pkg_testing"
+Cohesion: 0.07
+Nodes (33): TestModeString(), BenchmarkTrailRecent(), BenchmarkTrailRecord(), BenchmarkTrailRecordAndRead(), Trail, NewTrail(), newTrail(), TestTrailConcurrentRecords() (+25 more)
 
 ### Community 4 - "capture.go"
-Cohesion: 0.17
-Nodes (12): NewCaptureListener(), TestNewCaptureListener(), captureListener, ctxKeyConn, ctxKeyJA4, go_pkg_context, go_pkg_crypto_tls, go_pkg_github_com_wi1dcard_fingerproxy_pkg_hack (+4 more)
+Cohesion: 0.08
+Nodes (25): ConnContext(), JA4FromContext(), NewCaptureListener(), TestJA4FromContext(), TestNewCaptureListener(), IsGoodBotClaim(), IsVerifiedGoodBot(), TestIsGoodBotClaim() (+17 more)
 
 ### Community 5 - "testing.T"
-Cohesion: 0.07
-Nodes (64): fetchPage(), newChallenge(), postVerify(), solvePoW(), TestChallengeHandlerMethodNotAllowed(), TestChallengePageDetectsAdvancedAutomation(), TestChallengePageObfuscatesAutomationTells(), TestChallengeRealFlowPasses() (+56 more)
+Cohesion: 0.05
+Nodes (82): claims, NewStore(), TestGetByID_NilPoolFailsClearly(), TestSignin_NilPoolFailsClearly(), TestSignup_RejectsInvalidEmail(), TestSignup_RejectsShortPassword(), TestSignup_ValidInputReachesDatabaseCheck(), TestValidEmail() (+74 more)
 
 ### Community 6 - "CLAUDE.md"
 Cohesion: 0.08
 Nodes (24): 10. Detection Architecture, 12. Mutation Verification, 14. False Positives Are a Production Problem, 16. Multi-Tenant Security, 17. Visitor-Controlled Input, 18. Security Review, 19. Resource and Cost Awareness, 1. Autonomous Engineering Rule (+16 more)
 
 ### Community 7 - "Store"
-Cohesion: 0.38
-Nodes (6): Store, net/http/httputil.ReverseProxy, sync.RWMutex, ProxyFactory, Tenant, TenantConfig
+Cohesion: 0.11
+Nodes (18): Mode, PolicyMode, ParseMode(), ParsePolicy(), TestParseMode(), Stats, newStats(), TestStats_ConcurrentRecord() (+10 more)
 
-### Community 8 - "honeypot_test.go"
-Cohesion: 0.32
-Nodes (14): honeypotKey(), HoneypotTripped(), RecordHoneypotTrip(), sweepHoneypotLocked(), BenchmarkHoneypotTrippedEmpty(), resetHoneypot(), TestHoneypotConcurrentAccess(), TestHoneypotIgnoresIncompleteIdentity() (+6 more)
+### Community 8 - "go_pkg_time"
+Cohesion: 0.29
+Nodes (15): honeypotKey(), HoneypotTripped(), RecordHoneypotTrip(), sweepHoneypotLocked(), BenchmarkHoneypotTrippedEmpty(), resetHoneypot(), TestHoneypotConcurrentAccess(), TestHoneypotIgnoresIncompleteIdentity() (+7 more)
 
 ### Community 9 - "challenge.go"
-Cohesion: 0.15
-Nodes (15): Challenge, randomNonce(), safeRedirectPath(), validCanvasProof(), validPoW(), WithDecision(), challengeData, Guard (+7 more)
+Cohesion: 0.16
+Nodes (14): Challenge, randomNonce(), safeRedirectPath(), validCanvasProof(), validPoW(), WithDecision(), challengeData, Guard (+6 more)
 
 ### Community 10 - "What You Must Do When Invoked"
 Cohesion: 0.08
@@ -173,8 +171,8 @@ Cohesion: 0.04
 Nodes (45): About Page (`/about`), 📄 All Pages (19 Total), Analytics, Authentication, Authentication Flow, Authentication Pages, Backend Integration, ✅ Build Status (+37 more)
 
 ### Community 12 - "package.json"
-Cohesion: 0.11
-Nodes (17): name, private, type, canvas-confetti, date-fns, @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities (+9 more)
+Cohesion: 0.10
+Nodes (19): name, private, type, canvas-confetti, date-fns, @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities (+11 more)
 
 ### Community 13 - "HakaiShield: Fake Content Removed & Honest Positioning Added"
 Cohesion: 0.05
@@ -254,13 +252,13 @@ Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphif
 
 ### Community 42 - "score_test.go"
 Cohesion: 0.16
-Nodes (22): Analyze(), Decide(), DecideWithPolicy(), Decision, Score(), facts(), realBrowserHeaders(), TestDecideThresholds() (+14 more)
+Nodes (21): Analyze(), Decide(), DecideWithPolicy(), Decision, Score(), facts(), realBrowserHeaders(), TestDecideThresholds() (+13 more)
 
 ### Community 43 - "Changes Made to Remove AI-Generated Feel"
 Cohesion: 0.13
 Nodes (14): 10. **Code-Style Comments**, 1. **Removed Excessive Icons**, 2. **Simplified Navigation**, 3. **Metrics Cards - Less Visual Noise**, 4. **Shadow Mode Banner**, 5. **Section Headers**, 6. **Landing Page - Complete Rewrite**, 7. **Pricing Page - Stripped Down** (+6 more)
 
-### Community 44 - "ja4db.go"
+### Community 44 - "go_pkg_context"
 Cohesion: 0.26
 Nodes (11): AddCommonBrowserPrefix(), AddKnownScraperJA4(), redis.Client, isCommonBrowserJA4(), IsKnownScraperJA4(), StartJA4Sync(), syncJA4FromRedis(), TestJA4DynamicDatabase() (+3 more)
 
@@ -277,32 +275,32 @@ Cohesion: 0.14
 Nodes (13): compilerOptions, allowImportingTsExtensions, esModuleInterop, isolatedModules, jsx, lib, module, moduleResolution (+5 more)
 
 ### Community 48 - "HakaiShield Dashboard - Light Mode Implementation"
-Cohesion: 0.15
-Nodes (12): Build Status, Component Updates, CSS Variables Structure, Features, Files Modified, HakaiShield Dashboard - Light Mode Implementation, Light Mode Design, Overview (+4 more)
+Cohesion: 0.11
+Nodes (17): 1. Theme System (`src/context/ThemeContext.tsx`), 2. CSS Variables (`src/index.css`), 3. Layout Component (`src/components/Layout.tsx`), 4. All Pages Updated, Build Status, Changes Made, Component Updates, CSS Variables Structure (+9 more)
 
-### Community 49 - "go_pkg_strings"
-Cohesion: 0.23
-Nodes (9): IsGoodBotClaim(), IsVerifiedGoodBot(), TestIsGoodBotClaim(), TestIsVerifiedGoodBot_Spoofed(), TestIsVerifiedGoodBot_Success(), verifyDNS(), go_pkg_errors, go_pkg_strings (+1 more)
+### Community 49 - "go_pkg_errors"
+Cohesion: 0.21
+Nodes (9): Store, NewStore(), TestGet_NilPoolFailsClearly(), TestUpsert_RejectsBlockNotGreaterThanChallenge(), TestUpsert_ValidThresholdsReachDatabaseCheck(), go_pkg_errors, go_pkg_github_com_jackc_pgx_v5, go_pkg_github_com_jackc_pgx_v5_pgxpool (+1 more)
 
 ### Community 50 - "context.Context"
-Cohesion: 0.24
-Nodes (10): ConnContext(), JA4FromContext(), TestJA4FromContext(), DecisionFromContext(), ScoreFromContext(), GetTenant(), Init(), initSchema() (+2 more)
+Cohesion: 0.42
+Nodes (8): CreateDomain(), GetTenant(), GetTenantByID(), Domain, Init(), initSchema(), ListDomains(), context.Context
 
-### Community 51 - "go_pkg_testing"
-Cohesion: 0.27
-Nodes (9): ParseJA4(), TestJA4FingerprintRejectsGarbage(), TestParseJA4(), BenchmarkParseJA4(), FuzzParseJA4(), FuzzUAMismatch(), go_pkg_encoding_hex, go_pkg_testing (+1 more)
+### Community 51 - "main"
+Cohesion: 0.05
+Nodes (81): addDomainRequest, ctxKeyUserID, envelope, OffenderStats, signinRequest, signupRequest, statsResponse, toggleRuleRequest (+73 more)
 
-### Community 52 - "mockConn"
-Cohesion: 0.24
-Nodes (4): mockConn, net.Addr, time.Time, botCacheEntry
+### Community 52 - "DECISIONS.md — Why We Chose What We Chose"
+Cohesion: 0.05
+Nodes (36): Added 2 competitor-gap items to roadmap, rejected the rest — 2026-09-15, agentchat: removed the MCP server, kept plain file + manual relay — 2026-09-15, Assemble proven open-source pieces, don't reinvent TLS/fingerprint parsing — 2026-09-14, Automation probe lives inside the JS challenge, not injected site-wide — 2026-09-16, Back to one agent; Claude Code owns the dashboard too — 2026-09-16, Cap concurrent TLS handshakes at 1000 — 2026-09-14, Consolidating PR #10 and PR #11; dropping the forensics analyzer — 2026-09-20, Dashboard wiring: real account/domains/rules/settings API, same binary, no separate control-plane service — 2026-09-21 (+28 more)
 
 ### Community 53 - "hakaishield"
 Cohesion: 0.18
 Nodes (10): Dashboard (frontend), Documentation, hakaishield, Key Capabilities:, License, Responsible use, Shadow mode, Try it locally (+2 more)
 
-### Community 54 - "Mode"
-Cohesion: 0.24
-Nodes (6): Mode, PolicyMode, ParseMode(), ParsePolicy(), TestModeString(), TestParseMode()
+### Community 54 - "rules/rules.go"
+Cohesion: 0.16
+Nodes (17): createRuleRequest, decodeConditions(), encodeConditions(), Condition, CustomRule, Store, Managed(), newRuleID() (+9 more)
 
 ### Community 55 - "Page-by-Page Wiring Guide"
 Cohesion: 0.20
@@ -320,9 +318,13 @@ Nodes (9): 2026-09-16 — Market scan; repositioned the product away from "affor
 Cohesion: 0.22
 Nodes (9): 2026-09-16 — Pivot to hosted SaaS; self-hosting becomes Enterprise, Files changed, Honest gaps, How this was checked, Next session should, The item worth reading twice, The upside I had not seen at first, What I made sure was understood before writing it down (+1 more)
 
-### Community 59 - "Trail"
-Cohesion: 0.43
-Nodes (5): Trail, newTrail(), Evidence, sync.Mutex, time.Duration
+### Community 59 - "mockData.ts"
+Cohesion: 0.11
+Nodes (16): asns, Decision, decisions, domains, exceptions, geos, ips, ja4Hashes (+8 more)
+
+### Community 60 - "Upcoming Enterprise Innovations"
+Cohesion: 0.20
+Nodes (9): Done, How to read this list, P0 — MVP (prove the core idea works), P0-SaaS — required before anyone can pay us, P1 — makes it meaningfully harder to bypass, P2 — product-grade, Product direction: multi-signal scoring proxy, Upcoming Enterprise Innovations (+1 more)
 
 ### Community 61 - "Data Models"
 Cohesion: 0.25
@@ -336,9 +338,9 @@ Nodes (8): 2026-09-16 — Decision evidence trail (ROADMAP item 12a, done), Hone
 Cohesion: 0.25
 Nodes (8): 2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now, A pre-existing lie I found and fixed, Antigravity ended, Honest gaps, Next session should, Shadow mode — what was built, Tested how — eight mutations, all caught, What NO test covers
 
-### Community 64 - "go_pkg_time"
-Cohesion: 0.33
-Nodes (4): go_pkg_fmt, go_pkg_github_com_wi1dcard_fingerproxy_pkg_ja4, go_pkg_path, go_pkg_time
+### Community 64 - "account.go"
+Cohesion: 0.16
+Nodes (11): User, Store, isUniqueViolation(), newUserID(), go_pkg_crypto_rand, go_pkg_encoding_hex, go_pkg_fmt, go_pkg_golang_org_x_crypto_bcrypt (+3 more)
 
 ### Community 65 - "2026-09-16 — Answered "why not just build it yourself?"; named the moat"
 Cohesion: 0.29
@@ -348,10 +350,6 @@ Nodes (7): 2026-09-16 — Answered "why not just build it yourself?"; named the 
 Cohesion: 0.29
 Nodes (7): 2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed, Bug 1 — the shadow-mode lie, inverted (`dashboard/src/lib/stats.ts`), Bug 2 — two sources of truth for the mode (`proxy/stats.go`), Cleanups (Section 24a), Tested how — three more mutations, all caught, What NO test covers, What this says about the earlier session
 
-### Community 67 - "stats_test.go"
-Cohesion: 0.60
-Nodes (5): newStats(), TestStats_ConcurrentRecord(), TestStats_ModeReported(), TestStats_Record_AllDecisions(), TestStats_ZeroValues()
-
 ### Community 68 - "2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it"
 Cohesion: 0.33
 Nodes (6): 2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it, Report back with, Standing instruction from the project owner, What NOT to do, Where I would point an auditor first (honest list), Where things stand
@@ -359,10 +357,6 @@ Nodes (6): 2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break 
 ### Community 69 - "1. Landing Page (`/landing`)"
 Cohesion: 0.40
 Nodes (5): 1. Landing Page (`/landing`), "Apply for founding access" button, "Get started" button (nav), Interactive demo "Run through hakaishield" button, "Start free trial" button (hero)
-
-### Community 70 - "stats_bench_test.go"
-Cohesion: 0.50
-Nodes (3): BenchmarkStatsRead(), BenchmarkStatsRecord(), go_pkg_github_com_toufiqqureshi_hakaishield_pkg_stats
 
 ### Community 71 - "Authentication System"
 Cohesion: 0.50
@@ -389,24 +383,24 @@ Cohesion: 0.67
 Nodes (3): 2. Pricing Page (`/pricing`), "Start free trial" buttons (all plans), "Talk to sales" button (Enterprise)
 
 ## Knowledge Gaps
-- **442 isolated node(s):** `Key Capabilities:`, `Why this exists`, `What it is`, `Shadow mode`, `Dashboard (frontend)` (+437 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 508 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **499 isolated node(s):** `Key Capabilities:`, `Why this exists`, `What it is`, `Shadow mode`, `Dashboard (frontend)` (+494 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 574 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PROGRESS.md — What Was Done, When, and Why` connect `PROGRESS.md — What Was Done, When, and Why` to `App.tsx`, `2026-09-16 — Answered "why not just build it yourself?"; named the moat`, `2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed`, `2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it`, `2026-09-20 — Consolidated PR #10 + PR #11 into one hardened change`, `main`, `2026-09-16 — Market scan; repositioned the product away from "affordable alternative"`, `2026-09-16 — Pivot to hosted SaaS; self-hosting becomes Enterprise`, `2026-09-16 — Decision evidence trail (ROADMAP item 12a, done)`, `2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now`?**
-  _High betweenness centrality (0.051) - this node is a cross-community bridge._
-- **Why does `2026-09-19 — Repair the broken test suite left behind by the PoW/theme change; wire header_anomaly; remove dead probe endpoint` connect `App.tsx` to `PROGRESS.md — What Was Done, When, and Why`?**
-  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `PROGRESS.md — What Was Done, When, and Why` connect `PROGRESS.md — What Was Done, When, and Why` to `api.ts`, `2026-09-16 — Answered "why not just build it yourself?"; named the moat`, `2026-09-17 — /code-review on my own shadow-mode work; two real bugs fixed`, `2026-09-16 — HANDOFF: PR #4 merged; next session's job is to break it`, `2026-09-20 — Consolidated PR #10 + PR #11 into one hardened change`, `main`, `2026-09-16 — Market scan; repositioned the product away from "affordable alternative"`, `2026-09-16 — Pivot to hosted SaaS; self-hosting becomes Enterprise`, `mockData.ts`, `2026-09-16 — Decision evidence trail (ROADMAP item 12a, done)`, `2026-09-16 — Shadow mode (ROADMAP item 18, mode done); Antigravity ended; dashboard is ours now`?**
+  _High betweenness centrality (0.041) - this node is a cross-community bridge._
+- **Why does `2026-09-21 — Wired the dashboard to a real account/domains/rules/settings API` connect `api.ts` to `PROGRESS.md — What Was Done, When, and Why`?**
+  _High betweenness centrality (0.033) - this node is a cross-community bridge._
+- **Why does `RequireAuth()` connect `api.ts` to `DECISIONS.md — Why We Chose What We Chose`?**
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `useTheme()` (e.g. with `1. Theme System (`src/context/ThemeContext.tsx`)` and `3. Layout Component (`src/components/Layout.tsx`)`) actually correct?**
   _`useTheme()` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 3 inferred relationships involving `NewOriginProxy()` (e.g. with `JA4FromContext()` and `TestNewOriginProxy()`) actually correct?**
-  _`NewOriginProxy()` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Key Capabilities:`, `Why this exists`, `What it is` to the rest of the system?**
-  _442 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `App.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.05143570536828964 - nodes in this community are weakly interconnected._
+  _499 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `api.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.06164527666736798 - nodes in this community are weakly interconnected._
 - **Should `guard_test.go` be split into smaller, more focused modules?**
-  _Cohesion score 0.056334735857877516 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11100832562442182 - nodes in this community are weakly interconnected._

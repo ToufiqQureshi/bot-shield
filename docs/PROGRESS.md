@@ -3052,3 +3052,42 @@ Known gaps / follow-up:
     (react-router-dom, uuid) from the previous session's entry are
     still open — unrelated to this session's changes, not
     re-attempted.
+
+## 2026-09-21 — Ran backend + frontend together against a live Postgres (owner-requested check)
+
+Changed: nothing in source. This is a verification entry, not a code
+change — the owner asked to actually run both halves and confirm they
+talk to each other before trusting the previous entry's curl-only
+testing.
+
+What was done:
+  - Started Docker Desktop, brought up a throwaway Postgres 15
+    container (`hakaishield-pg-run`, port 5434 — avoids a pre-existing
+    native Windows Postgres service bound to the default 5432 on this
+    machine, which silently intercepts `localhost:5432` connections
+    and caused confusing auth failures earlier in this session; see
+    the port note in the 2026-09-21 dashboard-wiring entry if that
+    recurs) and Redis via `docker-compose.yml`.
+  - Built and ran `backend` with `-db-url`, `-jwt-secret`,
+    `-redis-url` pointed at them; confirmed the startup log shows
+    `account/domains/rules/settings API enabled`.
+  - Ran `dashboard` with `npm run dev` (Vite on :3000) and a
+    `dashboard/.env.local` (gitignored) pointing `VITE_API_BASE_URL`
+    at the running backend.
+  - Confirmed `GET /sign-in`, `GET /landing` on the frontend, and
+    `GET /api/v1/dashboard/stats?tenant=default` on the backend all
+    return 200.
+  - Ran a fresh signup + signin against the live backend from this
+    run (separate from the earlier entry's test data, since this used
+    a new throwaway database) — both succeeded, returned a real JWT.
+
+Why: the owner wanted the two halves actually running and talking to
+each other confirmed directly, not just inferred from the earlier
+curl-based verification.
+
+Known gaps / follow-up: none new — this only re-confirmed the
+2026-09-21 dashboard-wiring entry's claims. The full remaining-work
+list (payments, email, rule/settings enforcement, SIEM, WAF, traffic
+chart, immediate domain enforcement, multi-domain scoping,
+false-positive button, the two npm audit CVEs) is now tracked in
+`docs/ROADMAP.md` item 12 rather than duplicated here.
