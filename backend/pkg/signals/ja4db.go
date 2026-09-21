@@ -64,6 +64,12 @@ func syncJA4FromRedis(ctx context.Context, rdb *redis.Client) {
 		return
 	}
 
+	if len(scrapers) > maxScraperJA4s {
+		log.Printf("hakaishield: redis ja4:scrapers has %d entries, over the %d cap; keeping the existing list",
+			len(scrapers), maxScraperJA4s)
+		scrapers = nil
+	}
+
 	ja4Mu.Lock()
 	defer ja4Mu.Unlock()
 
@@ -76,10 +82,21 @@ func syncJA4FromRedis(ctx context.Context, rdb *redis.Client) {
 	}
 }
 
+// maxScraperJA4s caps the in-memory blocklist. The list is operator and
+// Redis fed rather than visitor fed, but it is still shared mutable
+// state on every node in front of customer traffic: without a ceiling a
+// runaway writer (or a Redis hash someone grew by accident) would be
+// copied into every node's heap on the next sync.
+const maxScraperJA4s = 250_000
+
 // AddKnownScraperJA4 adds a scraper to the local cache (primarily for testing or manual overrides)
 func AddKnownScraperJA4(ja4, tool string) {
 	ja4Mu.Lock()
 	defer ja4Mu.Unlock()
+	if _, exists := scraperJA4s[ja4]; !exists && len(scraperJA4s) >= maxScraperJA4s {
+		log.Printf("hakaishield: scraper JA4 list at capacity (%d), dropping %q", maxScraperJA4s, ja4)
+		return
+	}
 	scraperJA4s[ja4] = tool
 }
 

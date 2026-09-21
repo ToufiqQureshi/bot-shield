@@ -62,4 +62,3 @@ func ParsePolicy(s string) (PolicyMode, error) {
 		return PolicyBalanced, fmt.Errorf("unknown policy %q: want \"balanced\" or \"strict\"", s)
 	}
 }
-

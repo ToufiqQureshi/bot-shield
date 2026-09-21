@@ -56,9 +56,21 @@ Internet (every visitor, hostile until scored)
    │                         core/guard.go) — challenge/block/deceive.
    │                         Signals: fragmented_handshake, ua_mismatch,
    │                         header_anomaly, ja4_blocklist, scripting_tool,
-   │                         velocity_spike, ja4_velocity_spike, crawl_pattern
+   │                         velocity_spike, ja4_velocity_spike, crawl_pattern,
+   │                         honeypot_trap
    ├── challenge    BUILT    JS challenge (challenge/challenge.go), now
    │                         triggered by score via Guard
+   ├── deception    BUILT    rewrites HTML for deceived traffic only
+   │                         (deception/deception.go, applied in
+   │                         core/proxy.go ModifyResponse): tells automated
+   │                         readers the page is not worth ingesting, and
+   │                         plants the invisible honeypot link.
+   │                         HTML 200s under 512 KiB only — anything else
+   │                         streams through untouched.
+   ├── honeypot     BUILT    records a fetch of the hidden trap path
+   │                         (signals/honeypot.go) against
+   │                         (tenant, IP, JA4), TTL'd and capped, feeding
+   │                         the honeypot_trap signal. Per-node, in memory.
    ├── ratelimit     BUILT   Asset-aware per-IP velocity + crawl-pattern
    │                         detection (signals/velocity.go, signals/pattern.go)
    │

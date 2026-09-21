@@ -473,8 +473,18 @@ always the operator.
       warning. Needs a sane default (unlabeled endpoint = strictest
       category, not loosest) and validation that catches an empty/
       missing category rather than defaulting quietly.
-- [ ] **10. Honeypot fields** — invisible form fields/links only a
+- [x] **10. Honeypot fields** — invisible form fields/links only a
       blind selector-based script would interact with.
+      **Done 2026-09-20:** an `aria-hidden`, `tabindex="-1"`,
+      `rel="nofollow"`, `display:none` link injected into deceived HTML
+      (`pkg/deception`), with the fetch recorded by `pkg/signals`
+      scoped to (tenant, IP, JA4) with a TTL and a hard entry cap.
+      Scored at 50, not as a block: see `DECISIONS.md` 2026-09-20 for
+      why a lone trip must stay recoverable.
+      **Still open:** the trap link only reaches traffic already being
+      deceived. Injecting it into challenge pages (so it also catches
+      bots that never reach the deceive decision) and propagating trips
+      between nodes are both follow-ups.
 - [ ] **11. Per-client rules** — each client (site) can tune thresholds,
       allowlist known-good bots (search engine crawlers, uptime
       monitors), and set custom block pages.

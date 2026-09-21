@@ -2661,48 +2661,163 @@ Known gaps / follow-up:
     That needs profiling (`net/http/pprof`) against real traffic, not
     a linter, and is still open.
 
-## 2026-09-21 — Product rename: bot-shield → HakaiShield (on this branch, after main-history reconciliation)
+## 2026-09-20 — Consolidated PR #10 + PR #11 into one hardened change
+
+Reviewed both open PRs, kept what was real, and rebuilt the parts that
+would not have survived production traffic.
+
+### What shipped
+
+- **Deception payload (`pkg/deception`)** — rewritten. It now also
+  carries the honeypot bait link, so the trap is actually reachable;
+  before this, nothing in the tree ever emitted the trap path and no
+  crawler could have found it, despite the comment claiming the link
+  was "injected into challenge pages and HTML responses".
+- **Honeypot (`pkg/signals/honeypot.go`)** — rewritten, see below.
+- **`honeypot_trap` scoring signal** — 50 points, named in the evidence
+  trail, tenant-scoped via a new `RequestFacts.Tenant` field.
+
+### Bugs found and fixed
+
+1. **Honeypot trips hard-blocked innocent users across every tenant.**
+   The original wrote each trip into the shared `ja4:scrapers` map,
+   which `score.go` reads for its 100-point `ja4_blocklist` check. JA4
+   is a browser-build fingerprint, not a machine ID, so one scraper
+   using real Chrome TLS would have permanently blocked every genuine
+   Chrome user of that version on every customer site, from a single
+   request. Now scoped to (tenant, IP, JA4), TTL'd, and scored rather
+   than blocked. See `DECISIONS.md`.
+2. **Unbounded memory in the proxy response hook.** `ModifyResponse`
+   called `io.ReadAll` on the origin body for every deceived request,
+   before checking Content-Type — so a deceived request for a video or
+   a large download pinned the whole file in heap. Now: Content-Type
+   and status are checked before the body is touched, the read is
+   capped at 512 KiB with a single exact-sized allocation, and an
+   over-cap body is streamed through unmodified rather than buffered or
+   truncated. A measured ~10 MB of allocation churn per over-cap
+   request is now ~0.
+3. **Unbounded goroutines on an attacker-callable path.** Each trip
+   spawned a goroutine doing two Redis round trips. Hitting the trap in
+   a loop was a free goroutine and Redis amplifier. Removed; the
+   Redis `Publish` it did had no subscriber anywhere in the tree.
+4. **Unbounded map growth.** Neither the honeypot state nor
+   `scraperJA4s` had a ceiling. Both are capped now, and a repeat trip
+   from a known caller refreshes in place instead of adding an entry —
+   so hammering the trap costs no memory at all.
+5. **Accessibility failure in the payload.** `aria-hidden:true` was
+   written inside the CSS `style` attribute, where it is not a property
+   and does nothing — a screen reader would have read the poison text
+   aloud to a blind visitor. It is a real HTML attribute now, and the
+   bait link carries `tabindex="-1"` and `rel="nofollow"`.
+6. **Honeypot ran before the tenant lookup**, so anyone pointing a DNS
+   record at the service could write into detection state for a host we
+   do not serve. Moved below the lookup.
+7. **Payload injection lowercased the whole document** to find
+   `</body>`, doubling the allocation per deceived response. Replaced
+   with a case-insensitive tail search that allocates nothing.
+
+### Dropped
+
+- **PR #10's dependency downgrade** (Go 1.25→1.23, fingerproxy
+  v1.2.3→v0.6.1, pgx, go-redis, sentry). Discarded wholesale.
+- **`pkg/forensics`** (298 lines, no caller). Reasoning in
+  `DECISIONS.md`; preserved in PR #10's branch history.
+- PR #10's committed binaries, Go toolchain tarball, `coverage.out` and
+  self-declared production-readiness report, plus the `.gitignore`
+  corruption that let them in (markdown fences written into the file,
+  which also dropped `/bin/`, `.gocache/`, `*.exe` and added a `pkg/`
+  rule that would have ignored the entire backend source tree).
+- **`rdb` from `NewGuard`** — the honeypot was its only consumer, and
+  it no longer needs Redis. `StartJA4Sync` still takes its own client.
+
+Why: see `DECISIONS.md`. In short, both PRs contained genuinely useful
+ideas wrapped in implementations that would have failed under real
+traffic — the honeypot by blocking innocents, the deception hook by
+running the node out of memory.
+
+Tested how:
+  - `go build ./...`, `go vet ./...`, `gofmt -l .` — clean.
+  - `go test -race ./...` — all packages pass, race detector clean.
+  - `golangci-lint run ./...` — 0 issues.
+  - New end-to-end test (`TestHoneypotTrapEndToEnd`) walks the real
+    loop: deceived visitor receives HTML containing the trap link →
+    fetching that link returns 404 and is recorded → the trip is then
+    visible to scoring for that caller and no one else.
+  - Mutation checks, all three failed as they should and passed again
+    once restored:
+      * removed the tenant from the honeypot key → the cross-tenant
+        assertion failed.
+      * removed the honeypot entry cap → state grew to 55,000 against a
+        50,000 ceiling.
+      * raised the response cap to 64 MiB → the over-cap body was
+        rewritten instead of passed through.
+  - `BenchmarkHoneypotTrippedEmpty`: 1.1 ns/op, 0 B/op, 0 allocs/op —
+    the check added to every request costs nothing on a node where the
+    trap has never been tripped, which is the normal state.
+  - `BenchmarkGuardServeHTTP`: 35 µs/op, unchanged against main.
+
+Known gaps / follow-up:
+  - The trap link only reaches traffic already being deceived. Bots
+    that never reach the deceive decision never see it. Injecting it
+    into challenge pages is the obvious next step.
+  - Honeypot trips are per-node. A bot hitting a different node starts
+    clean. Cross-node propagation needs a bounded writer and a TTL'd,
+    tenant-scoped Redis key — deliberately not the shared blocklist.
+  - Client-telemetry scoring (the dropped forensics work) remains
+    unbuilt; see `DECISIONS.md` for what it needs.
+  - The 512 KiB response cap means a deceived visitor requesting an
+    unusually large HTML page gets it unpoisoned. Streaming the
+    injection with a fixed tail window would remove the cap entirely;
+    not done without evidence that it matters (`CLAUDE.md` Section 7).
+
+## 2026-09-21 — Product rename: hakaishield → HakaiShield (on this branch, after main-history reconciliation)
 
 Changed:
   - Discovered local `main` and `origin/main` had **unrelated
     histories** (`fatal: refusing to merge unrelated histories`) —
     same branch name, zero common ancestor, 33 commits unique to
-    local and 45 unique to origin. Consistent with `docs/PROGRESS.md`'s
-    own note that this project's code has moved between sessions as
-    zip handoffs rather than always via `git push`.
+    local and 45 unique to origin. Consistent with this file's own
+    note that this project's code has moved between sessions as zip
+    handoffs rather than always via `git push`.
   - Preserved the old local `main` as branch
     `main-local-backup-2026-09-21` (nothing deleted), then
-    `git reset --hard origin/main` so `main` now matches the real
-    GitHub history exactly (HEAD `7e62fe3`, PR #9).
-  - Re-applied the HakaiShield rename on top of this corrected `main`
-    (the rename done earlier was against the old, now-superseded
-    local `main` tree and did not carry over cleanly): Go module path
-    `github.com/ToufiqQureshi/bot-shield` → `.../hakaishield`
-    (`backend/go.mod` + every internal import), `X-BotShield-*`
-    headers/cookie → `X-HakaiShield-*`, binary name `botshield` →
-    `hakaishield`, Postgres DB name in `docker-compose.yml`, and all
-    prose across `README.md`, `CLAUDE.md`, `docs/*.md`.
-  - `README.md` also had its `go build` example corrected again on
-    this branch (it referenced a non-existent `./cmd/hakaishield`
-    directory — `main.go` lives directly under `backend/`) and gained
-    the `hakaishield.com` domain link.
+    `git reset --hard origin/main` so `main` matched the real GitHub
+    history exactly (HEAD `7e62fe3`, PR #9) before the rename.
+  - Re-applied the HakaiShield rename on top of that corrected `main`:
+    Go module path `github.com/ToufiqQureshi/hakaishield` →
+    `.../hakaishield` (`backend/go.mod` + every internal import),
+    `X-HakaiShield-*` headers/cookie → `X-HakaiShield-*`, binary name
+    `hakaishield` → `hakaishield`, Postgres DB name in
+    `docker-compose.yml`, and all prose across `README.md`,
+    `CLAUDE.md`, `docs/*.md`.
+  - `README.md`'s `go build` example was also corrected (it
+    referenced a non-existent `./cmd/hakaishield` directory —
+    `main.go` lives directly under `backend/`) and gained the
+    `hakaishield.com` domain link.
+  - GitHub renamed the remote repo `hakaishield` → `hakaishield` and
+    the local `origin` URL was updated to match. `git push origin
+    main` was then rejected because origin had moved on: the PR
+    consolidating deception + honeypot + RAG-poisoning (the section
+    directly above this one, plus the AI RAG deception work) had
+    landed on `origin/main` after the reset. That merge (this same
+    commit) brought `pkg/deception` and `pkg/signals/honeypot.go` in
+    still under the old `github.com/ToufiqQureshi/hakaishield` import
+    path, so the sed rename pass was re-run repo-wide after the merge
+    to catch those newly-merged files (`backend/pkg/core/proxy.go`'s
+    import block was a manual merge-conflict resolution combining
+    the renamed `pkg/signals` import with the incoming `pkg/deception`
+    import, both updated to the new module path).
 
 Why:
   Owner rename decision (see `docs/DECISIONS.md` 2026-09-21 entry).
-  The unrelated-histories discovery happened while syncing this
-  branch's `main` after the GitHub repo itself was renamed
-  `bot-shield` → `hakaishield`, so both fixes are recorded together.
 
 Tested how:
   - `go build ./...`, `go vet ./...`, `go test ./...` from `backend/`
-    — all packages pass on the reconciled `main` (api, challenge,
-    config, core, evidence, observability, signals, stats, tenant;
-    note this lineage of `main` does not include the `pkg/deception`
-    work, which lives only on the `claude/pr-review-feedback-nnaded`
-    branch, not yet merged to `main`).
+    — all packages pass after the merge and the second rename pass,
+    including `pkg/deception` and the honeypot-related tests.
   - Repo-wide grep for `[Bb]ot-?[Ss]hield` across `*.go`, `*.md`,
     `*.mod`, `*.yml`, `*.json` (excluding untracked `inspired/`)
-    returns zero matches.
+    returns zero matches after the merge was resolved.
   - `.agents/mcp_config.json` and `.claude/settings.local.json`
     parsed successfully via `node -e "JSON.parse(...)"`.
 
@@ -2712,10 +2827,12 @@ Known gaps / follow-up:
     real work and not stale zip-handoff artifacts, someone needs to
     review that branch and decide whether anything from it should be
     cherry-picked forward; otherwise it can eventually be deleted.
-  - The `claude/pr-review-feedback-nnaded` branch (this session's
-    original branch, containing the deception/honeypot work) still
-    has its own unrelated-history divergence from `origin`'s branch of
-    the same name and has not been reconciled — only `main` was fixed
-    in this pass.
-  - Same breaking-change caveat as before: `X-BotShield-*` header/
+  - The `claude/pr-review-feedback-nnaded` branch still has its own
+    unrelated-history divergence from `origin`'s branch of the same
+    name and has not been reconciled.
+  - There is an untracked `botshiel-frontend/` directory in the
+    working tree (not part of any commit) still carrying the old
+    name — left untouched since it isn't tracked or part of this
+    rename's scope.
+  - Same breaking-change caveat as before: `X-HakaiShield-*` header/
     cookie consumers need to move to `X-HakaiShield-*`.

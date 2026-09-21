@@ -10,6 +10,36 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Honeypot trap: scoped to (tenant, IP, JA4), scored not blocked — 2026-09-20
+
+**Decision:** a honeypot trip is recorded against the triple (tenant ID, source IP, JA4) with a 6h TTL and a hard 50k entry cap, and feeds scoring as a 50-point `honeypot_trap` signal. It is explicitly **not** written to the shared `ja4:scrapers` blocklist.
+
+**Why not the blocklist:** the original implementation called `AddKnownScraperJA4(ja4, ...)` on every trip, which lands in the map `score.go` reads for its 100-point `ja4_blocklist` check. JA4 identifies a *browser build*, not a machine — every real Chrome user on a given version shares one fingerprint. So one headless-Chrome scraper tripping the trap would have hard-blocked every genuine Chrome visitor of that version, on **every tenant**, permanently and with no expiry. That is the worst false positive this product can produce (`CLAUDE.md` Sections 14 and 16), triggered by a single request.
+
+**Why (IP, JA4) and not either alone:** JA4 alone is too coarse (above). IP alone is too coarse the other way — CGNAT and corporate egress put unrelated people on one address. Requiring both means a trip counts against the caller that actually walked into the trap and close to nobody else.
+
+**Why 50 points and not a block:** following a `display:none` link is strong evidence of DOM-walking automation, but not proof of malice. Screen readers walk the DOM, and browsers speculatively prefetch. At 50 a lone trip lands in challenge range, which a real person recovers from in one round trip, while an actual scraper also trips the handshake, UA-mismatch or crawl-pattern signals and crosses the block bar on combined evidence — which is what `CLAUDE.md` Section 6 requires anyway.
+
+**Rejected:** Redis fan-out of trips (`HSet` + `Publish` per hit, each in its own goroutine). It spawned an unbounded goroutine and two Redis round trips per request to an endpoint an attacker can call in a loop, and the `Publish` had no subscriber anywhere in the codebase. Cross-node propagation is a real want, but it needs a bounded writer and a TTL'd, tenant-scoped key; it is a follow-up, not a prerequisite.
+
+**Revisit when:** trips need to propagate between nodes, or when the trap link is injected somewhere other than deceived responses.
+
+---
+
+## Consolidating PR #10 and PR #11; dropping the forensics analyzer — 2026-09-20
+
+**Decision:** the deception and honeypot work ships; the `pkg/forensics` client-behaviour analyzer from PR #10 does not, and PR #10's dependency changes are discarded entirely.
+
+**Why the dependencies were discarded:** PR #10 downgraded every direct dependency — Go 1.25→1.23, `fingerproxy` v1.2.3→v0.6.1, `pgx` v5.11→v5.6, `go-redis` v9.22→v9.7, `sentry-go` v0.49→v0.27. Nothing in the PR needed older libraries; for a product whose job is sitting in the TLS request path, silently moving back across a year of upstream fixes is a security regression, not a neutral change.
+
+**Why forensics was dropped rather than merged:** it is 298 lines with no caller anywhere in the tree, and wiring it as written would have added a signal that *lowers* risk based on numbers the client supplies — a bot posts `{"mouse_entropy": 0.45}` and scores clean (`CLAUDE.md` Section 17). Two of its five layers (mouse entropy, timing variance) also have no safe reading on touch devices or for keyboard-only visitors, so a naive collection script would have penalised every mobile and accessibility user (Section 14). Separately, the challenge page already collects canvas, WebGL, `navigator.webdriver` and permission-probe telemetry over an HMAC-bound, size-limited POST — so the transport this analyzer needs already exists and the detection partly overlaps.
+
+**What it would take to ship it:** bind the payload to the existing challenge token, define signals that degrade safely on touch and keyboard-only input, and validate against real mobile traffic before it can influence a decision. That is a feature, not a merge conflict, and it is on the roadmap rather than half-wired into the request path.
+
+**Revisit when:** someone picks up client-telemetry scoring as its own piece of work. The code is preserved in PR #10's branch history.
+
+---
+
 ## Enterprise Hardening: Adaptive Policy Modes, Verified Good Bots, and Production Transport — 2026-09-19
 
 **Decision:** Bot Shield now supports adaptive policy modes (`PolicyBalanced` vs `PolicyStrict`). Under `PolicyBalanced` (the production default for e-commerce/SaaS), clean visitors (score 0) are passively forwarded to the origin with zero latency, reserving challenges for elevated risk scores (25-99) and blocks for >=100. `PolicyStrict` preserves the mandatory ~50ms invisible interstitial for strict zero-scrape environments. In addition, genuine search engine crawlers (Googlebot, Bingbot, Applebot, etc.) are verified via cached reverse+forward DNS and granted clean passthrough to protect SEO indexing. Upstream proxy connections are backed by a production-tuned pooled transport with explicit timeouts and custom 502/504 error handlers.

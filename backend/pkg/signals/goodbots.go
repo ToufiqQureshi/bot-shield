@@ -127,7 +127,7 @@ func verifyDNS(ipStr string, validDomains []string) bool {
 	for _, name := range names {
 		// Clean trailing dot in FQDN
 		cleanName := strings.TrimSuffix(strings.ToLower(name), ".")
-		
+
 		matchedDomain := false
 		for _, domain := range validDomains {
 			cleanDomain := strings.TrimPrefix(domain, ".")
