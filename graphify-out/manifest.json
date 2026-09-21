@@ -520,5 +520,197 @@
     "seen": 1789981887.5115876,
     "ast_hash": "f41d16cefe71a48d80599de38c6e2c7b",
     "semantic_hash": "f41d16cefe71a48d80599de38c6e2c7b"
+  },
+  ".claude/CLAUDE.md": {
+    "mtime": 1789981864.4719708,
+    "seen": 1789982120.9699478,
+    "ast_hash": "c232166e6492ba1ed955030b16979b05",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/SKILL.md": {
+    "mtime": 1789981864.4707472,
+    "seen": 1789982120.9699478,
+    "ast_hash": "1656a8a8e4a05bbe69f32cd15de81e87",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/add-watch.md": {
+    "mtime": 1789981855.2891235,
+    "seen": 1789982120.9699478,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/exports.md": {
+    "mtime": 1789981855.301968,
+    "seen": 1789982120.9699478,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1789981855.301968,
+    "seen": 1789982120.9699478,
+    "ast_hash": "42fef56a01698118f7fd722acdadea34",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1789981855.3060029,
+    "seen": 1789982120.9699478,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/hooks.md": {
+    "mtime": 1789981855.308018,
+    "seen": 1789982120.9699478,
+    "ast_hash": "3f545db6ce646650bb9de588f5512a27",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/query.md": {
+    "mtime": 1789981855.3136053,
+    "seen": 1789982120.9699478,
+    "ast_hash": "3c46f8ad006874260614ed8657d02307",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/transcribe.md": {
+    "mtime": 1789981855.3146036,
+    "seen": 1789982120.9699478,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/update.md": {
+    "mtime": 1789981855.319605,
+    "seen": 1789982120.9699478,
+    "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
+    "semantic_hash": ""
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1789981184.910061,
+    "seen": 1789982120.9699478,
+    "ast_hash": "ab7d85a4e68ac614b1ef11ab75ce4294",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1789981940.5580394,
+    "seen": 1789982120.9699478,
+    "ast_hash": "b339dee3386778b37b940f17e5833edb",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1789981185.0203063,
+    "seen": 1789982120.9699478,
+    "ast_hash": "53dd26fc99fac0ff35c4265263a86abf",
+    "semantic_hash": ""
+  },
+  "backend/.golangci.yml": {
+    "mtime": 1789981185.065724,
+    "seen": 1789982120.9699478,
+    "ast_hash": "172fcf120104fd921abda84d98cde076",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/BACKEND_WIRING_DOCS.md": {
+    "mtime": 1789980931.3869264,
+    "seen": 1789982120.9699478,
+    "ast_hash": "076834d1c9379d17bce5de8301177262",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/COMPLETE_PAGES_OVERVIEW.md": {
+    "mtime": 1789980931.387509,
+    "seen": 1789982120.9699478,
+    "ast_hash": "ddf3e484e3c8bbbad1e2d4a2c320e78e",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/FAKE_CONTENT_REMOVED.md": {
+    "mtime": 1789980931.3886485,
+    "seen": 1789982120.9699478,
+    "ast_hash": "6b9250ee64ae5aee074ab1d7bc686043",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/HUMAN_TOUCH_IMPROVEMENTS.md": {
+    "mtime": 1789980931.3892055,
+    "seen": 1789982120.9699478,
+    "ast_hash": "d4446c596c897c365a9107697708e164",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/LIGHT_MODE_IMPLEMENTATION.md": {
+    "mtime": 1789980931.3903282,
+    "seen": 1789982120.9699478,
+    "ast_hash": "5ff1b1d0b0674f1741297fd569864708",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/README.md": {
+    "mtime": 1789980931.3908691,
+    "seen": 1789982120.9699478,
+    "ast_hash": "81ef8e5fe6a01dc6249b6699d93e05c5",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/TRUST_BUILDERS.md": {
+    "mtime": 1789980931.391435,
+    "seen": 1789982120.9699478,
+    "ast_hash": "fa85a66e310c850c3d62c6d50fefc6d0",
+    "semantic_hash": ""
+  },
+  "botshiel-frontend/index.html": {
+    "mtime": 1789980931.3919926,
+    "seen": 1789982120.9699478,
+    "ast_hash": "053f2f1d43ff7bca5002367c4115da26",
+    "semantic_hash": ""
+  },
+  "docker-compose.yml": {
+    "mtime": 1789981188.287991,
+    "seen": 1789982120.9699478,
+    "ast_hash": "b917a9e66fc0dd4f798bf1570d1829ce",
+    "semantic_hash": ""
+  },
+  "docs/AGENT.md": {
+    "mtime": 1789981188.332576,
+    "seen": 1789982120.9699478,
+    "ast_hash": "94f7aad281c84a8ac99ff8ee37b83c59",
+    "semantic_hash": ""
+  },
+  "docs/ARCHITECTURE.md": {
+    "mtime": 1789981188.3764546,
+    "seen": 1789982120.9699478,
+    "ast_hash": "4d9cefa302e4e39692432634e4e780a0",
+    "semantic_hash": ""
+  },
+  "docs/DECISIONS.md": {
+    "mtime": 1789981188.4328785,
+    "seen": 1789982120.9699478,
+    "ast_hash": "5688a9b2091cd434ae5cd544c0f48112",
+    "semantic_hash": ""
+  },
+  "docs/FAILUROFTHISPRODUCT.MD": {
+    "mtime": 1789736612.85421,
+    "seen": 1789982120.9699478,
+    "ast_hash": "bd425b9ab4c39043aeaa8d146f137a89",
+    "semantic_hash": ""
+  },
+  "docs/PROGRESS.md": {
+    "mtime": 1789981188.6120617,
+    "seen": 1789982120.9699478,
+    "ast_hash": "2f3f12ac3a22ab0c28c39b539ad023f6",
+    "semantic_hash": ""
+  },
+  "docs/RESEARCH.md": {
+    "mtime": 1789981188.676077,
+    "seen": 1789982120.9699478,
+    "ast_hash": "ee8a03f2d33ec4b24f0e3395529770e1",
+    "semantic_hash": ""
+  },
+  "docs/ROADMAP.md": {
+    "mtime": 1789981188.7426276,
+    "seen": 1789982120.9699478,
+    "ast_hash": "91756740d2680edcaa07fede43d82dfd",
+    "semantic_hash": ""
+  },
+  "docs/go_expert.txt": {
+    "mtime": 1789736612.858886,
+    "seen": 1789982120.9699478,
+    "ast_hash": "72e603f9e5b1026ce4f62df88a3c8711",
+    "semantic_hash": ""
+  },
+  "harness.txt": {
+    "mtime": 1789736612.859413,
+    "seen": 1789982120.9699478,
+    "ast_hash": "6c1e3b92f2c8db3912174caaa64f0495",
+    "semantic_hash": ""
   }
 }
