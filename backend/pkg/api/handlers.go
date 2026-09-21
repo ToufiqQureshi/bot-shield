@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 type statsResponse struct {
@@ -57,7 +57,7 @@ func DashboardStatsHandler(store *tenant.Store) http.Handler {
 			Mode:          s.Mode.String(),
 			Enforcing:     s.Mode == config.ModeEnforce,
 		}); err != nil {
-			log.Printf("botshield: encoding dashboard stats response: %v", err)
+			log.Printf("hakaishield: encoding dashboard stats response: %v", err)
 		}
 	})
 }
@@ -88,7 +88,7 @@ func DashboardEvidenceHandler(store *tenant.Store) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		if err := json.NewEncoder(w).Encode(ten.Trail.Recent(limit)); err != nil {
-			log.Printf("botshield: encoding dashboard evidence response: %v", err)
+			log.Printf("hakaishield: encoding dashboard evidence response: %v", err)
 		}
 	})
 }

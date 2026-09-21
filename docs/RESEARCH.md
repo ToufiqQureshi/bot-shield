@@ -9,7 +9,7 @@ happens; don't let it go stale silently.
 
 ## How Akamai / DataDome / Cloudflare actually detect bots
 
-Studied because bot-shield's detection layers are modeled on the same
+Studied because hakaishield's detection layers are modeled on the same
 signal types, at a smaller scale:
 
 1. **TLS/JA3/JA4 fingerprint** — hashes the TLS ClientHello's cipher
@@ -40,7 +40,7 @@ covered by the client-side automation probe (item 6); 6–7 are P1/P2.
 ## Stealth/evasion tools studied (what we're building against)
 
 Researched to understand what modern scraping automation defeats by
-default, so bot-shield doesn't rely on checks that are already solved
+default, so hakaishield doesn't rely on checks that are already solved
 problems for attackers:
 
 - **Patchright** (patched Playwright) — suppresses CDP-detection
@@ -56,7 +56,7 @@ problems for attackers:
 - **obscura-scraper** — proxy + fingerprint rotation, smaller/simpler
   version of the same ideas.
 
-**Implication for bot-shield:** none of these tools are stopped by a
+**Implication for hakaishield:** none of these tools are stopped by a
 single check. This is the direct source of the multi-signal scoring
 decision in `DECISIONS.md`.
 
@@ -168,7 +168,7 @@ cover, so a future session doesn't re-research this from scratch.
   of blocking, so a scraper doesn't know it's been caught and keeps
   burning its own time on garbage. Genuinely under-offered even by big
   vendors — a real differentiator for a small product. **Added to
-  roadmap as item 11a**, scoped so bot-shield only signals the
+  roadmap as item 11a**, scoped so hakaishield only signals the
   decision; the origin app owns what fake data means for it.
 - **Persistent cross-session device fingerprinting** (Arkose Device
   ID) — AI similarity matching that re-identifies the same device
@@ -179,7 +179,7 @@ cover, so a future session doesn't re-research this from scratch.
   fingerprinting isn't enough.
 - **Native mobile SDK** (PerimeterX/HUMAN) — protects native iOS/
   Android app traffic, not just web. Not added: separate codebase,
-  separate maintenance surface, and bot-shield's whole product shape
+  separate maintenance surface, and hakaishield's whole product shape
   (`ROADMAP.md`) is a web reverse proxy. Out of scope unless a client
   need makes it real.
 - **Shared cross-customer threat intelligence** (DataDome/Cloudflare's
@@ -229,7 +229,7 @@ the ground below us is already given away.
 The competitor that actually matters to us is therefore **CrowdSec,
 not DataDome**. Where we genuinely differ:
 
-| | CrowdSec | bot-shield |
+| | CrowdSec | hakaishield |
 |---|---|---|
 | Input | parses server **logs** | reads the **live request** (TLS ClientHello) |
 | Timing | reactive — after bad requests land | first request, before the origin sees it |

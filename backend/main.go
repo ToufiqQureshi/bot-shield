@@ -1,4 +1,4 @@
-// Command botshield runs the bot-shield reverse proxy.
+// Command hakaishield runs the hakaishield reverse proxy.
 package main
 
 import (
@@ -14,14 +14,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/api"
-	"github.com/ToufiqQureshi/bot-shield/pkg/challenge"
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/core"
-	"github.com/ToufiqQureshi/bot-shield/pkg/db"
-	"github.com/ToufiqQureshi/bot-shield/pkg/observability"
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
-	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/api"
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/core"
+	"github.com/ToufiqQureshi/hakaishield/pkg/db"
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/redis/go-redis/v9"
@@ -37,31 +37,31 @@ func main() {
 	modeFlag := flag.String("mode", "enforce", `"enforce" acts on scores; "shadow" only records what it would have done`)
 	themeFlag := flag.String("theme", "ghost", `challenge page theme: "ghost", "branded", or "default"`)
 	policyFlag := flag.String("policy", "balanced", `policy strategy: "balanced" (allow clean score 0, challenge suspicious) or "strict" (mandatory challenge)`)
-	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-BotShield-Decision: deceive instead of 403)")
+	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-HakaiShield-Decision: deceive instead of 403)")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", "", "PostgreSQL URL for Supabase integration (e.g. postgres://user:pass@host:5432/db)")
 	flag.Parse()
 
 	mode, err := config.ParseMode(*modeFlag)
 	if err != nil {
-		log.Fatalf("botshield: %v", err)
+		log.Fatalf("hakaishield: %v", err)
 	}
 
 	policy, err := config.ParsePolicy(*policyFlag)
 	if err != nil {
-		log.Fatalf("botshield: %v", err)
+		log.Fatalf("hakaishield: %v", err)
 	}
 
 	// SENTRY_DSN is an env var, not a flag: flags show up in `ps aux`
 	// output on shared hosts, which a DSN (while not a secret that
 	// grants access to customer data) still has no reason to leak into.
 	if err := observability.Init(os.Getenv("SENTRY_DSN")); err != nil {
-		log.Printf("botshield: warning: sentry init failed: %v", err)
+		log.Printf("hakaishield: warning: sentry init failed: %v", err)
 	}
 	defer sentry.Flush(2 * time.Second)
 
 	if *target == "" {
-		log.Fatal("botshield: -target is required")
+		log.Fatal("hakaishield: -target is required")
 	}
 
 	secretStr := *challengeSecret
@@ -73,27 +73,27 @@ func main() {
 		// Fallback to random if not provided, sufficient for single-node.
 		secret = make([]byte, 32)
 		if _, err := rand.Read(secret); err != nil {
-			log.Fatalf("botshield: generating random secret: %v", err)
+			log.Fatalf("hakaishield: generating random secret: %v", err)
 		}
 	}
 
 	challengeHandler, err := challenge.NewChallenge(secret, *themeFlag)
 	if err != nil {
-		log.Fatalf("botshield: %v", err)
+		log.Fatalf("hakaishield: %v", err)
 	}
 
 	// Initialize Redis for global rate limiting
 	opt, err := redis.ParseURL(*redisURL)
 	if err != nil {
-		log.Fatalf("botshield: invalid redis url: %v", err)
+		log.Fatalf("hakaishield: invalid redis url: %v", err)
 	}
 	rdb := redis.NewClient(opt)
 	ctxRdb, cancelRdb := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelRdb()
 	if err := rdb.Ping(ctxRdb).Err(); err != nil {
-		log.Printf("botshield: warning: could not connect to redis at %s: %v (falling back to open)", *redisURL, err)
+		log.Printf("hakaishield: warning: could not connect to redis at %s: %v (falling back to open)", *redisURL, err)
 	} else {
-		log.Printf("botshield: connected to redis at %s", *redisURL)
+		log.Printf("hakaishield: connected to redis at %s", *redisURL)
 	}
 	signals.InitRedis(rdb)
 
@@ -102,9 +102,9 @@ func main() {
 
 	if *dbURL != "" {
 		if err := db.Init(*dbURL); err != nil {
-			log.Fatalf("botshield: initializing postgres db: %v", err)
+			log.Fatalf("hakaishield: initializing postgres db: %v", err)
 		}
-		log.Printf("botshield: connected to postgres at %s", *dbURL)
+		log.Printf("hakaishield: connected to postgres at %s", *dbURL)
 	}
 
 	store := tenant.NewStore()
@@ -112,7 +112,7 @@ func main() {
 
 	originProxy, err := core.NewOriginProxy(*target)
 	if err != nil {
-		log.Fatalf("botshield: creating origin proxy: %v", err)
+		log.Fatalf("hakaishield: creating origin proxy: %v", err)
 	}
 
 	err = store.Add("default", tenant.TenantConfig{
@@ -124,13 +124,13 @@ func main() {
 	}, []string{"*"}, originProxy)
 
 	if err != nil {
-		log.Fatalf("botshield: provisioning default tenant: %v", err)
+		log.Fatalf("hakaishield: provisioning default tenant: %v", err)
 	}
 
 	guard := core.NewGuard(store, challengeHandler)
 
 	mux := http.NewServeMux()
-	mux.Handle("/__botshield/", challengeHandler.Handler())
+	mux.Handle("/__hakaishield/", challengeHandler.Handler())
 	mux.Handle("/api/v1/dashboard/stats", api.DashboardStatsHandler(store))
 	mux.Handle("/", guard)
 
@@ -139,7 +139,7 @@ func main() {
 		// mux.Handle("/api/v1/dashboard/top-offenders", api.DashboardTopOffendersHandler(store))
 		// mux.Handle("/api/v1/dashboard/export", api.DashboardExportHandler(store))
 	} else {
-		log.Print("botshield: -evidence-token not set, evidence endpoint disabled")
+		log.Print("hakaishield: -evidence-token not set, evidence endpoint disabled")
 	}
 
 	srv := &http.Server{
@@ -151,13 +151,13 @@ func main() {
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
-		log.Fatalf("botshield: %v", err)
+		log.Fatalf("hakaishield: %v", err)
 	}
 
 	if *certFile != "" {
 		cert, err := tls.LoadX509KeyPair(*certFile, *keyFile)
 		if err != nil {
-			log.Fatalf("botshield: loading TLS cert/key: %v", err)
+			log.Fatalf("hakaishield: loading TLS cert/key: %v", err)
 		}
 		// TLS 1.0/1.1 are deprecated and, for a product whose own
 		// detection logic reads TLS version to spot automation
@@ -171,21 +171,21 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Printf("botshield: listening on %s, protecting %s", *addr, *target)
+		log.Printf("hakaishield: listening on %s, protecting %s", *addr, *target)
 		if mode == config.ModeShadow {
-			log.Print("botshield: SHADOW MODE - scoring and recording only, NOTHING will be blocked or challenged")
+			log.Print("hakaishield: SHADOW MODE - scoring and recording only, NOTHING will be blocked or challenged")
 		}
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("botshield: %v", err)
+			log.Fatalf("hakaishield: %v", err)
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("botshield: shutting down")
+	log.Println("hakaishield: shutting down")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("botshield: shutdown error: %v", err)
+		log.Printf("hakaishield: shutdown error: %v", err)
 	}
 }

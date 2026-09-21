@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/evidence"
+	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
 )
 
 func TestTrailRecordAndRecent(t *testing.T) {

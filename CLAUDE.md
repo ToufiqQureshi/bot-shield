@@ -1,4 +1,4 @@
-# CLAUDE.md — bot-shield Engineering Operating System
+# CLAUDE.md — hakaishield Engineering Operating System
 
 > **This file defines how engineering work is performed.**
 >
@@ -13,7 +13,7 @@
 
 # 0. Mission
 
-bot-shield is a **hosted inline traffic intelligence and governance system**.
+hakaishield is a **hosted inline traffic intelligence and governance system**.
 
 It sits in front of customer websites and evaluates automated traffic using
 request-level evidence. It can then apply policy such as:
@@ -27,7 +27,7 @@ request-level evidence. It can then apply policy such as:
 The important output is not only the action. The system must be able to explain
 **why** the action was taken using useful, defensible evidence.
 
-bot-shield is:
+hakaishield is:
 
 - closed-source
 - commercial
@@ -37,7 +37,7 @@ bot-shield is:
 
 ## Product principle
 
-Do not think of bot-shield as simply "a bot blocker".
+Do not think of hakaishield as simply "a bot blocker".
 
 Think:
 
@@ -53,7 +53,7 @@ operational problem, or roadmap requirement.
 
 ## Product positioning
 
-bot-shield is **not "a cheaper DataDome."** The market floor includes free
+hakaishield is **not "a cheaper DataDome."** The market floor includes free
 alternatives. Do not compete primarily on being the cheapest product.
 
 The product differentiates through:
@@ -584,7 +584,7 @@ Never make a rule stricter merely because it catches more bots.
 
 # 15. Production Safety
 
-bot-shield runs in the request path.
+hakaishield runs in the request path.
 
 ## Latency
 
@@ -640,7 +640,7 @@ Use `context.Context`.
 
 # 16. Multi-Tenant Security
 
-bot-shield is a multi-tenant SaaS.
+hakaishield is a multi-tenant SaaS.
 
 Treat tenant isolation as a security boundary.
 
@@ -737,7 +737,7 @@ Do not claim "secure" merely because tests pass.
 
 # 19. Resource and Cost Awareness
 
-bot-shield is hosted infrastructure.
+hakaishield is hosted infrastructure.
 
 A request is both a latency event **and potentially a cost event**.
 
@@ -789,7 +789,7 @@ Can our implementation be deleted?
 
 Prefer a battle-tested standard implementation over maintaining a custom copy.
 
-### Important bot-shield lesson
+### Important hakaishield lesson
 
 A previous audit found hand-written infrastructure in `proxy/capture.go` that
 duplicated behavior already handled by `net/http`, including:
@@ -973,7 +973,7 @@ Review tools supplement reasoning; they do not replace it.
 
 # 26. Product Boundary — Defensive Only
 
-bot-shield detects and governs automated traffic.
+hakaishield detects and governs automated traffic.
 
 Never turn it into a tool for defeating other companies' anti-bot systems.
 
@@ -1189,4 +1189,4 @@ Those are already part of the engineering job.
 > **Do the work, verify the work, document the work, and tell the truth about the
 > work.**
 
-**That is the standard for every part of bot-shield.**
+**That is the standard for every part of hakaishield.**

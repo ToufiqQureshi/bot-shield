@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/db"
-	"github.com/ToufiqQureshi/bot-shield/pkg/evidence"
-	"github.com/ToufiqQureshi/bot-shield/pkg/stats"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/db"
+	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
+	"github.com/ToufiqQureshi/hakaishield/pkg/stats"
 )
 
 // ErrTenantNotFound is returned when a requested tenant ID or host does not exist.
@@ -110,7 +110,7 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 	// than letting Go's zero value quietly pick a mode for a live tenant.
 	mode, err := config.ParseMode(modeStr)
 	if err != nil {
-		log.Printf("botshield: tenant %q has unknown mode %q, defaulting to enforce: %v", id, modeStr, err)
+		log.Printf("hakaishield: tenant %q has unknown mode %q, defaulting to enforce: %v", id, modeStr, err)
 		mode = config.ModeEnforce
 	}
 	proxy, err := s.ProxyFactory(target)

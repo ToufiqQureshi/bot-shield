@@ -40,7 +40,7 @@ Changed:
   - `backend/pkg/signals/score.go`: added `DecideWithPolicy` supporting zero-friction passive allow for score 0 in `PolicyBalanced`, and mandatory challenge in `PolicyStrict`.
   - `backend/pkg/signals/goodbots.go` (new): automated reverse-DNS and forward-DNS verification for major search engines (Googlebot, Bingbot, Applebot, DuckDuckBot, Yandex, Baidu) with 6-hour caching. Genuine search bots pass straight to the origin with evidence logged as `good_bot_verified`.
   - `backend/pkg/core/proxy.go`: replaced default proxy transport with production-tuned `DefaultOriginTransport` (1000 max idle conns, 200 per host, 90s idle timeout, 15s response header timeout) and custom structured 502 Bad Gateway error handler.
-  - `backend/pkg/core/guard.go`: added `/__botshield/healthz` endpoint for cloud load balancers / k8s health probes; integrated `IsVerifiedGoodBot` and `DecideWithPolicy`.
+  - `backend/pkg/core/guard.go`: added `/__hakaishield/healthz` endpoint for cloud load balancers / k8s health probes; integrated `IsVerifiedGoodBot` and `DecideWithPolicy`.
   - `backend/main.go`: added `-policy` flag (`balanced`/`strict`), `BOTSHIELD_CHALLENGE_SECRET` env var fallback for cluster deployments.
   - Tests: comprehensive unit tests in `goodbots_test.go`, `score_test.go`, `guard_test.go`, `tenant_test.go`.
 Why: transforms the prototype into a production-grade enterprise traffic governance system that eliminates false positives on real users, preserves SEO indexing, and provides rock-solid upstream reliability.
@@ -99,7 +99,7 @@ Changed:
     only via Guard's solved-challenge bypass, which is the actual behaviour.
   - `backend/pkg/core/guard.go`: pass `r.Header` to `Score`/`Analyze`; fixed a
     garbled comment ("scored zero" ?").
-  - `backend/pkg/challenge/challenge.go`: removed the dead `/__botshield/probe.js`
+  - `backend/pkg/challenge/challenge.go`: removed the dead `/__hakaishield/probe.js`
     endpoint and `probeScript` — it set a `_bs_probe` cookie nothing ever read
     and contradicted the documented item-6 decision (probe lives inside the
     challenge page, no site-wide injection). Fixed stale "ROADMAP item 5 not
@@ -184,14 +184,14 @@ yet when this entry was written — added in the next entry, same day.
 
 ## 2026-09-14 — Reverse proxy skeleton (ROADMAP P0 item 1)
 Changed:
-  - `go.mod`: created, module `github.com/ToufiqQureshi/bot-shield`.
+  - `go.mod`: created, module `github.com/ToufiqQureshi/hakaishield`.
   - `proxy/proxy.go`: added `New(target string) (*httputil.ReverseProxy, error)`
     — wraps stdlib `httputil.NewSingleHostReverseProxy`, validates the
     target URL has a scheme+host before returning.
   - `proxy/errors.go`: added `errInvalidTarget`.
   - `proxy/proxy_test.go`: added `TestPassthrough` (request/response
     unchanged through the proxy) and `TestNewRejectsBadTarget`.
-  - `cmd/botshield/main.go`: added the `botshield` binary — `-addr`/
+  - `cmd/hakaishield/main.go`: added the `hakaishield` binary — `-addr`/
     `-target` flags, starts the proxy, graceful shutdown on
     SIGINT/SIGTERM with a 10s drain timeout.
   - `.gitignore`: added (`/bin/`, `*.log`, `.env`).
@@ -204,7 +204,7 @@ into. Built test-first per `CLAUDE.md` Section 7: wrote
 failed for the right reason (`undefined: New`), then implemented.
 Tested how: `go test ./... -race` (unit tests pass); also ran a real
 end-to-end smoke test — a local Python HTTP server as the origin, the
-`botshield` binary in front of it, `curl` through the proxy — to
+`hakaishield` binary in front of it, `curl` through the proxy — to
 confirm actual traffic passthrough, not just mocked behavior.
 `gofmt -l .` and `go vet ./...` both clean.
 Known gaps / follow-up: no timeout/retry handling yet if the origin
@@ -214,7 +214,7 @@ fetcher)/retry work rather than building it ahead of the roadmap
 order (see `docs/DECISIONS.md` "MVP scope" entry for why P0 stays
 narrow). Also: code was committed locally but could not be pushed —
 this session's GitHub access was scoped to a different repo
-(`goScraper`), not `bot-shield`. Delivered as a zip instead; the
+(`goScraper`), not `hakaishield`. Delivered as a zip instead; the
 project owner pushes it manually. Whoever picks this up next should
 verify the zip's contents actually landed in the real repo before
 building on top of it.
@@ -224,8 +224,8 @@ building on top of it.
 ## 2026-09-14 — Zip landed in real repo; PR merged
 Changed:
   - Extracted the handed-off zip (see previous entry) into the actual
-    `bot-shield` repo on branch `claude/code-review-feedback-k1zukr`,
-    replacing the stray `bot-shield.zip` blob that had been committed
+    `hakaishield` repo on branch `claude/code-review-feedback-k1zukr`,
+    replacing the stray `hakaishield.zip` blob that had been committed
     to `main` directly instead of the real files. Opened as a PR,
     reviewed, merged into `main`.
   - `CLAUDE.md`: added Section 3a — every non-trivial function needs a
@@ -233,7 +233,7 @@ Changed:
     need made it necessary. This file didn't have that rule explicit
     yet even though `docs/AGENT.md` already expects beginner-readable
     code; added on request, PR merged separately.
-Why: this session had correct `bot-shield` GitHub access (previous
+Why: this session had correct `hakaishield` GitHub access (previous
 session did not — see prior entry), so it could close that handoff
 gap instead of leaving it to the project owner.
 Tested how: `go build/vet/test ./...` clean before and after; no
@@ -271,8 +271,8 @@ returns an error instead of a wrong/blank fingerprint. Confirmed via
 binary (only `utls` and two small `quic-go` internal subpackages
 `utls` itself needs).
 Known gaps / follow-up (real, not deferred without reason — see
-`CLAUDE.md` Section 17): **bot-shield does not terminate TLS at all
-today** — `cmd/botshield` proxies plain HTTP, so nothing currently
+`CLAUDE.md` Section 17): **hakaishield does not terminate TLS at all
+today** — `cmd/hakaishield` proxies plain HTTP, so nothing currently
 captures a live ClientHello to feed this function. This is deliberately
 not built in this same pass: it means rewriting the accept loop
 (TLS-terminating listener + HTTP/1.1 vs HTTP/2 branching, following
@@ -311,12 +311,12 @@ Changed:
     the HTTP server to pick up. Added `ConnContext`/`JA4FromContext`
     to carry the fingerprint from the connection into each request's
     context.
-  - `proxy/proxy.go`: `New()`'s director now sets `X-BotShield-JA4` on
+  - `proxy/proxy.go`: `New()`'s director now sets `X-HakaiShield-JA4` on
     the forwarded request when a fingerprint was captured; forwards
     normally (no header) otherwise — fingerprinting failing must never
     block real traffic (fail open, `CLAUDE.md` Section 9).
-  - `cmd/botshield/main.go`: added `-tls-cert`/`-tls-key` flags. With
-    them, botshield terminates TLS and wires the capture listener;
+  - `cmd/hakaishield/main.go`: added `-tls-cert`/`-tls-key` flags. With
+    them, hakaishield terminates TLS and wires the capture listener;
     without them, it proxies plain HTTP exactly as before (local dev
     still works without a cert).
   - `proxy/capture_test.go`: added a real end-to-end test — actual TLS
@@ -334,7 +334,7 @@ Tested how: `go build/vet/test ./... -race` all clean, `gofmt -l .`
 clean. Real end-to-end test (self-signed cert generated in-test, real
 `tls.Dial`/`http.Client` round trip). Also ran the actual compiled
 binary by hand: generated an `openssl` self-signed cert, started
-`botshield -tls-cert ... -tls-key ...` in front of a local Python HTTP
+`hakaishield -tls-cert ... -tls-key ...` in front of a local Python HTTP
 server, hit it with `curl -k` over real TLS — response came back
 correctly. Also re-ran the plain-HTTP path (no `-tls-cert` flags) by
 hand to confirm it still works unchanged.
@@ -342,7 +342,7 @@ Known gaps / follow-up (not deferred without reason — see `CLAUDE.md`
 Section 17):
   - HTTP/2 fingerprinting is not built. The capture listener forces
     `NextProtos = ["http/1.1"]`, so a browser that would otherwise use
-    HTTP/2 falls back to HTTP/1.1 against bot-shield. This is a
+    HTTP/2 falls back to HTTP/1.1 against hakaishield. This is a
     deliberate scope cut (see `DECISIONS.md`), not an oversight — it
     is its own roadmap item (item 2's "HTTP/2 fingerprint" half), and
     building it means hand-rolling HTTP/2 serving alongside the
@@ -353,7 +353,7 @@ Section 17):
     with ROADMAP item 16 (soak testing), once there's real traffic to
     tune it against.
   - JA4 alone is not a block/allow decision — nothing reads
-    `X-BotShield-JA4` yet except this proxy setting it. That's
+    `X-HakaiShield-JA4` yet except this proxy setting it. That's
     ROADMAP items 3 (UA consistency) and 5 (scoring engine), not this
     item.
 
@@ -366,7 +366,7 @@ Changed:
     triggers a panic in JA4 parsing would crash the *entire process*
     (Go kills the whole program on an unrecovered panic in any
     goroutine, not just that connection) — every client behind
-    bot-shield would go down over one bad handshake.
+    hakaishield would go down over one bad handshake.
   - `proxy/capture.go`: TLS handshake now uses `HandshakeContext` with
     a 10s timeout (`handshakeTimeout`, stored via `sync/atomic` so
     tests can shrink it) instead of a bare `Handshake()` call that
@@ -374,7 +374,7 @@ Changed:
     connection and never finish handshaking would fill
     `maxHandshakes` and block every legitimate new connection
     (slowloris-style).
-  - `cmd/botshield/main.go`: added `ReadHeaderTimeout`/`IdleTimeout` to
+  - `cmd/hakaishield/main.go`: added `ReadHeaderTimeout`/`IdleTimeout` to
     the `http.Server` — the same slowloris risk, one layer up, for a
     client that completes the TLS handshake but then sends the HTTP
     request too slowly.
@@ -405,7 +405,7 @@ that point, don't try to construct one speculatively now.
 Changed:
   - `proxy/proxy.go`: `New()`'s director now does `r.Header.Del(ja4Header)`
     unconditionally before maybe setting it. Before this, a visitor
-    could set `X-BotShield-JA4` themselves and it would reach the
+    could set `X-HakaiShield-JA4` themselves and it would reach the
     origin untouched whenever real capture didn't produce a value
     (plain HTTP, or capture failing) — a spoofable "detection" signal.
   - `proxy/capture.go`: the background accept loop in
@@ -436,7 +436,7 @@ the "silent failure" `docs/AGENT.md` calls out by name.
 Tested how: `go build/vet/test ./... -race` clean. Both new tests
 fail against the old code (verified by re-reading the diff, not just
 trusting the fix) and pass against the fix. Re-ran the compiled
-binary by hand: sent a request with a forged `X-BotShield-JA4` header
+binary by hand: sent a request with a forged `X-HakaiShield-JA4` header
 through a real TLS connection, confirmed the origin never saw it.
 Known gaps / follow-up: this was a re-audit of already-shipped code,
 not a new feature — a reminder that "tested and merged" isn't the
@@ -524,12 +524,12 @@ Changed:
   - `proxy/proxy.go`: migrated from `NewSingleHostReverseProxy` +
     `Director` to `httputil.ReverseProxy{Rewrite: ...}`, keeping the
     inbound `Host` and calling `SetXForwarded()`.
-  - `cmd/botshield/main.go`: comment now records that
+  - `cmd/hakaishield/main.go`: comment now records that
     `ReadHeaderTimeout` is also the TLS handshake deadline, so nobody
     removes it as "just a header thing".
   - `proxy/capture_test.go`: rewritten around a `startCapture` helper
     that runs the real wiring (capture listener + an `http.Server`
-    configured like `cmd/botshield`), since the timeout behaviour now
+    configured like `cmd/hakaishield`), since the timeout behaviour now
     comes from that configuration.
   - `proxy/proxy_test.go`: added `TestNewStripsSpoofedForwardedFor`.
   - `CLAUDE.md`: added Section 24 (check the standard library before
@@ -614,7 +614,7 @@ Tested how:
   - Reproduced finding 1 before fixing it: wrote a TCP relay that
     re-frames the client's first TLS record into two, ran a real
     client through it. Handshake succeeded, origin received
-    `X-BotShield-JA4: ""`. After the fix the same client produces
+    `X-HakaiShield-JA4: ""`. After the fix the same client produces
     `"unreadable"`.
   - Mutation-checked both new tests: reverting `JA4Unreadable` to `""`
     fails the fragmentation test; removing the header-strip loop fails
@@ -667,7 +667,7 @@ Changed:
   - `README.md`: had no usage instructions at all — you couldn't run
     the product from it. Added flags, a runnable example, the headers
     the origin receives, the HTTP/1.1-only note, and an honest status
-    line saying bot-shield labels traffic but does not block yet.
+    line saying hakaishield labels traffic but does not block yet.
   - `docs/AGENT.md`: doc map now covers `RESEARCH.md` and
     `PROGRESS.md`, and names the four highest-weight CLAUDE.md rules.
 Why: owner asked for every doc to be brought up to date and properly
@@ -696,11 +696,11 @@ Changed:
   - `README.md`: License section changed from `MIT` to "Proprietary —
     All Rights Reserved," with a line explaining no copy/modify/
     redistribute rights are granted. Also reworded the "combines
-    open-source building blocks" line, which read as if bot-shield
+    open-source building blocks" line, which read as if hakaishield
     itself were open source — it isn't; it uses open-source
     *libraries* internally.
   - `CLAUDE.md` Section 1: added an explicit, hard statement that
-    bot-shield is closed-source commercial software, not an
+    hakaishield is closed-source commercial software, not an
     open-source project, and that no future session should suggest
     an open-source license or public release.
   - `docs/DECISIONS.md`: recorded the correction as a decision entry,
@@ -717,7 +717,7 @@ Tested how: not a code change. Grepped every doc for "MIT" after the
 fix; the only remaining hits are (1) this decision entry explaining
 why MIT was wrong, (2) CLAUDE.md telling future sessions never to
 suggest it, and (3) RESEARCH.md correctly noting that a *third-party*
-library (BotD) is MIT-licensed, which is unrelated to bot-shield's
+library (BotD) is MIT-licensed, which is unrelated to hakaishield's
 own license. `go build/vet/test ./... -race` and `gofmt -l .` confirm
 no code was touched.
 Known gaps / follow-up: there is still no actual LICENSE file, and no
@@ -741,8 +741,8 @@ Changed:
     UA that openly admits it's a crawler (contains "bot"/"spider"/
     "crawl") is exempted — declaring yourself isn't lying.
   - `proxy/proxy.go`: wired into `Rewrite` — strips any incoming
-    `X-BotShield-UA-Mismatch` header first (same anti-spoof pattern as
-    `X-BotShield-JA4`), sets it to `"true"` only when `UAMismatch`
+    `X-HakaiShield-UA-Mismatch` header first (same anti-spoof pattern as
+    `X-HakaiShield-JA4`), sets it to `"true"` only when `UAMismatch`
     fires. Absence means nothing was flagged, not "unknown".
   - `proxy/useragent_test.go`: 9 cases — real Chrome/modern TLS
     (negative), claimed Chrome + `JA4Unreadable` (positive), claimed
@@ -776,13 +776,13 @@ Tested how:
     `TestNewStripsSpoofedUAMismatchHeader` with the spoofed value
     named.
   - `go build/vet/test ./... -race` and `gofmt -l .` clean throughout.
-  - Real binary run: openssl cert + curl through botshield — no
+  - Real binary run: openssl cert + curl through hakaishield — no
     mismatch header set (correct, curl doesn't claim to be a browser).
   - Independent `/security-review` (background agent) on the new
     surface: checked User-Agent length/ReDoS exposure (bounded by
     Go's 1MB `DefaultMaxHeaderBytes`, verified in `$GOROOT/src/net/
     http/server.go:916`, since no `MaxHeaderBytes` override exists in
-    `cmd/botshield`), the crawler-exemption bypass (real gap, but
+    `cmd/hakaishield`), the crawler-exemption bypass (real gap, but
     "signal only, no single signal decides" per Section 6 — not a
     vulnerability today), and the `ja4[1:3]` slice (safe: `ja4` here
     is never attacker-supplied text, only `""`, `JA4Unreadable`, or
@@ -813,7 +813,7 @@ Current state, verified before writing this:
   - `git status` clean, everything committed and pushed to
     `claude/code-review-feedback-k1zukr`. Latest commit: `9c230a1`
     ("Add UA/header consistency check (ROADMAP item 3, done)").
-  - PR #2 (https://github.com/ToufiqQureshi/bot-shield/pull/2) held
+  - PR #2 (https://github.com/ToufiqQureshi/hakaishield/pull/2) held
     everything from item 2 (TLS/JA4) and item 3 (UA consistency),
     clean and CI green as of the last check. **The project owner is
     merging PR #2 into `main` right now**, outside this session.
@@ -859,8 +859,8 @@ unchanged and still listed in `docs/ROADMAP.md`'s Done section and
 Changed:
   - `proxy/challenge.go`: added `Challenge` — `NewChallenge()` (random
     in-process HMAC secret), `Handler()` exposing GET
-    `/__botshield/challenge` (issue a puzzle) and POST
-    `/__botshield/verify` (check the answer), and `Passed(r)` for
+    `/__hakaishield/challenge` (issue a puzzle) and POST
+    `/__hakaishield/verify` (check the answer), and `Passed(r)` for
     whatever wires this in next to check an already-solved visitor.
     The puzzle: a signed token binds a random nonce + issue time + the
     exact page the visitor was on; the page's JS must compute
@@ -869,7 +869,7 @@ Changed:
     canvas proof, tampered/expired token, or a token signed by a
     different secret all fail closed back to a fresh puzzle. On
     success: a signed, HttpOnly/Secure/SameSite=Lax
-    `X-BotShield-Passed` cookie, and a redirect back to the exact
+    `X-HakaiShield-Passed` cookie, and a redirect back to the exact
     original path+query — `serveChallenge` is designed to be called in
     place of proxying a real request (item 5's job, not built yet), so
     the "page to return to" is just that request's own URL.
@@ -888,8 +888,8 @@ Changed:
     original path+query (not just "starts with the challenge route") —
     added after the first version of that test was too weak to catch a
     real bug (see below).
-  - `cmd/botshield/main.go`: mounts `challenge.Handler()` at
-    `/__botshield/` on a new `http.ServeMux`, proxy still on `/`.
+  - `cmd/hakaishield/main.go`: mounts `challenge.Handler()` at
+    `/__hakaishield/` on a new `http.ServeMux`, proxy still on `/`.
     Endpoints are reachable today for manual testing; nothing routes a
     real visitor to them automatically yet.
   - `docs/ROADMAP.md`: item 4 moved to Done with the design rationale
@@ -927,7 +927,7 @@ Tested how:
     available in this environment (`CGO_ENABLED=0`, no `gcc` on PATH),
     unlike prior sessions' environment. Flagging this as an actual gap
     in this session's verification, not silently skipping it.
-  - Real compiled binary run: local Python origin server + `botshield`
+  - Real compiled binary run: local Python origin server + `hakaishield`
     in front of it, both a plain passthrough request (200, proxied
     correctly) and a full challenge solve done for real over HTTP
     (GET the challenge, `sha256sum` the real nonce, POST the real
@@ -952,7 +952,7 @@ Section 17):
     matching exactly how items 2 and 3 shipped as signals nothing yet
     consumed.
   - **Canvas proof is a shape check, not a render check.** A bot that
-    specifically studies bot-shield can fake a passing string without
+    specifically studies hakaishield can fake a passing string without
     ever rendering anything server-verifiable. Documented in
     `DECISIONS.md` as an accepted MVP-scope limitation, same class as
     item 3's JA4-database gap — real pixel verification is a project
@@ -960,7 +960,7 @@ Section 17):
   - **Signing secret is per-process, in-memory only.** A restart or a
     second instance invalidates every outstanding challenge/cookie.
     Correct for the current single-process architecture; needs the
-    planned Redis store before bot-shield can run more than one
+    planned Redis store before hakaishield can run more than one
     instance.
   - **This session could not run `-race`** (no cgo/gcc in this
     environment). The code was still reviewed for the same concurrency
@@ -968,7 +968,7 @@ Section 17):
     construction, no shared mutable state introduced), but that is
     reasoning, not a tool result — worth an actual `-race` run in an
     environment that has it before this is called fully verified.
-  - No rate limiting on `/__botshield/verify` — out of scope
+  - No rate limiting on `/__hakaishield/verify` — out of scope
     deliberately (ROADMAP item 9, not item 4), matching the project's
     "don't build ahead of the roadmap order" pattern from item 1.
 
@@ -989,8 +989,8 @@ Changed:
   - `proxy/challenge.go`: renamed `serveChallenge` to the exported
     `Serve`, since `Guard` needs to call it from outside the package's
     own challenge-handling code — same method, no behavior change.
-  - `cmd/botshield/main.go`: `/` is now served by `Guard`, not the bare
-    proxy. `/__botshield/` stays mounted for direct manual testing.
+  - `cmd/hakaishield/main.go`: `/` is now served by `Guard`, not the bare
+    proxy. `/__hakaishield/` stays mounted for direct manual testing.
   - `proxy/score_test.go`, `proxy/guard_test.go`: unit tests for every
     `Score`/`Decide` boundary, plus four real end-to-end tests through
     actual TLS handshakes (reusing items 2-4's `startCapture`/
@@ -1001,7 +1001,7 @@ Changed:
   every earlier item (fingerprint, UA check, JS challenge) was
   deliberately a label with nothing consuming it yet
   (`docs/ROADMAP.md`'s own recurring note on items 2-4). This closes
-  that loop: bot-shield now actually allows, challenges, or blocks a
+  that loop: hakaishield now actually allows, challenges, or blocks a
   real request instead of only describing it.
   Tested how:
     - Real end-to-end tests, not the pure functions in isolation: a
@@ -1037,11 +1037,11 @@ Changed:
       `gofmt -l` clean on every new/changed file (pre-existing files
       still show CRLF-only diffs unrelated to this change, as noted in
       item 4's entry).
-    - Real compiled binary run: a local origin plus `botshield` in
+    - Real compiled binary run: a local origin plus `hakaishield` in
       front of it, plain HTTP (no `-tls-cert`) request through
       `Guard` — 200, unchanged from before this change, confirming
       the fail-open path (no TLS, so nothing to score, so nothing is
-      ever penalized for a connection bot-shield genuinely can't
+      ever penalized for a connection hakaishield genuinely can't
       examine) still holds with `Guard` in the path.
   Known gaps / follow-up (not deferred without reason — `CLAUDE.md`
   Section 17):
@@ -1090,7 +1090,7 @@ Changed:
   - `proxy/guard.go`: `Guard` now takes a `*Stats` and increments the
     matching counter on every decision (allow, challenge, block,
     including the already-passed-challenge bypass path).
-  - `cmd/botshield/main.go`: mounts the stats endpoint at
+  - `cmd/hakaishield/main.go`: mounts the stats endpoint at
     `/api/v1/dashboard/stats`.
   - `proxy/stats_test.go`: JSON shape/field-name tests, wrong-method
     rejection, CORS header check, and a real end-to-end test that
@@ -1195,7 +1195,7 @@ site-wide — see `docs/DECISIONS.md` for why and when to revisit.
 **Session wrap-up (project owner asked to stop for today) — status of
 everything built by both agents, checked against `CLAUDE.md`:**
 
-*Claude Code (backend, `proxy/`, `cmd/botshield/`) — all items below
+*Claude Code (backend, `proxy/`, `cmd/hakaishield/`) — all items below
 built test-first, mutation-checked, verified against the real compiled
 binary this session, `go build/vet/test ./proxy/... ./cmd/...` clean
 as of this entry:*
@@ -1287,7 +1287,7 @@ Tested how:
   - `npx eslint .` clean, `npx tsc --noEmit` clean, `npm run build`
     (real Next.js production build, not just dev mode) succeeded.
   - Real end-to-end integration test, not just unit tests: built and
-    ran the actual `botshield` binary on `:8080` with a real origin
+    ran the actual `hakaishield` binary on `:8080` with a real origin
     behind it, ran the actual Next.js dev server on `:3000`, confirmed
     (a) the compiled JS bundle contains `api/v1/dashboard/stats` and
     no reference to the deleted mock, (b) `curl` with an
@@ -1326,7 +1326,7 @@ Known gaps / follow-up:
     automatically.
   - The dashboard's own `README.md` is still the unedited
     `create-next-app` default (generic Next.js getting-started text,
-    not bot-shield-specific). Noticed during this review, not fixed —
+    not hakaishield-specific). Noticed during this review, not fixed —
     lower priority than the dead code/wiring issues actually blocking
     real functionality, flagging per `CLAUDE.md` Section 16 rather than
     silently leaving it unmentioned.
@@ -1343,7 +1343,7 @@ asked to stop for today after finishing what was in flight.
     local commits.
   - **Nothing from today is committed.** `git status` shows all of
     today's work as working-tree changes (modified: `.gitignore`,
-    `CLAUDE.md`, `README.md`, `cmd/botshield/main.go`,
+    `CLAUDE.md`, `README.md`, `cmd/hakaishield/main.go`,
     `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`,
     `docs/ROADMAP.md`; new/untracked: `claude_and_agy.md`,
     `proxy/{challenge,guard,score,stats}.go` + their `_test.go` files,
@@ -1426,7 +1426,7 @@ pricing scan — 2026-09-16"**. The short version:
   an argument we can win.
 - What the free tools **don't** do: they parse server **logs**, so
   they react to an IP after it has already misbehaved somewhere.
-  bot-shield reads the live ClientHello and scores the first request
+  hakaishield reads the live ClientHello and scores the first request
   with no prior sighting. No self-hostable product does inline
   TLS/JA4 scoring today. **That**, not price, is the moat.
 - Forrester renamed the category in Q2 2026 to *Bot and Agent Trust
@@ -1449,7 +1449,7 @@ pricing scan — 2026-09-16"**. The short version:
   402 billing now / open-source a community edition), and an explicit
   note on what this does **not** change.
 - **`docs/ROADMAP.md`** — rewrote the intro as a scannable
-  "what bot-shield is" block with a NOT/IS table and a who-pays list.
+  "what hakaishield is" block with a NOT/IS table and a who-pays list.
   Added items **11b** (verified agent policy), **12a** (decision
   evidence trail) and **18** (shadow mode + traffic report). Gave item
   17 an actual pricing anchor. Added a two-question test to "How to
@@ -1490,7 +1490,7 @@ old framing and never reached the correction.
   9 and 18), not bolted on after it fills a client's disk.
 - **18, shadow mode** — score and record without enforcing. *Risk
   logged:* a client who thinks they're protected while in shadow mode
-  is worse off than one with no bot-shield at all, so the mode has to
+  is worse off than one with no hakaishield at all, so the mode has to
   be loud in the dashboard, the logs and at startup.
 
 ### How this was checked
@@ -1543,7 +1543,7 @@ see `ROADMAP.md`'s dated priority note for why.
 ## 2026-09-16 — Decision evidence trail (ROADMAP item 12a, done)
 
 Built the thing the previous session's priority note said to build
-first: bot-shield can now answer *"why was this request stopped?"*
+first: hakaishield can now answer *"why was this request stopped?"*
 instead of only *"how many were."*
 
 ### What was built
@@ -1556,7 +1556,7 @@ instead of only *"how many were."*
   `checks` table that both `Score` and the new `signals()` read.
 - **`proxy/guard.go`** — `NewGuard` now takes a `*Trail`; every branch
   records what it decided and why.
-- **`cmd/botshield/main.go`** — `-evidence-token` flag; the route is
+- **`cmd/hakaishield/main.go`** — `-evidence-token` flag; the route is
   only mounted when it's set, and startup logs when it isn't.
 
 ### The decision that shaped it
@@ -1676,7 +1676,7 @@ checks — why would a company pay us?"*
 
 The first half of the honest answer is that they're right about
 today's code: two signals, fixed thresholds, `fingerproxy` already
-open source. A good engineer rebuilds current bot-shield in a
+open source. A good engineer rebuilds current hakaishield in a
 fortnight. There was no answer to that in what's built, and finding
 that out in a real sales call would be worse than finding it out now.
 
@@ -1762,7 +1762,7 @@ sessions of work:
 1. Scoring engine (item 5), JS-challenge automation probe (item 6),
    dashboard stats endpoint, and the `dashboard/` Next.js skeleton
    (built by Antigravity — see `claude_and_agy.md` and Section 25).
-2. Positioning rewrite across every doc — bot-shield is no longer an
+2. Positioning rewrite across every doc — hakaishield is no longer an
    "affordable alternative", it is the inline, self-hostable layer
    that decides which automated clients get in and proves why.
 3. Decision evidence trail (item 12a) — `proxy/evidence.go`.
@@ -1860,7 +1860,7 @@ behaves exactly as it did at PR #4's merge.
 
 ### What the owner decided
 
-bot-shield is sold as **a hosted service we run**. Customers point a
+hakaishield is sold as **a hosted service we run**. Customers point a
 CNAME at us and install nothing. Self-hosting is not deleted — it
 becomes a priced-up **Enterprise** option for customers who cannot
 send traffic to someone else's cloud.
@@ -1983,7 +1983,7 @@ anyone else to hand the frontend to.
 
 The project owner ended the arrangement. `claude_and_agy.md` deleted,
 `CLAUDE.md` Section 25 replaced with a plain statement that `proxy/`,
-`cmd/botshield/` **and** `dashboard/` are all Claude Code's.
+`cmd/hakaishield/` **and** `dashboard/` are all Claude Code's.
 Reasoning in `docs/DECISIONS.md`.
 
 **The dashboard code stays.** It works and it is wired to the real
@@ -2004,7 +2004,7 @@ and it must behave when the backend is down.
   collapsed into one `record(Decision)` (three near-identical
   functions, Section 24a), and `mode`/`enforcing` now travel with
   every stats response.
-- **`cmd/botshield`** — `-mode enforce|shadow`, plus a startup log
+- **`cmd/hakaishield`** — `-mode enforce|shadow`, plus a startup log
   line when shadow is on.
 - **`dashboard/`** — a status badge, a banner over the numbers, and
   the counters relabelled **"Would block" / "Would challenge" /
@@ -2189,7 +2189,7 @@ Changed:
     isolated tenants, proving no race conditions or cross-tenant leaks 
     under load.
   - Manual verification of single-tenant "Enterprise" mode backward 
-    compatibility by running the real `botshield.exe` binary with 
+    compatibility by running the real `hakaishield.exe` binary with 
     `-mode shadow` and fetching `/api/v1/dashboard/stats?tenant=default` 
     to prove it still accurately records and returns JSON for the default
     single tenant.
@@ -2202,7 +2202,7 @@ including mutation testing and load testing before calling it done.
 Tested how: 
   - Ran `TestTenantIsolationConcurrentLoad` (passed cleanly without races).
   - Mutated `guard.go` and verified tests fail as expected (reverted).
-  - Built real binary, tested with `curl` to prove the `botshield` works
+  - Built real binary, tested with `curl` to prove the `hakaishield` works
     as a proxy and the API still returns the correct schema.
 Known gaps / follow-up:
   - Still need to start and finish ROADMAP Item 18 (Shadow Mode Traffic 
@@ -2213,7 +2213,7 @@ Known gaps / follow-up:
 ## 2026-09-17 — Dashboard API definition, Test Coverage, and Codebase Cleanup
 Changed:
   - `pkg/tenant/tenant.go`: Removed unnecessary `TenantStore` interface since it had a single implementation (`InMemoryTenantStore`). Renamed struct to `Store`.
-  - `pkg/core/guard.go`, `pkg/api/handlers.go`, `cmd/botshield/main.go`, and all related test files: Updated to use `*tenant.Store` pointer directly.
+  - `pkg/core/guard.go`, `pkg/api/handlers.go`, `cmd/hakaishield/main.go`, and all related test files: Updated to use `*tenant.Store` pointer directly.
   - `pkg/api/handlers_test.go`: Added new tests for `DashboardStatsHandler` and `DashboardEvidenceHandler` to ensure correct JSON responses, error codes, and Auth token checking.
   - `pkg/core/capture_test.go`: Added new tests for `JA4FromContext` and `NewCaptureListener`.
   - `pkg/core/proxy_test.go`: Added new tests for `NewOriginProxy` verifying header rewriting (`X-Real-IP`, stripping `True-Client-IP`).
@@ -2255,18 +2255,18 @@ Changed:
   - `pkg/signals/score.go`: Added `DecisionDeceive` enum outcome (`"deceive"`) and wired `ja4_velocity_spike` (+50 risk weight) into the unified scoring `checks` table.
   - `pkg/tenant/tenant.go`: Added `Deception bool` flag to `TenantConfig` (enables decoy responses instead of 403 Forbidden).
   - `pkg/core/guard.go`: Implemented Deception mode forwarding: when `decision == DecisionBlock` and `tenant.Config.Deception` is enabled, decision becomes `DecisionDeceive` and requests are forwarded to origin with `WithDecision` context propagation.
-  - `pkg/core/proxy.go`: Added `WithDecision`, `DecisionFromContext`, and `ScoreFromContext` context helpers. In `Rewrite`, stripped client-supplied `X-BotShield-*` headers and stamped genuine `X-BotShield-Decision` and `X-BotShield-Score` headers from request context.
+  - `pkg/core/proxy.go`: Added `WithDecision`, `DecisionFromContext`, and `ScoreFromContext` context helpers. In `Rewrite`, stripped client-supplied `X-HakaiShield-*` headers and stamped genuine `X-HakaiShield-Decision` and `X-HakaiShield-Score` headers from request context.
   - `pkg/stats/stats.go`: Added atomic `deceived` counter and `Deceived()` getter.
   - `pkg/api/handlers.go`: Added `deceived` field to `statsResponse` JSON for dashboard consumption.
-  - `pkg/challenge/challenge.go`: Enhanced client-side JS probe inside `challengePage` with stealth `navigator.webdriver` property descriptor inspection, authentic Chrome runtime checks (`window.chrome`), and headless cloud VM WebGL renderer checks (flagging `SwiftShader`, `llvmpipe`, `VirtualBox`, `Mesa OffScreen`). Updated `handleVerify` to reject `headless=true`. Mounted `/__botshield/probe.js` endpoint.
+  - `pkg/challenge/challenge.go`: Enhanced client-side JS probe inside `challengePage` with stealth `navigator.webdriver` property descriptor inspection, authentic Chrome runtime checks (`window.chrome`), and headless cloud VM WebGL renderer checks (flagging `SwiftShader`, `llvmpipe`, `VirtualBox`, `Mesa OffScreen`). Updated `handleVerify` to reject `headless=true`. Mounted `/__hakaishield/probe.js` endpoint.
   - `main.go`: Added `-deception` CLI flag to enable deception mode for the default tenant.
 Why: Advanced scrapers (like Patchright, Scrapling, and Bright Data proxy pools) bypass simple IP rate limiting and standard headless checks. Cross-IP JA4 velocity rate-limits the scraper client regardless of how many residential IPs it rotates through. Deception mode poisons the scraper's dataset with dummy/decoy data rather than signaling a 403 block. The enhanced client-side probe detects automated VM environments and stealth tampering.
 Tested how:
   - Ran `go test -v ./pkg/...`: All packages (`api`, `challenge`, `config`, `core`, `evidence`, `signals`, `stats`, `tenant`) passed with 100% success.
   - Ran `go vet ./pkg/...`: Passed with zero warnings.
-  - Ran `go build -o botshield.exe main.go`: Built binary cleanly.
+  - Ran `go build -o hakaishield.exe main.go`: Built binary cleanly.
 Mutation checks (CLAUDE.md Section 12):
-  1. Deception Mode: Disabled deception decision override in `guard.go` -> `TestGuardDeceptionMode` immediately failed with `got 403, expected 200 OK from decoy response` and `expected X-BotShield-Decision: deceive, got ""`. Restored -> Passed.
+  1. Deception Mode: Disabled deception decision override in `guard.go` -> `TestGuardDeceptionMode` immediately failed with `got 403, expected 200 OK from decoy response` and `expected X-HakaiShield-Decision: deceive, got ""`. Restored -> Passed.
   2. Headless Probe: Removed `headless == "true"` check in `challenge.go` -> `TestChallengeRejectsHeadlessFlag` immediately failed with `headless=true must not pass`. Restored -> Passed.
   3. Scraper JA4 Impersonation: Disabled `IsKnownScraperJA4` check in `useragent.go` -> `TestScoreJA4BlocklistWithUAMismatch` immediately failed with `Score() = 150, want 200`. Restored -> Passed.
 Known gaps / follow-up:
@@ -2284,7 +2284,7 @@ Tested how:
   - Mutation verification (CLAUDE.md Section 12): Disabled IsKnownScraperJA4 read-lock mechanism -> TestScoreJA4BlocklistWithUAMismatch and TestUAMismatch correctly failed. Restored to pass.
   - Full package test pass go test -v ./pkg/signals/....
 Known gaps / follow-up:
-  - Final end-to-end test with a real python bot hitting the flask hotel app through the bot-shield proxy.
+  - Final end-to-end test with a real python bot hitting the flask hotel app through the hakaishield proxy.
 
 ---
 
@@ -2551,7 +2551,7 @@ Changed:
     Necessary so the new CI's gofmt check starts green instead of
     immediately red on unrelated pre-existing drift.
   - `pkg/observability/sentry.go` (new package): `Init(dsn string)`
-    (no-op if `dsn` is empty — no signup required to run bot-shield)
+    (no-op if `dsn` is empty — no signup required to run hakaishield)
     and `Middleware(next http.Handler) http.Handler`, which recovers a
     panicking handler, reports it to Sentry when configured, logs it
     either way, and returns 500 instead of the client just seeing the
@@ -2631,7 +2631,7 @@ Changed:
     (CLAUDE.md Section 13, vacuous assertion). Fixed to fail when the
     header is missing.
   - `pkg/challenge/challenge.go`: gosec's G101 flagged
-    `passedCookie = "X-BotShield-Passed"` as a potential hardcoded
+    `passedCookie = "X-HakaiShield-Passed"` as a potential hardcoded
     credential — a false positive (it's a cookie *name*, not a secret
     value). Suppressed inline with `#nosec G101` and a comment
     explaining why, rather than broadening the linter exclusion.
@@ -2660,3 +2660,62 @@ Known gaps / follow-up:
     catches code smells and correctness bugs, not algorithmic cost.
     That needs profiling (`net/http/pprof`) against real traffic, not
     a linter, and is still open.
+
+## 2026-09-21 — Product rename: bot-shield → HakaiShield (on this branch, after main-history reconciliation)
+
+Changed:
+  - Discovered local `main` and `origin/main` had **unrelated
+    histories** (`fatal: refusing to merge unrelated histories`) —
+    same branch name, zero common ancestor, 33 commits unique to
+    local and 45 unique to origin. Consistent with `docs/PROGRESS.md`'s
+    own note that this project's code has moved between sessions as
+    zip handoffs rather than always via `git push`.
+  - Preserved the old local `main` as branch
+    `main-local-backup-2026-09-21` (nothing deleted), then
+    `git reset --hard origin/main` so `main` now matches the real
+    GitHub history exactly (HEAD `7e62fe3`, PR #9).
+  - Re-applied the HakaiShield rename on top of this corrected `main`
+    (the rename done earlier was against the old, now-superseded
+    local `main` tree and did not carry over cleanly): Go module path
+    `github.com/ToufiqQureshi/bot-shield` → `.../hakaishield`
+    (`backend/go.mod` + every internal import), `X-BotShield-*`
+    headers/cookie → `X-HakaiShield-*`, binary name `botshield` →
+    `hakaishield`, Postgres DB name in `docker-compose.yml`, and all
+    prose across `README.md`, `CLAUDE.md`, `docs/*.md`.
+  - `README.md` also had its `go build` example corrected again on
+    this branch (it referenced a non-existent `./cmd/hakaishield`
+    directory — `main.go` lives directly under `backend/`) and gained
+    the `hakaishield.com` domain link.
+
+Why:
+  Owner rename decision (see `docs/DECISIONS.md` 2026-09-21 entry).
+  The unrelated-histories discovery happened while syncing this
+  branch's `main` after the GitHub repo itself was renamed
+  `bot-shield` → `hakaishield`, so both fixes are recorded together.
+
+Tested how:
+  - `go build ./...`, `go vet ./...`, `go test ./...` from `backend/`
+    — all packages pass on the reconciled `main` (api, challenge,
+    config, core, evidence, observability, signals, stats, tenant;
+    note this lineage of `main` does not include the `pkg/deception`
+    work, which lives only on the `claude/pr-review-feedback-nnaded`
+    branch, not yet merged to `main`).
+  - Repo-wide grep for `[Bb]ot-?[Ss]hield` across `*.go`, `*.md`,
+    `*.mod`, `*.yml`, `*.json` (excluding untracked `inspired/`)
+    returns zero matches.
+  - `.agents/mcp_config.json` and `.claude/settings.local.json`
+    parsed successfully via `node -e "JSON.parse(...)"`.
+
+Known gaps / follow-up:
+  - `main-local-backup-2026-09-21` exists locally only — it has not
+    been pushed. If the 33 commits unique to the old local `main` are
+    real work and not stale zip-handoff artifacts, someone needs to
+    review that branch and decide whether anything from it should be
+    cherry-picked forward; otherwise it can eventually be deleted.
+  - The `claude/pr-review-feedback-nnaded` branch (this session's
+    original branch, containing the deception/honeypot work) still
+    has its own unrelated-history divergence from `origin`'s branch of
+    the same name and has not been reconciled — only `main` was fixed
+    in this pass.
+  - Same breaking-change caveat as before: `X-BotShield-*` header/
+    cookie consumers need to move to `X-HakaiShield-*`.

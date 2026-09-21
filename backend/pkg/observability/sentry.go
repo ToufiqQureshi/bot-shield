@@ -20,7 +20,7 @@ import (
 // logs panics instead of also reporting them.
 func Init(dsn string) error {
 	if dsn == "" {
-		log.Print("botshield: SENTRY_DSN not set, crash reporting disabled (panics still logged)")
+		log.Print("hakaishield: SENTRY_DSN not set, crash reporting disabled (panics still logged)")
 		return nil
 	}
 	return sentry.Init(sentry.ClientOptions{
@@ -41,7 +41,7 @@ func Middleware(next http.Handler) http.Handler {
 			if err := recover(); err != nil {
 				sentry.CurrentHub().Recover(err)
 				sentry.Flush(2 * time.Second)
-				log.Printf("botshield: recovered panic serving %s %s: %v", r.Method, r.URL.Path, err)
+				log.Printf("hakaishield: recovered panic serving %s %s: %v", r.Method, r.URL.Path, err)
 				http.Error(w, "internal error", http.StatusInternalServerError)
 			}
 		}()

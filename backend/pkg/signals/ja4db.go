@@ -26,7 +26,7 @@ func init() {
 // lookups during actual request processing.
 func StartJA4Sync(ctx context.Context, rdb *redis.Client) {
 	if rdb == nil {
-		log.Println("botshield: warning: StartJA4Sync called with nil Redis client. JA4 DB will remain empty/default.")
+		log.Println("hakaishield: warning: StartJA4Sync called with nil Redis client. JA4 DB will remain empty/default.")
 		return
 	}
 
@@ -54,13 +54,13 @@ func syncJA4FromRedis(ctx context.Context, rdb *redis.Client) {
 
 	scrapers, err := rdb.HGetAll(timeoutCtx, "ja4:scrapers").Result()
 	if err != nil && err != redis.Nil {
-		log.Printf("botshield: error syncing ja4 scrapers from redis: %v", err)
+		log.Printf("hakaishield: error syncing ja4 scrapers from redis: %v", err)
 		return
 	}
 
 	browsers, err := rdb.SMembers(timeoutCtx, "ja4:browsers").Result()
 	if err != nil && err != redis.Nil {
-		log.Printf("botshield: error syncing ja4 browsers from redis: %v", err)
+		log.Printf("hakaishield: error syncing ja4 browsers from redis: %v", err)
 		return
 	}
 

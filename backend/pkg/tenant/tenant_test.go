@@ -6,11 +6,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/challenge"
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/core"
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
-	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/core"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 // helper to build a live httptest origin + its reverse proxy

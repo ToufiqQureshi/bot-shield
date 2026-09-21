@@ -26,18 +26,18 @@ argument against zero.
 
 What those free tools *don't* do is read the live TLS handshake. They
 parse **logs** — they react to an IP after it has already misbehaved
-somewhere. bot-shield sits in the request path and scores the **first
+somewhere. hakaishield sits in the request path and scores the **first
 request**, from the ClientHello, with no prior sighting of that
 client.
 
-**We host it.** Since 2026-09-16 bot-shield is a service we run: the
+**We host it.** Since 2026-09-16 hakaishield is a service we run: the
 customer points DNS at us and installs nothing. Self-hosting survives
 as a priced-up Enterprise option for customers who can't send traffic
 to someone else's cloud. See `DECISIONS.md` for what that pivot costs
 (their traffic is now our bandwidth bill, and our downtime is their
 site being down) and what it buys.
 
-**bot-shield's job:** stop the 70–90% of bot traffic that is naive-to-
+**hakaishield's job:** stop the 70–90% of bot traffic that is naive-to-
 intermediate automation (plain HTTP scripts, unconfigured libraries,
 basic headless browsers, and increasingly, stealth tools like patched
 browser-automation frameworks) — live in an afternoon, and able to
@@ -69,10 +69,10 @@ proposing a change of direction — it likely already says why.
 
 A client with no bot protection today can:
 
-1. Point their domain (CNAME) at bot-shield — nothing to install.
+1. Point their domain (CNAME) at hakaishield — nothing to install.
 2. See bot traffic drop within the first day, visible on the
    dashboard, in numbers they understand (not raw logs).
-3. Never have bot-shield break their site for real users — a false
+3. Never have hakaishield break their site for real users — a false
    positive is a worse outcome than a bot getting through.
 4. Trust it to run for months without babysitting.
 
@@ -81,7 +81,7 @@ clever the detection logic is.
 
 ---
 
-## You are bot-shield's principal engineer and de facto CTO
+## You are hakaishield's principal engineer and de facto CTO
 
 Hold this standard on every feature, every file, every review:
 
@@ -96,7 +96,7 @@ Hold this standard on every feature, every file, every review:
 > under load) — research how mature, real-world projects solve the
 > same problem first. Do not add complexity the product doesn't need
 > yet, but do not under-build safety it needs today. When you see a
-> gap that would make bot-shield meaningfully better, safer, or more
+> gap that would make hakaishield meaningfully better, safer, or more
 > trustworthy than what exists today, say so — even if not explicitly
 > asked — with why it matters and how big the effort is.
 
@@ -110,7 +110,7 @@ Hold this standard on every feature, every file, every review:
   automation tools are specifically built to defeat exactly one check.
 - **Latency creep** — this runs in the request path of every visitor
   to every client's site. A slow decision is a slow site.
-- **Fail-open vs fail-closed left undecided** — an internal bot-shield
+- **Fail-open vs fail-closed left undecided** — an internal hakaishield
   error must have a deliberate, documented behavior, not an accident.
 - **Data overreach** — collecting more from real visitors than a
   detection decision actually needs.

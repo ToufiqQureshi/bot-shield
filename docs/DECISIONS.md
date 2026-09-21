@@ -44,7 +44,7 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 **Decision:** the header-consistency check (`HeaderAnomaly`, `signals/headers.go`)
 is now a real scoring input: `Score`/`Analyze` take the request `http.Header`,
 and the single `checks` table gains a `header_anomaly` entry weighted 25 — below
-the block bar. Separately, the `/__botshield/probe.js` endpoint and its
+the block bar. Separately, the `/__hakaishield/probe.js` endpoint and its
 `probeScript` are deleted.
 
 **Why header_anomaly:** it was fully built and tested but never referenced by
@@ -94,7 +94,7 @@ To make it "sellable", we implemented:
 **Decision:** the two-agent workflow is over. The project owner ended
 the Antigravity arrangement. `claude_and_agy.md` is deleted,
 `CLAUDE.md` Section 25 is replaced with a plain statement of sole
-ownership, and `proxy/`, `cmd/botshield/` **and** `dashboard/` are all
+ownership, and `proxy/`, `cmd/hakaishield/` **and** `dashboard/` are all
 Claude Code's.
 
 **What does not change:** the `dashboard/` code stays. It works, it is
@@ -112,7 +112,7 @@ a cosmetic bug — it tells the customer their traffic is clean when we
 have no idea what their traffic is.
 
 It is also the only part of the product a customer ever sees. They
-will never read `proxy/score.go`; they will judge bot-shield entirely
+will never read `proxy/score.go`; they will judge hakaishield entirely
 on whether the numbers on screen make sense and are believable.
 
 **Also retired with it:** `agentchat/` (the two-agent coordination
@@ -130,7 +130,7 @@ collision and edit-war problems from scratch.
 
 ## Pivot: hosted SaaS is the product; self-hosting becomes Enterprise — 2026-09-16
 
-**Decision:** bot-shield is sold as a **hosted service we run**.
+**Decision:** hakaishield is sold as a **hosted service we run**.
 Customers point DNS at us, their traffic flows through our
 infrastructure, they pay monthly. Self-hosting is not removed — it
 becomes a **priced-up Enterprise option**, not the default.
@@ -180,7 +180,7 @@ is theirs to make.
 **What "Enterprise" means here** (recorded because it is easy to
 misread as a feature tier): it is a *deployment and contract* tier,
 not a feature list. Regulated or large customers who cannot send
-traffic to our cloud run bot-shield themselves, on a custom price
+traffic to our cloud run hakaishield themselves, on a custom price
 **above** the hosted plans, invoiced rather than card-billed, with a
 contract and direct support. It is sales-led, not self-serve.
 **It is not to be built now** — there are zero customers. It exists
@@ -222,7 +222,7 @@ this with Redis and a few checks — why would a company pay us?"*
 
 **The honest first half:** they're right about today's code. Two
 signals, fixed thresholds, `fingerproxy` is open source. A good
-engineer rebuilds the current bot-shield in a couple of weeks. There
+engineer rebuilds the current hakaishield in a couple of weeks. There
 is no answer to that objection in what is built so far, and pretending
 otherwise would just mean discovering it in a sales call instead.
 
@@ -245,7 +245,7 @@ feature, it's a standing fight with someone who updates:
   in eight months and nobody wants to touch it after that.
 
 **Decision:** a maintained **known-browser fingerprint database** is
-bot-shield's commercial moat, and gets treated as a first-class
+hakaishield's commercial moat, and gets treated as a first-class
 roadmap item (new item 19) rather than as a research cost to avoid.
 
 **Why it, specifically.** `ROADMAP.md` item 3 already identified this
@@ -308,7 +308,7 @@ data, and it is an **evasion oracle** — a bot can query it to learn
 whether its own fingerprint is being flagged and iterate until it
 isn't. That second one is the reason this is not merely "add auth
 later"; an open version of this endpoint actively helps the attacker
-bot-shield exists to stop. So: token required, `crypto/subtle`
+hakaishield exists to stop. So: token required, `crypto/subtle`
 comparison, an empty configured token denies everyone (a deployment
 that forgot to set one fails closed), and deliberately **no wildcard
 CORS**, unlike `/stats`.
@@ -363,7 +363,7 @@ should become per-deployment settings.
 
 ## Positioning: self-hostable agent governance, not "cheap DataDome" — 2026-09-16
 
-**Decision:** bot-shield stops describing itself as an *affordable
+**Decision:** hakaishield stops describing itself as an *affordable
 alternative to Akamai/DataDome* and starts describing itself as
 **the inline, self-hostable layer that decides which automated
 clients reach a site, and proves why.** `ROADMAP.md`'s intro and
@@ -386,7 +386,7 @@ roadmap item was implicitly judged as "does a big vendor have this?"
 
 **What we actually have that the free tier does not:** CrowdSec and
 friends parse **logs** — they react to an IP *after* it has misbehaved
-somewhere. bot-shield reads the **live TLS ClientHello** and scores
+somewhere. hakaishield reads the **live TLS ClientHello** and scores
 the first request, with no prior sighting of that client. No
 self-hostable product does inline JA4 fingerprint scoring today. That
 is a narrow but real moat, and it is worth money to two buyers the
@@ -471,7 +471,7 @@ every proxied origin response.
 separate feature (parse/rewrite HTML, handle charset and compressed
 responses, interact correctly with the origin's own CSP) that this
 codebase has no infrastructure for and no roadmap decision to build.
-The challenge page is the one place bot-shield already controls its
+The challenge page is the one place hakaishield already controls its
 own JS execution in a visitor's browser — reusing it is both smaller
 and immediately testable with the existing harness, matching
 `CLAUDE.md` Section 3/13's bias against building new machinery when
@@ -509,13 +509,13 @@ even by big vendors. Both fit `CLAUDE.md` Section 14 (real gap, not
 **Rejected:** persistent cross-session device fingerprinting (needs a
 standing ML similarity model + cross-session storage — an infra
 project of its own), native mobile SDK (separate codebase/maintenance
-surface, off bot-shield's web-proxy shape), shared cross-customer
+surface, off hakaishield's web-proxy shape), shared cross-customer
 threat intel (needs a consent/data-sharing framework first, or it's a
 Section 18 data-overreach problem), WASM deep browser-engine
 fingerprinting (research-heavy, no observed client need yet). Full
 reasoning for each in `RESEARCH.md`.
 **Risk accepted knowingly:** item 11a (deception) is scoped narrow on
-purpose — origin app owns the fake data, bot-shield only signals the
+purpose — origin app owns the fake data, hakaishield only signals the
 decision, and it's gated to only the highest-confidence score band
 (above the block threshold) because a wrongly-deceived real customer
 sees *wrong data as real*, which is a worse failure mode than a
@@ -636,13 +636,13 @@ a JS engine, which is the actual stated threat.
 **Known limitation, accepted:** the canvas proof is a client-reported
 string (`validCanvasProof` checks its shape — prefix + minimum
 length — not its actual pixel content). A bot author who studies
-bot-shield specifically can fake a plausible-looking string without
+hakaishield specifically can fake a plausible-looking string without
 ever rendering anything. Verifying real pixel content server-side
 needs either a headless-render comparison service or a much larger
 research effort — out of MVP scope, same class of accepted limitation
 as item 3's JA4-database gap. This is why the challenge raises cost
 for a naive-to-intermediate bot; it does not claim to stop a bot built
-specifically against bot-shield.
+specifically against hakaishield.
 **Revisit when:** real traffic data shows the canvas check is either
 pulling its weight or not worth the false-positive risk on browsers
 with canvas disabled (privacy tools, some accessibility setups).
@@ -665,7 +665,7 @@ implemented yet; would let a restart survive without invalidating
 outstanding cookies, but there's no config-loading mechanism in the
 codebase yet to hang it off, and the current architecture is single-
 instance so the gap has no observable effect yet.
-**Revisit when:** bot-shield runs more than one process (needs a
+**Revisit when:** hakaishield runs more than one process (needs a
 shared secret — the planned Redis store, `docs/ARCHITECTURE.md`, is
 the natural place) or when the passed-cookie's 30-minute lifetime
 surviving a restart becomes something a real client asks for.
@@ -704,8 +704,8 @@ structural signal of the same no-database kind).
 
 ---
 
-## bot-shield is closed-source commercial software, not open source — 2026-09-14
-**Decision:** bot-shield is proprietary. `README.md` previously said
+## hakaishield is closed-source commercial software, not open source — 2026-09-14
+**Decision:** hakaishield is proprietary. `README.md` previously said
 `License: MIT`, which was wrong and is corrected to "Proprietary — All
 Rights Reserved." There is no LICENSE file granting copy/modify/
 redistribute rights, and none should be added.
@@ -720,11 +720,11 @@ until caught here.
 features closed) — not rejected outright, just not decided; revisit
 if the owner ever wants community contributions or wider adoption as
 a growth strategy. Until then, default to fully closed.
-**What doesn't change:** bot-shield still *uses* open-source
+**What doesn't change:** hakaishield still *uses* open-source
 libraries internally (`fingerproxy`, `BotD` — see the "assemble
 proven open-source pieces" entry below). Depending on open-source
 components is normal for commercial software and is unrelated to
-whether bot-shield's own code is licensed for redistribution.
+whether hakaishield's own code is licensed for redistribution.
 **Revisit when:** the owner explicitly decides on a monetization/
 distribution model (self-hosted license sales, managed SaaS, open-
 core) — that decision picks the real license text, ideally with a
@@ -770,7 +770,7 @@ origin logs, allowlists or rate-limits — the same spoof we closed for
 **Alternatives considered:** stripping only `X-Real-IP` (the most
 common) — rejected, each remaining header is a full bypass on some
 origin stack, and they cost one line each.
-**Revisit when:** bot-shield runs behind a trusted CDN that legitimately
+**Revisit when:** hakaishield runs behind a trusted CDN that legitimately
 sets one of these; that needs an explicit trusted-upstream setting,
 never blanket trust.
 
@@ -798,7 +798,7 @@ connection *underneath* `tls.Server`, which costs one line.
 request rather than once per connection. Benchmarked at **14.3µs**
 against a ~2ms budget (`ARCHITECTURE.md`), so no cache — adding one
 would be optimising something that costs 0.7% of its budget.
-**Trade-off accepted:** `ReadHeaderTimeout` in `cmd/botshield` is now
+**Trade-off accepted:** `ReadHeaderTimeout` in `cmd/hakaishield` is now
 load-bearing for the TLS handshake too, not just headers. Noted in a
 comment there so nobody removes it as "just a header thing".
 **Revisit when:** HTTP/2 support is added — returning a real
@@ -826,7 +826,7 @@ header to the origin's host; we restore the visitor's `Host` (`r.Out
 **Behaviour changed deliberately:** an inbound `X-Forwarded-For` is
 now replaced rather than appended to. That is the secure default and
 there are no deployments yet to break.
-**Revisit when:** bot-shield is ever deployed *behind* another trusted
+**Revisit when:** hakaishield is ever deployed *behind* another trusted
 proxy (a CDN), where the inbound `X-Forwarded-For` is legitimate — at
 that point it needs an explicit "trusted upstream" setting, never a
 blanket trust of the header.
@@ -858,7 +858,7 @@ that point is cheaper than keeping our own thin wrapper.
 
 ## TLS capture listener: HTTP/1.1 only for now, no HTTP/2 — 2026-09-14
 **Decision:** `proxy.NewCaptureListener` forces `NextProtos =
-["http/1.1"]`, so browsers fall back to HTTP/1.1 against bot-shield
+["http/1.1"]`, so browsers fall back to HTTP/1.1 against hakaishield
 instead of using HTTP/2.
 **Why:** capturing JA4 means terminating TLS and handshaking
 ourselves instead of letting Go's `http.Server` do it, which breaks
@@ -943,7 +943,7 @@ real client traffic shows this tier is a priority (ties to
 ---
 
 ## Product is one deployable service, not a library — 2026-09-14
-**Decision:** bot-shield ships as one product (reverse proxy +
+**Decision:** hakaishield ships as one product (reverse proxy +
 dashboard) a client deploys directly. It is not published/marketed as
 a reusable Go library for other developers to import.
 **Why:** the actual customer is a non-technical site owner, not a Go
@@ -958,7 +958,7 @@ logic directly in their own app instead of running the proxy.
 ---
 
 ## Go stack, same as goScraper — 2026-09-14
-**Decision:** bot-shield is written in Go.
+**Decision:** hakaishield is written in Go.
 **Why:** team already knows Go from goScraper; this service sits in
 every request's path, so it needs high concurrency and low memory —
 Go fits (same reason Cloudflare/Caddy/Traefik are Go/Rust, not

@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"net"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/wi1dcard/fingerproxy/pkg/hack"
 )
 

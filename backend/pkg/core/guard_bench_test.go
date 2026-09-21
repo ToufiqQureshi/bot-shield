@@ -6,10 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/challenge"
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/core"
-	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/core"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 func newBenchGuard(b *testing.B) (http.Handler, *httptest.Server) {

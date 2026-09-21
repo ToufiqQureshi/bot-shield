@@ -3,7 +3,7 @@ package evidence_test
 import (
 	"testing"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/evidence"
+	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
 )
 
 // BenchmarkTrailRecord measures how fast we can write evidence under load.

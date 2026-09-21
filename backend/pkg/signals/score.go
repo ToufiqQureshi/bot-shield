@@ -3,7 +3,7 @@ package signals
 import (
 	"net/http"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 )
 
 // Decision is the outcome scoring produces for a request: challenge it

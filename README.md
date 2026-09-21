@@ -1,10 +1,11 @@
-<p align="center"><b>bot-shield</b></p>
+<p align="center"><b>hakaishield</b></p>
+<p align="center"><a href="https://hakaishield.com">hakaishield.com</a></p>
 
-# bot-shield
+# hakaishield
 
-**Bot-Shield** is an enterprise-grade, inline bot protection proxy that decides which automated clients reach your site — and proves exactly why it made that decision in real-time. 
+**HakaiShield** is an enterprise-grade, inline bot protection proxy that decides which automated clients reach your site — and proves exactly why it made that decision in real-time. 
 
-Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or API abuse, Bot-Shield sits directly in the request path and evaluates the very first request from any client using advanced JA4 TLS fingerprinting.
+Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or API abuse, HakaiShield sits directly in the request path and evaluates the very first request from any client using advanced JA4 TLS fingerprinting.
 
 ### Key Capabilities:
 - **Zero-Trust TLS Fingerprinting (JA4):** Instantly analyzes the TLS ClientHello handshake to identify headless browsers, scripts, and faked user-agents without relying on log analysis or shared blocklists.
@@ -24,7 +25,7 @@ company:
   free, but they parse **server logs** — they react to an IP *after*
   it has already misbehaved somewhere, and lean on shared blocklists.
 
-bot-shield is neither. It sits in the request path, reads the live TLS
+hakaishield is neither. It sits in the request path, reads the live TLS
 ClientHello, and scores the **first request** from a client it has
 never seen — then tells you exactly why it decided what it decided.
 
@@ -37,14 +38,14 @@ usage-billed API calls.
 your own infrastructure. That's a contract, not a signup — talk to
 us.
 
-bot-shield is closed-source, commercial software (a paid service —
+hakaishield is closed-source, commercial software (a paid service —
 see License below). Internally it uses proven open-source
 *libraries* (TLS/JA4 fingerprinting, behavioral scoring, JS
 challenges) instead of reinventing hard, already-solved problems.
 
 ## What it is
 
-bot-shield is one product: a reverse proxy + dashboard that sits in
+hakaishield is one product: a reverse proxy + dashboard that sits in
 front of your site. We run it — you point DNS at us and there is
 nothing to install. (Enterprise customers run the same binary
 themselves.) Internally the code is split into small, focused packages
@@ -54,17 +55,17 @@ meant to be reused elsewhere.
 
 ## Try it locally
 
-The hosted service is how customers use bot-shield. The commands below
+The hosted service is how customers use hakaishield. The commands below
 run the same binary on your own machine for development.
 
 ```bash
-go build -o botshield ./cmd/botshield
+cd backend && go build -o hakaishield .
 
 # plain HTTP — proxies traffic, no fingerprinting (nothing to capture)
-./botshield -addr :8080 -target http://127.0.0.1:9000
+./hakaishield -addr :8080 -target http://127.0.0.1:9000
 
 # with TLS — terminates TLS and fingerprints every connection
-./botshield -addr :8443 -target http://127.0.0.1:9000 \
+./hakaishield -addr :8443 -target http://127.0.0.1:9000 \
             -tls-cert cert.pem -tls-key key.pem
 ```
 
@@ -72,20 +73,20 @@ go build -o botshield ./cmd/botshield
 |---|---|
 | `-addr` | Address to listen on (default `:8080`) |
 | `-target` | The origin server to protect, e.g. `http://127.0.0.1:9000` |
-| `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — bot-shield has to terminate TLS to see the handshake. |
+| `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — hakaishield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
 | `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
 
 | Env var | Meaning |
 |---|---|
-| `SENTRY_DSN` | Optional. A handler panic is always recovered and logged either way (the process never crashes); setting this also reports it to Sentry so it surfaces as an alert instead of a line in a log nobody is watching. Unset by default — no signup required to run bot-shield. |
+| `SENTRY_DSN` | Optional. A handler panic is always recovered and logged either way (the process never crashes); setting this also reports it to Sentry so it surfaces as an alert instead of a line in a log nobody is watching. Unset by default — no signup required to run hakaishield. |
 
 ### Shadow mode
 
 `-mode shadow` runs the full scoring pipeline and records what it
 *would* have done, while forwarding every request to your origin
 untouched. Nothing your visitors do can be broken by a score while it
-is on, which makes it the safe way to see what bot-shield finds in
+is on, which makes it the safe way to see what hakaishield finds in
 your real traffic before enforcing anything.
 
 It is deliberately hard to miss that it is on: a startup log line,
@@ -110,12 +111,12 @@ Your origin then receives each request with:
 
 | Header | Meaning |
 |---|---|
-| `X-BotShield-JA4` | The caller's JA4 fingerprint, e.g. `t13d1516h2_8daaf6152771_e5627efa2ab1` |
-| `X-BotShield-JA4: unreadable` | TLS, but the handshake couldn't be read — unusual, and worth treating as suspicious |
+| `X-HakaiShield-JA4` | The caller's JA4 fingerprint, e.g. `t13d1516h2_8daaf6152771_e5627efa2ab1` |
+| `X-HakaiShield-JA4: unreadable` | TLS, but the handshake couldn't be read — unusual, and worth treating as suspicious |
 | *(absent)* | Not a TLS connection, so there was nothing to fingerprint |
 | `X-Real-IP`, `X-Forwarded-For` | The real caller's address |
 
-bot-shield strips all of these from the incoming request before setting
+hakaishield strips all of these from the incoming request before setting
 its own, so a visitor can't forge them.
 
 ## Documentation
@@ -126,13 +127,13 @@ Start with `docs/AGENT.md` (why this exists), then
 
 ## Responsible use
 
-bot-shield is a defensive security tool. It is built to protect
+hakaishield is a defensive security tool. It is built to protect
 websites from unwanted automated traffic — it is not, and will never
 include, tooling whose purpose is to help automation evade detection.
 
 ## License
 
-**Proprietary — All Rights Reserved.** bot-shield is closed-source
+**Proprietary — All Rights Reserved.** hakaishield is closed-source
 commercial software. No license to copy, modify, distribute, or use
 this code is granted except as agreed directly with the owner. It is
 not an open-source project, even though it uses open-source libraries

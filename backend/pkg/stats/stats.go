@@ -3,8 +3,8 @@ package stats
 import (
 	"sync/atomic"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 )
 
 // Stats counts what core.Guard has decided, for the dashboard (ROADMAP

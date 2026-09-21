@@ -32,11 +32,11 @@ const challengeMaxAge = 2 * time.Minute
 
 // passedCookie marks a visitor who already solved a challenge, so
 // they aren't re-challenged on every request in the same session.
-const passedCookie = "X-BotShield-Passed" // #nosec G101 -- cookie name, not a credential
+const passedCookie = "X-HakaiShield-Passed" // #nosec G101 -- cookie name, not a credential
 const passedMaxAge = 30 * time.Minute
 
-const challengePath = "/__botshield/challenge"
-const verifyPath = "/__botshield/verify"
+const challengePath = "/__hakaishield/challenge"
+const verifyPath = "/__hakaishield/verify"
 
 // maxVerifyBodyBytes bounds the POST body from an unauthenticated,
 // visitor-controlled endpoint. A real canvas proof is a few KB; this
@@ -141,7 +141,7 @@ func validPoW(nonce, answer string) bool {
 // canvasDataPrefix / minCanvasProofLen: a genuine canvas.toDataURL()
 // render is a base64 PNG of at least a few hundred bytes. This is a
 // shape check, not a render check — it's a client-reported string, so
-// a bot that specifically studies bot-shield can fake a value that
+// a bot that specifically studies hakaishield can fake a value that
 // passes it without ever rendering anything. Documented as a known,
 // accepted limitation (see docs/DECISIONS.md): validating the actual
 // pixel content server-side is a project of its own, out of MVP scope.
@@ -227,7 +227,7 @@ h2 { font-weight: normal; font-size: 1.2rem; }
       var ctx = c.getContext("2d");
       ctx.textBaseline = "top";
       ctx.font = "16px Arial";
-      ctx.fillText("botshield", 2, 2);
+      ctx.fillText("hakaishield", 2, 2);
       canvasProof = c.toDataURL();
     } catch (e) {}
 

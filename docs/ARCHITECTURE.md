@@ -1,15 +1,15 @@
-# bot-shield Architecture
+# hakaishield Architecture
 
-This document details the enterprise-grade architecture of Bot-Shield, designed to process high-volume traffic with near-zero latency. See `docs/ROADMAP.md` for upcoming enterprise features, `docs/DECISIONS.md` for architectural reasoning, and `CLAUDE.md` for our strict enterprise engineering rules.
+This document details the enterprise-grade architecture of HakaiShield, designed to process high-volume traffic with near-zero latency. See `docs/ROADMAP.md` for upcoming enterprise features, `docs/DECISIONS.md` for architectural reasoning, and `CLAUDE.md` for our strict enterprise engineering rules.
 
 ---
 
 ## How it's delivered — Hosted Enterprise SaaS
 
-Bot-Shield is deployed primarily as a high-performance, globally available service. This multi-tenant SaaS architecture ensures zero maintenance overhead for customers.
+HakaiShield is deployed primarily as a high-performance, globally available service. This multi-tenant SaaS architecture ensures zero maintenance overhead for customers.
 
 ```text
-Customer points their DNS (CNAME) at bot-shield
+Customer points their DNS (CNAME) at hakaishield
         │
         ▼
   our edge  →  terminates TLS for their domain (cert we issue)
@@ -46,7 +46,7 @@ dead code either; it is what Enterprise ships.
 Internet (every visitor, hostile until scored)
    │
    ▼
-[bot-shield]  ← terminates TLS, sits in front of the client's origin
+[hakaishield]  ← terminates TLS, sits in front of the client's origin
    │
    ├── capture      BUILT   keep the raw TLS handshake  (proxy/capture.go)
    ├── fingerprint  BUILT   handshake → JA4 hash        (proxy/fingerprint.go)
@@ -85,7 +85,7 @@ Internet (every visitor, hostile until scored)
              Token-gated and off unless -evidence-token is set.
 ```
 
-As of the latest stable release, Bot-Shield evaluates traffic continuously. `Guard` (`proxy/guard.go`) scores every request and allows, JS-challenges, or blocks it instantaneously. Our constantly updated heuristics feed the scoring engine.
+As of the latest stable release, HakaiShield evaluates traffic continuously. `Guard` (`proxy/guard.go`) scores every request and allows, JS-challenges, or blocks it instantaneously. Our constantly updated heuristics feed the scoring engine.
 
 ---
 
@@ -96,9 +96,9 @@ own future scoring code. Treat it as an API: changing it breaks both.
 
 | Header | Meaning |
 |---|---|
-| `X-BotShield-JA4` | The connection's JA4 fingerprint, e.g. `t13d1516h2_8daaf6152771_e5627efa2ab1`. |
-| `X-BotShield-JA4: unreadable` | The connection was TLS, but the handshake couldn't be read — see the fragmentation note in `docs/RESEARCH.md`. A normal client never causes this, so it is itself a signal. |
-| *(header absent)* | Not a TLS connection at all — bot-shield is running without `-tls-cert`, so there is nothing to fingerprint. |
+| `X-HakaiShield-JA4` | The connection's JA4 fingerprint, e.g. `t13d1516h2_8daaf6152771_e5627efa2ab1`. |
+| `X-HakaiShield-JA4: unreadable` | The connection was TLS, but the handshake couldn't be read — see the fragmentation note in `docs/RESEARCH.md`. A normal client never causes this, so it is itself a signal. |
+| *(header absent)* | Not a TLS connection at all — hakaishield is running without `-tls-cert`, so there is nothing to fingerprint. |
 | `X-Real-IP` | The real client address, set by us. |
 | `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto` | Set by us from the real connection. |
 
@@ -133,7 +133,7 @@ scoring layer would trust it (`CLAUDE.md` Section 6).
 
 ## How a request flows today — BUILT
 
-1. `cmd/botshield` listens on `-addr`. With `-tls-cert`/`-tls-key` it
+1. `cmd/hakaishield` listens on `-addr`. With `-tls-cert`/`-tls-key` it
    wraps the listener in `proxy.NewCaptureListener`; without them it
    serves plain HTTP and no fingerprinting happens.
 2. `Accept` wraps the raw connection so the handshake bytes are kept,
@@ -201,6 +201,6 @@ fallback, not a slower default.
   message split across TLS records defeats the capture (it reads one
   record). Reported as `unreadable` so it is visible, but it is not
   prevented. See `docs/RESEARCH.md`.
-- **bot-shield must terminate TLS to see anything.** Behind a CDN or
+- **hakaishield must terminate TLS to see anything.** Behind a CDN or
   load balancer that terminates TLS first, there is no handshake to
   capture and no fingerprint — a deployment constraint, not a bug.

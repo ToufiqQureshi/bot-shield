@@ -3,7 +3,7 @@ package config
 import "fmt"
 
 // Mode decides whether core.Guard acts on its scores or only records them.
-// Shadow mode lets a client see what bot-shield would have done to
+// Shadow mode lets a client see what hakaishield would have done to
 // their real traffic without risking a single blocked customer.
 type Mode int
 

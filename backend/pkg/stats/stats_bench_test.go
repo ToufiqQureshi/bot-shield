@@ -3,9 +3,9 @@ package stats_test
 import (
 	"testing"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
-	"github.com/ToufiqQureshi/bot-shield/pkg/stats"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/stats"
 )
 
 // BenchmarkStatsRecord measures atomic counter throughput under parallel load.

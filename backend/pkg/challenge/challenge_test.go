@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/challenge"
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
 )
 
 var (
@@ -24,8 +24,8 @@ var (
 )
 
 const (
-	challengePath = "/__botshield/challenge"
-	verifyPath    = "/__botshield/verify"
+	challengePath = "/__hakaishield/challenge"
+	verifyPath    = "/__hakaishield/verify"
 )
 
 func newChallenge(t *testing.T) *challenge.Challenge {
@@ -168,7 +168,7 @@ func TestChallengeRejectsTamperedToken(t *testing.T) {
 func TestPassedRejectsForgedCookie(t *testing.T) {
 	c := newChallenge(t)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "X-BotShield-Passed", Value: "1700000000.forged"})
+	req.AddCookie(&http.Cookie{Name: "X-HakaiShield-Passed", Value: "1700000000.forged"})
 	if c.Passed(req) {
 		t.Fatal("Passed() must reject a forged cookie")
 	}

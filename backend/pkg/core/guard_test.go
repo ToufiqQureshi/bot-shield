@@ -14,11 +14,11 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/challenge"
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/core"
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
-	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/core"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 // TestGuardChallengesCleanTrafficStrict: under PolicyStrict, a scoreless first request
@@ -50,7 +50,7 @@ func TestGuardChallengesCleanTrafficStrict(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 from the challenge page, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "__botshield") {
+	if !strings.Contains(rec.Body.String(), "__hakaishield") {
 		t.Fatalf("clean unscored traffic under PolicyStrict must be challenged, body=%q", rec.Body.String())
 	}
 }
@@ -94,7 +94,7 @@ func TestGuardHealthzEndpoint(t *testing.T) {
 	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	guard := core.NewGuard(store, c)
 
-	req := httptest.NewRequest("GET", "http://any-host/__botshield/healthz", nil)
+	req := httptest.NewRequest("GET", "http://any-host/__hakaishield/healthz", nil)
 	rec := httptest.NewRecorder()
 
 	guard.ServeHTTP(rec, req)
@@ -191,7 +191,7 @@ func solveChallenge(t *testing.T, c *challenge.Challenge, host string) *http.Coo
 	t.Helper()
 	h := c.Handler()
 
-	getReq := httptest.NewRequest(http.MethodGet, "/__botshield/challenge", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/__hakaishield/challenge", nil)
 	getReq.Host = host
 	getRec := httptest.NewRecorder()
 	h.ServeHTTP(getRec, getReq)
@@ -210,14 +210,14 @@ func solveChallenge(t *testing.T, c *challenge.Challenge, host string) *http.Coo
 	form.Set("token", tm[1])
 	form.Set("answer", answer)
 	form.Set("canvas", "data:image/png;base64,"+strings.Repeat("A", 150))
-	postReq := httptest.NewRequest(http.MethodPost, "/__botshield/verify", strings.NewReader(form.Encode()))
+	postReq := httptest.NewRequest(http.MethodPost, "/__hakaishield/verify", strings.NewReader(form.Encode()))
 	postReq.Host = host
 	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	postRec := httptest.NewRecorder()
 	h.ServeHTTP(postRec, postReq)
 
 	for _, ck := range postRec.Result().Cookies() {
-		if ck.Name == "X-BotShield-Passed" {
+		if ck.Name == "X-HakaiShield-Passed" {
 			return ck
 		}
 	}
@@ -285,7 +285,7 @@ func TestGuardDeceptionMode(t *testing.T) {
 
 	var receivedDecision string
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedDecision = r.Header.Get("X-BotShield-Decision")
+		receivedDecision = r.Header.Get("X-HakaiShield-Decision")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("fake-decoy-data"))
 	}))
@@ -311,6 +311,6 @@ func TestGuardDeceptionMode(t *testing.T) {
 		t.Errorf("expected 200 OK from decoy response, got %d", rec.Code)
 	}
 	if receivedDecision != "deceive" {
-		t.Errorf("expected origin to receive X-BotShield-Decision: deceive, got %q", receivedDecision)
+		t.Errorf("expected origin to receive X-HakaiShield-Decision: deceive, got %q", receivedDecision)
 	}
 }

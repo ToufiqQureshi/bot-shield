@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/challenge"
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
-	"github.com/ToufiqQureshi/bot-shield/pkg/evidence"
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
-	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 // Guard is the first thing in this codebase that actually acts on a
@@ -34,7 +34,7 @@ func NewGuard(store *tenant.Store, challenge *challenge.Challenge) *Guard {
 // for no extra signal (CLAUDE.md Section 8).
 func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Health check endpoint for cloud load balancers and container orchestrators.
-	if r.URL.Path == "/__botshield/healthz" {
+	if r.URL.Path == "/__hakaishield/healthz" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
@@ -139,7 +139,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 	case signals.DecisionDeceive:
 		// ROADMAP Item 11a: Deception mode (decoy response).
-		// Forward the request with X-BotShield-Decision: deceive so the origin
+		// Forward the request with X-HakaiShield-Decision: deceive so the origin
 		// can serve dummy data/poisoned pricing and waste the scraper's resources.
 		ctx := WithDecision(r.Context(), signals.DecisionDeceive.String(), score)
 		tenant.Origin.ServeHTTP(w, r.WithContext(ctx))

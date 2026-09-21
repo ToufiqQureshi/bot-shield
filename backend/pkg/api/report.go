@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
-	"github.com/ToufiqQureshi/bot-shield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 // OffenderStats aggregates traffic data for a single JA4 fingerprint.
@@ -111,7 +111,7 @@ func DashboardTopOffendersHandler(store *tenant.Store) http.Handler {
 		// fingerprints, so it follows the evidence endpoint's rule, not
 		// /stats'. See docs/DECISIONS.md, "Evidence trail: token-gated".
 		if err := json.NewEncoder(w).Encode(list); err != nil {
-			log.Printf("botshield: encoding top-offenders response: %v", err)
+			log.Printf("hakaishield: encoding top-offenders response: %v", err)
 		}
 	})
 }
@@ -142,7 +142,7 @@ func DashboardExportHandler(store *tenant.Store) http.Handler {
 		evidence := tenant.Trail.Recent(0)
 
 		w.Header().Set("Content-Type", "text/csv")
-		w.Header().Set("Content-Disposition", `attachment; filename="bot-shield-traffic.csv"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="hakaishield-traffic.csv"`)
 		w.Header().Set("Cache-Control", "no-store")
 		// No wildcard CORS — same per-visitor-fingerprint reasoning as
 		// top-offenders above.

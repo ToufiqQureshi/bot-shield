@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 )
 
 // realBrowserHeaders is the header set every current real browser sends on

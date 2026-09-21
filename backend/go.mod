@@ -1,4 +1,4 @@
-module github.com/ToufiqQureshi/bot-shield
+module github.com/ToufiqQureshi/hakaishield
 
 go 1.25.0
 

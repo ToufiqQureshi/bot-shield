@@ -6,7 +6,7 @@ every item targets a real evasion technique seen in the field
 scripted HTTP clients). `CLAUDE.md` has the engineering rules every
 item must meet before it counts as done.
 
-## What bot-shield is
+## What hakaishield is
 
 > **The inline layer that decides which automated clients reach a
 > site — and proves why it decided that.**
@@ -22,7 +22,7 @@ obvious alternative framing is wrong and was tried:
 | Reacting to bad IPs | Scoring the **first request**, no prior sighting needed |
 | Software you install | A **CNAME away** — nothing for the customer to run |
 
-**How it's sold (changed 2026-09-16).** bot-shield is a **hosted
+**How it's sold (changed 2026-09-16).** hakaishield is a **hosted
 service we run**. The customer points a CNAME at us and installs
 nothing. Self-hosting still exists, but as a priced-up **Enterprise**
 option for customers who cannot send traffic to our cloud — it is not
@@ -36,7 +36,7 @@ CrowdSec, SafeLine and Coraza are free, and Cloudflare has a free
 tier. "Cheaper bot detection" is answered with "CrowdSec is free,"
 and that argument cannot be won. What *cannot* be answered that way:
 CrowdSec parses **logs** (reactive, needs a prior sighting);
-bot-shield reads the **live ClientHello** and scores the first
+hakaishield reads the **live ClientHello** and scores the first
 request. Full numbers and sources: `docs/RESEARCH.md`, market scan
 2026-09-16.
 
@@ -104,23 +104,23 @@ always the operator.
 ## Done
 
 - [x] Project scaffolding, engineering rules (`CLAUDE.md`), this roadmap.
-- [x] **1. Reverse proxy skeleton** (`proxy/proxy.go`, `cmd/botshield`)
+- [x] **1. Reverse proxy skeleton** (`proxy/proxy.go`, `cmd/hakaishield`)
       — a stdlib `httputil.ReverseProxy` that forwards every request
-      to the configured origin unchanged, plus a `botshield` binary
+      to the configured origin unchanged, plus a `hakaishield` binary
       with graceful shutdown on SIGINT/SIGTERM. Verified with unit
       tests and a real end-to-end run (local origin + proxy + curl).
       Known gap: no timeout/error handling yet for a dead or slow
       origin (proxy just returns Go's default 502) — that belongs
       with item 2 (HTTP fetcher) / retry work, not this skeleton.
 - [x] **2. TLS/JA4 fingerprinting** (`proxy/fingerprint.go`,
-      `proxy/capture.go`) — `cmd/botshield -tls-cert`/`-tls-key` makes
-      bot-shield terminate TLS itself, capture each connection's raw
+      `proxy/capture.go`) — `cmd/hakaishield -tls-cert`/`-tls-key` makes
+      hakaishield terminate TLS itself, capture each connection's raw
       ClientHello, turn it into a JA4 hash, and forward it to the
-      origin as `X-BotShield-JA4`. Tested against known-good JA4
+      origin as `X-HakaiShield-JA4`. Tested against known-good JA4
       vectors, a real end-to-end TLS handshake + proxied request, a
       bad/garbage handshake (must not hang or crash the listener), and
       `-race`. Verified with a real binary run (openssl self-signed
-      cert + curl through botshield). Plain HTTP (no `-tls-cert`) still
+      cert + curl through hakaishield). Plain HTTP (no `-tls-cert`) still
       works unchanged for local dev.
       The listener hands net/http a real `*tls.Conn` and lets it run
       the handshake, so the handshake timeout, error handling, accept
@@ -140,7 +140,7 @@ always the operator.
       current real browser does), or triggers the `JA4Unreadable`
       fragmentation evasion (real browsers never fragment their
       ClientHello). Forwarded to the origin as
-      `X-BotShield-UA-Mismatch: true`, stripped from the incoming
+      `X-HakaiShield-UA-Mismatch: true`, stripped from the incoming
       request first so a visitor can't set it themselves. A UA that
       openly declares itself a crawler (Googlebot etc.) is exempted —
       that's not a lie. Tested: known-good (real Chrome + modern TLS),
@@ -169,13 +169,13 @@ always the operator.
       browser engine, not just an HTTP client). A plain scripted client
       that never runs JS never reaches the verify step at all. On
       success, sets a signed, HttpOnly/Secure/SameSite=Lax cookie
-      (`X-BotShield-Passed`) and redirects back to the exact page the
+      (`X-HakaiShield-Passed`) and redirects back to the exact page the
       visitor originally asked for. Token and cookie are HMAC-signed
       with a random in-process secret, checked with
       `subtle.ConstantTimeCompare`; the redirect target is validated by
       `safeRedirectPath` against open-redirect. Wired into
-      `cmd/botshield` at `/__botshield/challenge` and
-      `/__botshield/verify` — reachable today for manual testing, not
+      `cmd/hakaishield` at `/__hakaishield/challenge` and
+      `/__hakaishield/verify` — reachable today for manual testing, not
       yet triggered automatically for real visitors (that decision
       belongs to item 5's scoring engine, which doesn't exist yet).
       Tested: full round-trip against real end-to-end flow (extract
@@ -198,7 +198,7 @@ always the operator.
           gets challenged yet; that's item 5.
         - The canvas proof is a client-reported string, not a verified
           render — spoofable by a bot that specifically studies
-          bot-shield. Documented, accepted limitation, same class as
+          hakaishield. Documented, accepted limitation, same class as
           item 3's JA4-database gap.
         - Signing secret is generated fresh per process, in memory
           only — a restart or a second instance invalidates
@@ -221,8 +221,8 @@ always the operator.
       Guard scores the request and either forwards it, serves the
       challenge in its place, or returns 403 — never proxying an
       unscored or blocked request to the origin. Wired into
-      `cmd/botshield` as the real handler for `/` (the standalone
-      `/__botshield/challenge` and `/__botshield/verify` routes stay
+      `cmd/hakaishield` as the real handler for `/` (the standalone
+      `/__hakaishield/challenge` and `/__hakaishield/verify` routes stay
       reachable directly for manual testing).
       Tested: known-good browser traffic (no signal fires → allowed),
       known-bad traffic (both signals fire → blocked before reaching
@@ -243,7 +243,7 @@ always the operator.
       suite was back to green. Real compiled binary run: plain HTTP
       (no TLS) passthrough still works unchanged (fail-open — no
       fingerprint to score, so nothing is ever penalized for a
-      connection bot-shield can't examine).
+      connection hakaishield can't examine).
       Known gaps (not deferred without reason — `CLAUDE.md` Section
       17):
         - Thresholds (50/100) and weights (50/50) are a reasoned
@@ -283,7 +283,7 @@ always the operator.
       hasn't decided to build — no existing infra for it, and it's a
       meaningfully large piece: charset handling, compressed
       responses, CSP interaction), the automation check runs inside
-      the JS challenge page (item 4) — the one place bot-shield already
+      the JS challenge page (item 4) — the one place hakaishield already
       serves its own JS to a visitor's browser. The page's JS checks
       `navigator.webdriver` and known Selenium/PhantomJS/Nightmare.js
       globals; `handleVerify` fails the challenge (no passed cookie)
@@ -347,10 +347,10 @@ always the operator.
       specific complaint still means matching on time and fingerprint.
 
 - [x] **18. Shadow mode** (`proxy/mode.go`, `proxy/guard.go`,
-      `proxy/stats.go`, `dashboard/`) — `botshield -mode shadow` scores
+      `proxy/stats.go`, `dashboard/`) — `hakaishield -mode shadow` scores
       and records every request exactly as enforce mode does, then
       forwards all of it to the origin. Nothing is blocked or
-      challenged, so a client can point real traffic at bot-shield with
+      challenged, so a client can point real traffic at hakaishield with
       zero risk to their customers.
       `-mode` accepts only `enforce` (default) or `shadow`; anything
       else refuses to start rather than defaulting quietly.
@@ -384,7 +384,7 @@ always the operator.
       crawlers (`IsVerifiedGoodBot`) with 6-hour caching to ensure zero SEO penalty.
       Upstream proxy connections now use production-tuned pooled `http.Transport`
       (1000 max conns, 200 per host, 90s idle timeout, 15s response header timeout)
-      and custom structured 502/504 error handlers. Added `/__botshield/healthz`
+      and custom structured 502/504 error handlers. Added `/__hakaishield/healthz`
       for load balancer health probes and `BOTSHIELD_CHALLENGE_SECRET` env var for
       multi-instance cluster synchronization. Tested: 100% test coverage across
       unit test suites, fresh build/vet checks, and real-world headful Patchright
@@ -480,9 +480,9 @@ always the operator.
       monitors), and set custom block pages.
 - [ ] **11a. Deception mode (decoy response)** — a fifth decision
       outcome alongside allow/challenge/block: for high-confidence-bot
-      traffic, forward the request with `X-BotShield-Decision: deceive`
+      traffic, forward the request with `X-HakaiShield-Decision: deceive`
       instead of blocking, and let the origin app decide what fake data
-      to return (stale price, dummy inventory). bot-shield only signals
+      to return (stale price, dummy inventory). hakaishield only signals
       the decision — it never generates or owns the fake data itself,
       keeping this a proxy-layer change, not new business logic.
       Competitor gap: see `docs/RESEARCH.md`'s 2026-09-15 scan — an
@@ -533,7 +533,7 @@ always the operator.
       and any auth on the dashboard itself.
 - [x] ~~**12a. Decision evidence trail**~~ — done, see "Done" section.
 - [ ] **13. Real-time scoring API** — for clients who want to call
-      bot-shield from their own app instead of routing all traffic
+      hakaishield from their own app instead of routing all traffic
       through the proxy.
 - [ ] **14. Deployment story** — Docker image + simple config, so a
       client can stand this up in under an hour (this is the actual

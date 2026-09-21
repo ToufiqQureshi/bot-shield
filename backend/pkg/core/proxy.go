@@ -12,13 +12,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 )
 
 type ctxKeyDecision struct{}
 type ctxKeyScore struct{}
 
-// WithDecision attaches the botshield policy decision and score to the request context.
+// WithDecision attaches the hakaishield policy decision and score to the request context.
 func WithDecision(ctx context.Context, decision string, score int) context.Context {
 	ctx = context.WithValue(ctx, ctxKeyDecision{}, decision)
 	return context.WithValue(ctx, ctxKeyScore{}, score)
@@ -43,15 +43,15 @@ func ScoreFromContext(ctx context.Context) int {
 // ja4Header is the header we attach to the forwarded request so the
 // origin (and later, our own scoring code) can see the caller's JA4
 // fingerprint without re-capturing it themselves.
-const ja4Header = "X-BotShield-JA4"
+const ja4Header = "X-HakaiShield-JA4"
 
 // uaMismatchHeader tells the origin the caller's declared browser
 // doesn't match its TLS handshake. Set to "true" only when we caught
 // one — absence means nothing suspicious was found, not "unknown".
-const uaMismatchHeader = "X-BotShield-UA-Mismatch"
-const decisionHeader = "X-BotShield-Decision"
-const scoreHeader = "X-BotShield-Score"
-const signalsHeader = "X-BotShield-Signals"
+const uaMismatchHeader = "X-HakaiShield-UA-Mismatch"
+const decisionHeader = "X-HakaiShield-Decision"
+const scoreHeader = "X-HakaiShield-Score"
+const signalsHeader = "X-HakaiShield-Signals"
 
 // realIPHeader is the client-IP header we set ourselves. nginx, Rails
 // and Laravel apps commonly read this one.
@@ -108,7 +108,7 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusBadGateway)
-			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>502 Bad Gateway</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}h1{font-size:2rem;color:#f85149;}p{color:#8b949e;}</style></head><body><div style="text-align:center;"><h1>502 Bad Gateway</h1><p>Origin server connection failed or timed out.</p><small style="color:#484f58;">Protected by BotShield</small></div></body></html>`))
+			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>502 Bad Gateway</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}h1{font-size:2rem;color:#f85149;}p{color:#8b949e;}</style></head><body><div style="text-align:center;"><h1>502 Bad Gateway</h1><p>Origin server connection failed or timed out.</p><small style="color:#484f58;">Protected by HakaiShield</small></div></body></html>`))
 		},
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(u)
@@ -141,7 +141,7 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 				r.Out.Header.Set(uaMismatchHeader, "true")
 			}
 
-			// Inbound requests cannot forge BotShield decision or score headers.
+			// Inbound requests cannot forge HakaiShield decision or score headers.
 			r.Out.Header.Del(decisionHeader)
 			r.Out.Header.Del(scoreHeader)
 			r.Out.Header.Del(signalsHeader)

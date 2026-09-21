@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ToufiqQureshi/bot-shield/pkg/observability"
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 )
 
 func TestInitEmptyDSNIsNoop(t *testing.T) {
