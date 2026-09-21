@@ -534,13 +534,17 @@ always the operator.
 - [ ] **12. Dashboard** — requests scored, blocked, challenged over
       time; top offending fingerprints/IPs; false-positive report
       button for the client's ops team.
-      **Started, not done:** `dashboard/` (Next.js) shows a live
-      snapshot (total/passed/challenged/blocked) from the real
-      `/api/v1/dashboard/stats` endpoint — see item 5's Done entry and
-      `docs/PROGRESS.md` 2026-09-16. Missing: history over time (the
-      backend only keeps a running total, no time series), top
-      offending fingerprints/IPs, the false-positive report button,
-      and any auth on the dashboard itself.
+      **Started, not done:** `dashboard/` (React + Vite) has account
+      signup/signin (JWT), domain management, mitigation rule
+      CRUD, protection settings, live stats
+      (`/api/v1/dashboard/stats`), top-offending JA4 fingerprints
+      (`/api/v1/dashboard/top-offenders`), and evidence logs
+      (`/api/v1/dashboard/evidence-logs`) — see `docs/PROGRESS.md`
+      2026-09-21 dashboard-wiring entry. Missing: history over time
+      (the backend only keeps a running total, no time series — the
+      dashboard says so rather than faking a chart), the
+      false-positive report button, payments, email (so no
+      verification/reset-password emails), and SIEM export.
 - [x] ~~**12a. Decision evidence trail**~~ — done, see "Done" section.
 - [ ] **13. Real-time scoring API** — for clients who want to call
       hakaishield from their own app instead of routing all traffic

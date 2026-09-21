@@ -1,22 +1,38 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowRight } from 'lucide-react';
+import { signup, signin, ApiError } from '../lib/api';
 
 export default function SignUp() {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     company: '',
   });
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, this would create account
-    console.log('Sign up:', formData);
-    // Redirect to onboarding
-    window.location.href = '/onboarding';
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signup(formData.name, formData.email, formData.password, formData.company || undefined);
+      // The backend doesn't send a verification email (no email
+      // service configured yet), so a fresh account is usable
+      // immediately — sign in right after signup instead of making
+      // the user retype what they just entered.
+      await signin(formData.email, formData.password);
+      navigate('/onboarding');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not create account. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,8 +119,12 @@ export default function SignUp() {
               </label>
             </div>
 
-            <button type="submit" className="group btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2">
-              Create account
+            {error && (
+              <p className="text-sm" style={{ color: 'var(--accent-red, #ef4444)' }}>{error}</p>
+            )}
+
+            <button type="submit" disabled={submitting} className="group btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+              {submitting ? 'Creating account…' : 'Create account'}
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
             </button>
           </form>

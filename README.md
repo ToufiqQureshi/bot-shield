@@ -76,6 +76,8 @@ cd backend && go build -o hakaishield .
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — hakaishield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
 | `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
+| `-db-url` | PostgreSQL URL (e.g. `postgres://user:pass@host:5432/hakaishield`). Required, along with `-jwt-secret`, for the dashboard's account/domains/rules/settings API. |
+| `-jwt-secret` | HMAC secret for dashboard session JWTs. Required, along with `-db-url`, for that same API. Deliberately not auto-generated (unlike the challenge secret) — sessions signed with a random per-restart secret would all invalidate on every restart. |
 
 | Env var | Meaning |
 |---|---|
@@ -123,18 +125,29 @@ its own, so a visitor can't forge them.
 
 `dashboard/` is a React + Vite UI (19 pages: marketing, auth, billing,
 and the operator dashboard itself — evidence logs, mitigation rules,
-protection settings, domains). It is **not yet wired to the backend
-API** — see `dashboard/BACKEND_WIRING_DOCS.md` for what connecting it
-requires. Treat it as a UI scaffold, not a working product surface,
-until that wiring lands.
+protection settings, domains).
+
+**Wired to a real backend**, over `dashboard/src/lib/api.ts`:
+account signup/signin (JWT), domains, mitigation rules, protection
+settings, live dashboard stats, top-offender JA4s, and evidence logs.
+See `docs/DECISIONS.md`'s 2026-09-21 dashboard-wiring entry for exactly
+what's real vs. still a placeholder — in short: payments, email
+(so no verification/reset emails), SIEM export, WAF toggles, and the
+traffic-over-time chart are not built. Those sections say so in the UI
+rather than showing fake data.
 
 ```bash
 cd dashboard
 npm install
-npm run dev        # local dev server
+npm run dev        # local dev server (set VITE_API_BASE_URL — see .env.example)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
+
+The backend side needs `-db-url` and `-jwt-secret` set to serve this
+API at all (see `docs/PROGRESS.md`'s dashboard-wiring entry); without
+both, `hakaishield` still runs as a proxy, just without the account
+API.
 
 ## Documentation
 

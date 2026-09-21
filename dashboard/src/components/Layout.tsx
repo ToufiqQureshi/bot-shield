@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { ChevronDown, Sun, Moon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { ChevronDown } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { listDomains, me, signout, type Domain, type AuthUser } from '../lib/api';
 
 const tabs = [
   { path: '/', label: 'Overview' },
@@ -11,16 +12,54 @@ const tabs = [
   { path: '/domains-siem', label: 'Domains' },
 ];
 
-const tenants = [
-  { id: '1', name: 'Production', env: 'prod' },
-  { id: '2', name: 'Staging', env: 'staging' },
-  { id: '3', name: 'Development', env: 'dev' },
-];
+// Shared with child pages via useOutletContext<LayoutContext>() so
+// Overview/EvidenceLogs/etc. know which protected domain they're
+// looking at without each re-fetching the domain list themselves.
+export interface LayoutContext {
+  domains: Domain[];
+  selectedDomain: Domain | null;
+  domainsLoading: boolean;
+}
 
 export default function Layout() {
   const [tenantOpen, setTenantOpen] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState(tenants[0]);
+  const [userOpen, setUserOpen] = useState(false);
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [domainsLoading, setDomainsLoading] = useState(true);
+  const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    listDomains()
+      .then((d) => {
+        if (cancelled) return;
+        setDomains(d);
+        setSelectedDomain(d[0] ?? null);
+      })
+      .catch(() => {
+        // Domain load failure isn't fatal to the rest of the
+        // dashboard shell — pages that need a domain handle an
+        // empty selection themselves rather than this component
+        // blocking the whole layout on one failed request.
+      })
+      .finally(() => !cancelled && setDomainsLoading(false));
+    me().then((u) => !cancelled && setUser(u)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSignOut = () => {
+    signout();
+    navigate('/sign-in');
+  };
+
+  const initials = user?.name
+    ? user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
+    : '..';
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
@@ -31,28 +70,34 @@ export default function Layout() {
           <div className="flex items-center gap-5">
             <a href="/landing" className="font-bold text-sm tracking-tight" style={{ color: 'var(--text-primary)' }}>hakaishield</a>
 
-            {/* Tenant Switcher */}
+            {/* Domain Switcher */}
             <div className="relative">
               <button
                 onClick={() => setTenantOpen(!tenantOpen)}
                 className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors"
                 style={{ border: '1px solid var(--border-secondary)', color: 'var(--text-secondary)' }}
               >
-                <span>{selectedTenant.name}</span>
+                <span>{domainsLoading ? 'Loading…' : selectedDomain?.domain ?? 'No domains yet'}</span>
                 <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />
               </button>
               {tenantOpen && (
-                <div className="absolute top-full left-0 mt-1 w-48 rounded-lg py-1 z-50" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-secondary)' }}>
-                  {tenants.map(t => (
+                <div className="absolute top-full left-0 mt-1 w-56 rounded-lg py-1 z-50" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-secondary)' }}>
+                  {domains.length === 0 && (
+                    <div className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      No domains added yet.{' '}
+                      <NavLink to="/domains-siem" className="underline" onClick={() => setTenantOpen(false)}>Add one</NavLink>
+                    </div>
+                  )}
+                  {domains.map((d) => (
                     <button
-                      key={t.id}
-                      onClick={() => { setSelectedTenant(t); setTenantOpen(false); }}
+                      key={d.id}
+                      onClick={() => { setSelectedDomain(d); setTenantOpen(false); }}
                       className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center justify-between"
-                      style={{ color: t.id === selectedTenant.id ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                      style={{ color: d.id === selectedDomain?.id ? 'var(--text-primary)' : 'var(--text-secondary)' }}
                     >
-                      <span>{t.name}</span>
-                      <span className={`badge ${t.env === 'prod' ? 'badge-green' : t.env === 'staging' ? 'badge-yellow' : 'badge-gray'}`}>
-                        {t.env}
+                      <span>{d.domain}</span>
+                      <span className={`badge ${d.status === 'active' ? 'badge-green' : 'badge-yellow'}`}>
+                        {d.status}
                       </span>
                     </button>
                   ))}
@@ -83,8 +128,31 @@ export default function Layout() {
             <button onClick={toggleTheme} className="text-xs" style={{ color: 'var(--text-muted)' }}>
               {theme === 'dark' ? 'Light' : 'Dark'}
             </button>
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium text-white" style={{ background: 'var(--text-muted)' }}>
-              JD
+            <div className="relative">
+              <button
+                onClick={() => setUserOpen(!userOpen)}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium text-white"
+                style={{ background: 'var(--text-muted)' }}
+                title={user?.email}
+              >
+                {initials}
+              </button>
+              {userOpen && (
+                <div className="absolute top-full right-0 mt-1 w-44 rounded-lg py-1 z-50" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-secondary)' }}>
+                  {user && (
+                    <div className="px-3 py-2 text-xs truncate" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-secondary)' }}>
+                      {user.email}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full text-left px-3 py-1.5 text-xs transition-colors"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -106,7 +174,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-4 py-6">
-        <Outlet />
+        <Outlet context={{ domains, selectedDomain, domainsLoading } satisfies LayoutContext} />
       </main>
     </div>
   );

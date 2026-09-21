@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { completeOnboarding, ApiError } from '../lib/api';
 
 export default function Onboarding() {
   const { theme } = useTheme();
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     useCase: '',
@@ -12,13 +15,25 @@ export default function Onboarding() {
     botProblem: '',
     teamSize: '',
   });
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, save onboarding data
-    console.log('Onboarding complete:', formData);
-    // Redirect to dashboard
-    window.location.href = '/';
+    setError(null);
+    setSubmitting(true);
+    try {
+      // The questionnaire answers (useCase, monthlyVisitors, teamSize,
+      // botProblem) aren't persisted server-side yet — no table for
+      // them exists (see docs/PROGRESS.md). Only the completion flag
+      // is saved, which is what actually gates the redirect below.
+      await completeOnboarding();
+      navigate('/domains-siem');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save onboarding. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -214,13 +229,17 @@ export default function Onboarding() {
                   ))}
                 </div>
 
+                {error && (
+                  <p className="text-sm mt-4" style={{ color: 'var(--accent-red, #ef4444)' }}>{error}</p>
+                )}
+
                 <div className="mt-8 flex justify-between">
                   <button type="button" onClick={prevStep} className="btn-secondary px-6 py-2.5 text-sm flex items-center gap-2">
                     <ArrowLeft size={14} />
                     Back
                   </button>
-                  <button type="submit" className="group btn-primary px-6 py-2.5 text-sm flex items-center gap-2">
-                    Complete setup
+                  <button type="submit" disabled={submitting} className="group btn-primary px-6 py-2.5 text-sm flex items-center gap-2 disabled:opacity-60">
+                    {submitting ? 'Saving…' : 'Complete setup'}
                     <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                   </button>
                 </div>

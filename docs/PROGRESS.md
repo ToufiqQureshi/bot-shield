@@ -2893,3 +2893,162 @@ Known gaps / follow-up:
     customer until that wiring is done — see `CLAUDE.md` Section 27.
   - No test suite exists for the dashboard (no `test` script in
     `package.json`).
+
+## 2026-09-21 — Wired the dashboard to a real account/domains/rules/settings API
+
+Changed:
+  - New Go packages: `backend/pkg/auth` (JWT issue/verify, HMAC,
+    `WithValidMethods` + explicit HMAC-type check against
+    algorithm-confusion), `backend/pkg/account` (users table, bcrypt
+    signup/signin, validation ordered before the database check so
+    input errors don't need a live DB to test), `backend/pkg/rules`
+    (managed-rule catalogue + custom rule CRUD, conditions stored as
+    JSON), `backend/pkg/settings` (protection-threshold CRUD with a
+    block>challenge invariant).
+  - New `backend/pkg/api` handlers: `auth.go`, `domains.go`,
+    `rules.go`, `settings.go`, `dashboard_extra.go`
+    (top-offenders + evidence-logs, both derived from the existing
+    in-memory `evidence.Trail`, no new store), `middleware.go`
+    (`RequireAuth`), `response.go` (shared `{success,data|message|error}`
+    envelope matching `dashboard/BACKEND_WIRING_DOCS.md`).
+  - `backend/pkg/db/db.go`: extended the `tenants` table
+    (`owner_user_id`, `name`, `status`, `created_at`) instead of a new
+    domains table, added `users`, `mitigation_rules`,
+    `protection_settings` tables, `ListDomains`/`CreateDomain`, and
+    `GetTenantByID` (`GetTenant`'s counterpart for ID-based lookups).
+  - `backend/main.go`: new `-jwt-secret` flag; the whole
+    account/domains/rules/settings API is only registered when both
+    `-db-url` and `-jwt-secret` are set (fails loudly/logs a clear
+    disabled-reason otherwise, rather than minting sessions no restart
+    can verify). Also fixed a missed rename from the earlier
+    bot-shield→HakaiShield pass: `BOTSHIELD_CHALLENGE_SECRET` (all-caps,
+    not matched by the case-sensitive sed patterns used then) →
+    `HAKAISHIELD_CHALLENGE_SECRET`.
+  - `dashboard/src/lib/api.ts`: the one fetch client every page uses —
+    envelope unwrapping, JWT storage (`localStorage`, cleared on any
+    401), typed methods for every endpoint above.
+  - Wired pages: `SignIn`, `SignUp` (signs up then immediately signs
+    in, since there's no email verification step to gate on),
+    `Onboarding` (saves only the completion flag — the questionnaire
+    answers aren't persisted, no table for them exists),
+    `DomainsSiem` (domains real; SIEM section replaced with an
+    explicit "not built" notice instead of fake toggle state),
+    `MitigationRules` (managed rules shown read-only with a lock icon;
+    custom rules real CRUD; exceptions section replaced with a "not
+    built" notice), `ProtectionSettings` (the four real fields get a
+    Save button wired to the API; WAF/tarpit/honeypot-endpoint-list
+    sections were already honestly marked "Coming Soon" and were left
+    that way), `Overview` (real stats + top-offenders; traffic chart
+    replaced with an explicit "not available yet" notice), `EvidenceLogs`
+    (rewritten around the fields that actually exist in
+    `evidence.Evidence` — timestamp/JA4/signals/score/decision/enforced
+    — dropping the mocked IP/geo/method/path/headers/TLS-detail columns
+    that have no real backing data).
+  - New `Layout` domain switcher reads real domains
+    (`GET /domains`) instead of three hardcoded fake tenants, and a
+    working sign-out replaces the static "JD" avatar. Selected domain
+    is threaded to child pages via `useOutletContext`
+    (`components/Layout.tsx`'s new `LayoutContext` type).
+  - `components/RequireAuth.tsx`: gates the dashboard routes in
+    `App.tsx` behind a signed-in session.
+  - `dashboard/src/vite-env.d.ts` added (`/// <reference types="vite/client" />`)
+    — `import.meta.env` didn't typecheck without it.
+  - `dashboard/package.json`'s `name` was already renamed in the
+    previous session's entry; `.env.example` added for
+    `VITE_API_BASE_URL`; `.gitignore` gained `.env`/`.env.local`.
+
+Two real bugs found and fixed while verifying this end-to-end (see
+`docs/DECISIONS.md`'s matching entry for the full "why"):
+  1. `tenant.Store.GetByID` had no database fallback (unlike
+     `GetByHost`), so a domain added via the dashboard 404'd as
+     "tenant not found" from `/dashboard/stats` until the *proxy*
+     happened to see a real request for that host first. Fixed by
+     giving `GetByID` the same lazy-DB-fetch path, via a shared
+     `addFromDBRow` helper both now call.
+  2. The origin format `BACKEND_WIRING_DOCS.md` itself documents
+     (`"10.0.1.50:8080"`, no URL scheme) fails `core.NewOriginProxy`'s
+     `url.Parse` check, so submitting exactly the documented example
+     silently stored an unusable origin. Fixed with `normalizeOrigin`
+     in `pkg/api/domains.go` (accepts either form, prepends `http://`
+     when no scheme is present).
+  3. `evidence_token` is nullable and never set for a
+     dashboard-created domain; `pgx` can't scan SQL `NULL` into
+     `*string`. Fixed with `COALESCE(evidence_token, '')` in both
+     `db.GetTenant` and the new `db.GetTenantByID`.
+
+Why: owner instruction to actually wire the frontend to the backend
+rather than leave it a mock-data scaffold ("har ek cheez kaam karni
+chahiye acche se"). Scoped to what's buildable without third-party
+credentials this session doesn't have (Stripe, an email service) —
+see `docs/DECISIONS.md` for the full scope reasoning per feature.
+
+Tested how:
+  - `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...` —
+    all packages pass, including new tests for `pkg/auth`, `pkg/account`,
+    `pkg/rules`, `pkg/settings`, and `pkg/api` (`RequireAuth`,
+    `normalizeOrigin`).
+  - Mutation checks, all caught as they should and passed again once
+    restored:
+      * JWT: swapped in a hardcoded wrong signing key inside `Verify`'s
+        keyfunc → `TestIssueVerify_RoundTrip` failed as expected.
+      * Settings: replaced the `block > challenge` check with
+        `if false` → `TestUpsert_RejectsBlockNotGreaterThanChallenge`
+        failed as expected.
+      * `normalizeOrigin`: replaced the `strings.Contains(origin, "://")`
+        branch condition with `if false` → all four URL-form test
+        cases failed as expected.
+  - Full real end-to-end run against Docker Postgres 15 + Redis (not
+    mocked): signup, duplicate-email rejection (409), weak-password
+    rejection (400), signin, wrong-password rejection (401), `/auth/me`
+    with and without a token, onboarding-complete, add/list a domain,
+    duplicate-domain rejection (409), list/create/toggle a custom
+    mitigation rule, get default / reject-invalid (400,
+    block<=challenge) / update protection settings, and — after fixing
+    the three bugs above — a domain added via the API immediately
+    returning real (zeroed but present) stats and an empty-but-correct
+    top-offenders list from `/dashboard/stats` and
+    `/dashboard/top-offenders`, with no proxy restart or live traffic
+    required.
+  - Frontend: `npm run typecheck` (`tsc --noEmit`) and `npm run build`
+    (`vite build`) clean after every page's changes — final bundle
+    327 KB / 83 KB gzipped, actually *smaller* than the mock-data
+    version (728 KB) because dropping the fake traffic chart also
+    dropped `recharts` from the bundle.
+
+Known gaps / follow-up:
+  - **Payments (Stripe) and email (SendGrid/SES) are not built.**
+    Signup has no verification step and there is no forgot/reset
+    password flow — both need real third-party credentials nobody has
+    provided. `Subscription`/`Payment` pages remain unwired.
+  - **Custom mitigation rules are stored but not enforced.** Nothing
+    in `pkg/core`/`pkg/signals` reads `mitigation_rules` yet — a rule
+    created in the dashboard has no effect on live traffic. This needs
+    a design decision (how does an arbitrary condition compose with
+    the existing signal-based score?) before it's wired in, not a
+    blind wire-through.
+  - **Protection settings are stored but not enforced** — same
+    reasoning: `pkg/signals/score.go`'s thresholds are still fixed in
+    code.
+  - **SIEM integrations and WAF toggles are unbuilt** — the dashboard
+    says so explicitly instead of showing fake "Connected"/toggle
+    state.
+  - **No traffic-over-time chart** — `stats.Stats` is a running total,
+    not a time series; the dashboard says so instead of faking a
+    chart. Building one needs a bucketed store and a retention policy,
+    which is real scope, not a quick add.
+  - **A newly added domain doesn't take live traffic immediately** —
+    enforcement starts once `tenant.Store` loads the row (now possible
+    via either a dashboard read or a real proxied request, after this
+    session's `GetByID` fix), but there's still no "start enforcing on
+    this host right now" push on domain creation.
+  - **`GET /dashboard/top-offenders` and `/dashboard/evidence-logs`
+    implicitly scope to the caller's first-created domain** — no
+    `?domain=` parameter yet, so a multi-domain account can't pick
+    which one it's looking at from the dashboard API (the frontend
+    doesn't have a per-domain selector wired to these two calls yet
+    either, though `Layout`'s domain switcher exists and could drive
+    one).
+  - The pre-existing 2 moderate `npm audit` CVEs
+    (react-router-dom, uuid) from the previous session's entry are
+    still open — unrelated to this session's changes, not
+    re-attempted.

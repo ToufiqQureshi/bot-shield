@@ -6,12 +6,12 @@
 - Unclassified: 6 file(s) not represented in the graph (top: (none) 5, .css 1)
 
 ## Summary
-- 629 nodes · 1456 edges · 33 communities (27 shown, 6 thin omitted)
+- 691 nodes · 1508 edges · 42 communities (32 shown, 10 thin omitted)
 - Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 101 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `910c315b`
+- Built from commit: `e1835f47`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -21,13 +21,13 @@
 - proxy.go
 - NewTrail
 - go_pkg_testing
-- newTestRedis
+- testing.T
 - CLAUDE.md
 - Store
 - honeypot_test.go
 - challenge.go
-- score_test.go
-- testing.T
+- What You Must Do When Invoked
+- challenge_test.go
 - package.json
 - dependencies
 - compilerOptions
@@ -48,6 +48,15 @@
 - 11. Testing Is Part of Implementation
 - 20. Standard Library First
 - 21. Existing Code and Dead Code
+- graphify reference: extra exports and benchmark
+- graphify reference: query, path, explain
+- graphify reference: add a URL and watch a folder
+- graphify reference: commit hook and native CLAUDE.md integration
+- graphify reference: incremental update and cluster-only
+- graphify reference: GitHub clone and cross-repo merge
+- graphify reference: transcribe video and audio
+- .claude/CLAUDE.md
+- extraction-spec.md
 
 ## God Nodes (most connected - your core abstractions)
 1. `useTheme()` - 31 edges
@@ -58,25 +67,25 @@
 6. `NewChallenge()` - 18 edges
 7. `lucide-react` - 17 edges
 8. `Store` - 17 edges
-9. `newTestRedis()` - 15 edges
-10. `main()` - 15 edges
+9. `main()` - 15 edges
+10. `newTestRedis()` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `DashboardTopOffendersHandler()` --calls--> `authorized()`  [INFERRED]
-  backend/pkg/api/report.go → backend/pkg/api/handlers.go
-- `TestHoneypotScoresBelowBlockOnItsOwn()` --calls--> `Analyze()`  [INFERRED]
-  backend/pkg/signals/honeypot_test.go → backend/pkg/signals/score.go
-- `TestHoneypotScoresBelowBlockOnItsOwn()` --calls--> `Score()`  [INFERRED]
-  backend/pkg/signals/honeypot_test.go → backend/pkg/signals/score.go
-- `deceiveResp()` --calls--> `WithDecision()`  [INFERRED]
-  backend/pkg/core/proxy_test.go → backend/pkg/core/proxy.go
+- `NewOriginProxy()` --calls--> `JA4FromContext()`  [INFERRED]
+  backend/pkg/core/proxy.go → backend/pkg/core/capture.go
 - `TestNewOriginProxy()` --calls--> `NewOriginProxy()`  [INFERRED]
   backend/pkg/core/proxy_test.go → backend/pkg/core/proxy.go
+- `TestNewOriginProxy_InvalidTarget()` --calls--> `NewOriginProxy()`  [INFERRED]
+  backend/pkg/core/proxy_test.go → backend/pkg/core/proxy.go
+- `deceiveResp()` --calls--> `WithDecision()`  [INFERRED]
+  backend/pkg/core/proxy_test.go → backend/pkg/core/proxy.go
+- `TestHoneypotScoresBelowBlockOnItsOwn()` --calls--> `Analyze()`  [INFERRED]
+  backend/pkg/signals/honeypot_test.go → backend/pkg/signals/score.go
 
 ## Import Cycles
 - None detected.
 
-## Communities (33 total, 6 thin omitted)
+## Communities (42 total, 10 thin omitted)
 
 ### Community 0 - "App.tsx"
 Cohesion: 0.06
@@ -84,23 +93,23 @@ Nodes (58): App(), Layout(), tabs, tenants, Theme, ThemeContext, ThemeContextTyp
 
 ### Community 1 - "guard_test.go"
 Cohesion: 0.06
-Nodes (74): OffenderStats, statsResponse, main(), DashboardEvidenceHandler(), DashboardStatsHandler(), TestDashboardEvidenceHandler(), TestDashboardStatsHandler(), DashboardTopOffendersHandler() (+66 more)
+Nodes (76): OffenderStats, statsResponse, main(), authorized(), DashboardEvidenceHandler(), DashboardStatsHandler(), TestDashboardEvidenceHandler(), TestDashboardStatsHandler() (+68 more)
 
 ### Community 2 - "proxy.go"
-Cohesion: 0.11
-Nodes (26): deceiveResponse(), DecisionFromContext(), readBody(), ScoreFromContext(), deceiveResp(), TestDeceiveResponseDoesNotBufferLargeBodies(), TestDeceiveResponseIgnoresUndeceivedTraffic(), TestDeceiveResponseInjectsIntoHTML() (+18 more)
+Cohesion: 0.09
+Nodes (32): deceiveResponse(), DecisionFromContext(), readBody(), deceiveResp(), TestDeceiveResponseDoesNotBufferLargeBodies(), TestDeceiveResponseIgnoresUndeceivedTraffic(), TestDeceiveResponseInjectsIntoHTML(), TestDeceiveResponseLeavesNonHTMLUntouched() (+24 more)
 
 ### Community 3 - "NewTrail"
-Cohesion: 0.08
-Nodes (24): TestNewCaptureListener(), BenchmarkTrailRecent(), BenchmarkTrailRecord(), BenchmarkTrailRecordAndRead(), Trail, NewTrail(), newTrail(), TestTrailConcurrentRecords() (+16 more)
+Cohesion: 0.07
+Nodes (33): BenchmarkTrailRecent(), BenchmarkTrailRecord(), BenchmarkTrailRecordAndRead(), Trail, NewTrail(), newTrail(), TestTrailConcurrentRecords(), TestTrailLimit() (+25 more)
 
 ### Community 4 - "go_pkg_testing"
 Cohesion: 0.06
-Nodes (48): ConnContext(), JA4FromContext(), NewCaptureListener(), TestJA4FromContext(), ParseJA4(), TestJA4FingerprintRejectsGarbage(), TestParseJA4(), IsGoodBotClaim() (+40 more)
+Nodes (46): ConnContext(), JA4FromContext(), NewCaptureListener(), TestJA4FromContext(), TestNewCaptureListener(), ScoreFromContext(), GetTenant(), Init() (+38 more)
 
-### Community 5 - "newTestRedis"
-Cohesion: 0.13
-Nodes (27): CrawlPatternSuspected(), isStaticAsset(), TestCrawlPatternExemptsAssets(), TestCrawlPatternExemptsNonBrowser(), TestCrawlPatternFiresOnManyDistinctPaths(), TestCrawlPatternIsolatedPerIP(), TestCrawlPatternNoRedisFailsOpen(), TestCrawlPatternRepeatedSamePathDoesNotFire() (+19 more)
+### Community 5 - "testing.T"
+Cohesion: 0.08
+Nodes (56): HeaderAnomaly(), TestHeaderAnomalyCaseInsensitiveHeaderLookup(), TestHeaderAnomalyCrawlerExempt(), TestHeaderAnomalyEmptyUA(), TestHeaderAnomalyHonestScriptingTool(), TestHeaderAnomalyMissingFetchMetadataFires(), TestHeaderAnomalyRealBrowserNavigation(), TestHeaderAnomalyScriptedClientFakingBrowser() (+48 more)
 
 ### Community 6 - "CLAUDE.md"
 Cohesion: 0.08
@@ -111,20 +120,20 @@ Cohesion: 0.09
 Nodes (20): Mode, PolicyMode, ParseMode(), ParsePolicy(), TestModeString(), TestParseMode(), Stats, newStats() (+12 more)
 
 ### Community 8 - "honeypot_test.go"
-Cohesion: 0.29
-Nodes (15): honeypotKey(), HoneypotTripped(), RecordHoneypotTrip(), sweepHoneypotLocked(), BenchmarkHoneypotTrippedEmpty(), resetHoneypot(), TestHoneypotConcurrentAccess(), TestHoneypotIgnoresIncompleteIdentity() (+7 more)
+Cohesion: 0.27
+Nodes (16): honeypotKey(), HoneypotTripped(), RecordHoneypotTrip(), sweepHoneypotLocked(), BenchmarkHoneypotTrippedEmpty(), resetHoneypot(), TestHoneypotConcurrentAccess(), TestHoneypotIgnoresIncompleteIdentity() (+8 more)
 
 ### Community 9 - "challenge.go"
 Cohesion: 0.15
-Nodes (15): authorized(), DashboardExportHandler(), Challenge, randomNonce(), safeRedirectPath(), validCanvasProof(), validPoW(), challengeData (+7 more)
+Nodes (14): Challenge, randomNonce(), safeRedirectPath(), validCanvasProof(), validPoW(), WithDecision(), challengeData, go_pkg_crypto_hmac (+6 more)
 
-### Community 10 - "score_test.go"
-Cohesion: 0.14
-Nodes (23): WithDecision(), Analyze(), Decide(), DecideWithPolicy(), Decision, Score(), facts(), realBrowserHeaders() (+15 more)
+### Community 10 - "What You Must Do When Invoked"
+Cohesion: 0.08
+Nodes (24): For /graphify add and --watch, For /graphify query, For the commit hook and native CLAUDE.md integration, For --update and --cluster-only, /graphify, Honesty Rules, Interpreter guard for subcommands, Part A - Structural extraction for code files (+16 more)
 
-### Community 11 - "testing.T"
-Cohesion: 0.12
-Nodes (39): fetchPage(), newChallenge(), postVerify(), solvePoW(), TestChallengeHandlerMethodNotAllowed(), TestChallengePageDetectsAdvancedAutomation(), TestChallengePageObfuscatesAutomationTells(), TestChallengeRealFlowPasses() (+31 more)
+### Community 11 - "challenge_test.go"
+Cohesion: 0.29
+Nodes (18): fetchPage(), newChallenge(), postVerify(), solvePoW(), TestChallengeHandlerMethodNotAllowed(), TestChallengePageDetectsAdvancedAutomation(), TestChallengePageObfuscatesAutomationTells(), TestChallengeRealFlowPasses() (+10 more)
 
 ### Community 12 - "package.json"
 Cohesion: 0.11
@@ -186,25 +195,45 @@ Nodes (3): 3. Documentation Is Project Memory, Document responsibilities, Mandat
 Cohesion: 0.67
 Nodes (3): 8. Go Standards, Files, Naming
 
+### Community 33 - "graphify reference: extra exports and benchmark"
+Cohesion: 0.22
+Nodes (8): graphify reference: extra exports and benchmark, Step 6b - Wiki (only if --wiki flag), Step 7 - Neo4j export (only if --neo4j or --neo4j-push flag), Step 7a - FalkorDB export (only if --falkordb or --falkordb-push flag), Step 7b - SVG export (only if --svg flag), Step 7c - GraphML export (only if --graphml flag), Step 7d - MCP server (only if --mcp flag), Step 8 - Token reduction benchmark (only if total_words > 5000)
+
+### Community 34 - "graphify reference: query, path, explain"
+Cohesion: 0.33
+Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
+
+### Community 35 - "graphify reference: add a URL and watch a folder"
+Cohesion: 0.50
+Nodes (3): For /graphify add, For --watch, graphify reference: add a URL and watch a folder
+
+### Community 36 - "graphify reference: commit hook and native CLAUDE.md integration"
+Cohesion: 0.50
+Nodes (3): For git commit hook, For native CLAUDE.md integration, graphify reference: commit hook and native CLAUDE.md integration
+
+### Community 37 - "graphify reference: incremental update and cluster-only"
+Cohesion: 0.50
+Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
+
 ## Knowledge Gaps
-- **129 isolated node(s):** `CLAUDE.md — hakaishield Engineering Operating System`, `Product principle`, `Product positioning`, `1. Autonomous Engineering Rule`, `Act without asking when:` (+124 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 175 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **171 isolated node(s):** `graphify`, `Usage`, `What graphify is for`, `Step 0 - GitHub repos and multi-path merge (only if a URL or several paths)`, `Step 1 - Ensure graphify is installed` (+166 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 227 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `mockConn` connect `NewTrail` to `go_pkg_testing`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
-- **Why does `Challenge` connect `challenge.go` to `guard_test.go`, `testing.T`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
-- **Why does `Stats` connect `Store` to `guard_test.go`, `score_test.go`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+- **Why does `Challenge` connect `challenge.go` to `guard_test.go`, `challenge_test.go`?**
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+- **Why does `Stats` connect `Store` to `guard_test.go`?**
+  _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **Are the 3 inferred relationships involving `NewOriginProxy()` (e.g. with `JA4FromContext()` and `TestNewOriginProxy()`) actually correct?**
   _`NewOriginProxy()` has 3 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `CLAUDE.md — hakaishield Engineering Operating System`, `Product principle`, `Product positioning` to the rest of the system?**
-  _129 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `graphify`, `Usage`, `What graphify is for` to the rest of the system?**
+  _171 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `App.tsx` be split into smaller, more focused modules?**
   _Cohesion score 0.05818395533352924 - nodes in this community are weakly interconnected._
 - **Should `guard_test.go` be split into smaller, more focused modules?**
-  _Cohesion score 0.06265389876880985 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06138975966562173 - nodes in this community are weakly interconnected._

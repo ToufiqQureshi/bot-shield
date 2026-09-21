@@ -14,12 +14,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ToufiqQureshi/hakaishield/pkg/account"
 	"github.com/ToufiqQureshi/hakaishield/pkg/api"
+	"github.com/ToufiqQureshi/hakaishield/pkg/auth"
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 	"github.com/ToufiqQureshi/hakaishield/pkg/core"
 	"github.com/ToufiqQureshi/hakaishield/pkg/db"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
+	"github.com/ToufiqQureshi/hakaishield/pkg/rules"
+	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 
@@ -40,6 +44,7 @@ func main() {
 	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-HakaiShield-Decision: deceive instead of 403)")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", "", "PostgreSQL URL for Supabase integration (e.g. postgres://user:pass@host:5432/db)")
+	jwtSecret := flag.String("jwt-secret", "", "HMAC secret for dashboard session JWTs; required to enable the account/domains/rules/settings API (unset disables it)")
 	flag.Parse()
 
 	mode, err := config.ParseMode(*modeFlag)
@@ -66,7 +71,7 @@ func main() {
 
 	secretStr := *challengeSecret
 	if secretStr == "" {
-		secretStr = os.Getenv("BOTSHIELD_CHALLENGE_SECRET")
+		secretStr = os.Getenv("HAKAISHIELD_CHALLENGE_SECRET")
 	}
 	secret := []byte(secretStr)
 	if len(secret) == 0 {
@@ -136,10 +141,39 @@ func main() {
 
 	if *evidenceToken != "" {
 		mux.Handle("/api/v1/dashboard/evidence", api.DashboardEvidenceHandler(store))
-		// mux.Handle("/api/v1/dashboard/top-offenders", api.DashboardTopOffendersHandler(store))
-		// mux.Handle("/api/v1/dashboard/export", api.DashboardExportHandler(store))
 	} else {
 		log.Print("hakaishield: -evidence-token not set, evidence endpoint disabled")
+	}
+
+	// The account/domains/rules/settings dashboard API needs both a
+	// database (it's the only durable store any of it has) and a JWT
+	// secret (without one, sessions can't be signed at all). Requiring
+	// both explicitly rather than falling back to a random secret means
+	// a misconfigured deployment fails loudly at startup instead of
+	// silently minting sessions no restart can verify.
+	if *dbURL != "" && *jwtSecret != "" {
+		issuer, err := auth.NewIssuer([]byte(*jwtSecret))
+		if err != nil {
+			log.Fatalf("hakaishield: %v", err)
+		}
+		accountStore := account.NewStore(db.DB)
+		rulesStore := rules.NewStore(db.DB)
+		settingsStore := settings.NewStore(db.DB)
+
+		mux.HandleFunc("POST /api/v1/auth/signup", api.SignupHandler(accountStore))
+		mux.HandleFunc("POST /api/v1/auth/signin", api.SigninHandler(accountStore, issuer))
+		mux.HandleFunc("GET /api/v1/auth/me", api.MeHandler(accountStore, issuer))
+		mux.HandleFunc("POST /api/v1/onboarding/complete", api.OnboardingCompleteHandler(accountStore, issuer))
+		mux.HandleFunc("/api/v1/domains", api.DomainsHandler(issuer))
+		mux.HandleFunc("GET /api/v1/rules", api.RulesListHandler(rulesStore, issuer))
+		mux.HandleFunc("POST /api/v1/rules/custom", api.CreateRuleHandler(rulesStore, issuer))
+		mux.HandleFunc("PUT /api/v1/rules/{id}/toggle", api.ToggleRuleHandler(rulesStore, issuer))
+		mux.HandleFunc("/api/v1/settings/protection", api.ProtectionSettingsHandler(settingsStore, issuer))
+		mux.HandleFunc("GET /api/v1/dashboard/top-offenders", api.TopOffendersHandler(store, issuer))
+		mux.HandleFunc("GET /api/v1/dashboard/evidence-logs", api.EvidenceLogsHandler(store, issuer))
+		log.Print("hakaishield: account/domains/rules/settings API enabled")
+	} else {
+		log.Print("hakaishield: -db-url and/or -jwt-secret not set, account/domains/rules/settings API disabled")
 	}
 
 	srv := &http.Server{

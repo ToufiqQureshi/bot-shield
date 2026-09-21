@@ -105,6 +105,15 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 		return nil, ErrTenantNotFound
 	}
 
+	return s.addFromDBRow(id, host, target, modeStr, evidenceToken)
+}
+
+// addFromDBRow turns one tenants-table row into a live Tenant and
+// registers it under both lookup maps, so a dashboard request that
+// found the row by ID and a proxy request that finds it later by host
+// share the same in-memory Stats/Trail rather than each starting a
+// fresh one.
+func (s *Store) addFromDBRow(id, host, target, modeStr, evidenceToken string) (*Tenant, error) {
 	// A stored mode we can't parse must never silently decide behaviour.
 	// Treat an unknown value as enforce (fail closed) and say so, rather
 	// than letting Go's zero value quietly pick a mode for a live tenant.
@@ -130,17 +139,31 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.byHost[host], nil
+	return s.byID[id], nil
 }
 
-// GetByID looks up a tenant by their internal ID (for dashboard API use).
+// GetByID looks up a tenant by their internal ID (for dashboard API
+// use, where the caller knows a domain's ID from the tenants table but
+// has no incoming request/Host header to look it up by).
 func (s *Store) GetByID(id string) (*Tenant, error) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	t, ok := s.byID[id]
-	if !ok {
+	s.mu.RUnlock()
+	if ok {
+		return t, nil
+	}
+
+	if s.ProxyFactory == nil {
 		return nil, ErrTenantNotFound
 	}
-	return t, nil
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	host, target, modeStr, evidenceToken, err := db.GetTenantByID(ctx, id)
+	if err != nil {
+		return nil, ErrTenantNotFound
+	}
+
+	return s.addFromDBRow(id, host, target, modeStr, evidenceToken)
 }

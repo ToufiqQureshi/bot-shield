@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import Layout from './components/Layout';
+import RequireAuth from './components/RequireAuth';
 import Overview from './pages/Overview';
 import EvidenceLogs from './pages/EvidenceLogs';
 import MitigationRules from './pages/MitigationRules';
@@ -47,13 +48,15 @@ function App() {
           <Route path="/subscription" element={<Subscription />} />
           <Route path="/payment" element={<Payment />} />
 
-          {/* Dashboard */}
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Overview />} />
-            <Route path="evidence-logs" element={<EvidenceLogs />} />
-            <Route path="mitigation-rules" element={<MitigationRules />} />
-            <Route path="protection-settings" element={<ProtectionSettings />} />
-            <Route path="domains-siem" element={<DomainsSiem />} />
+          {/* Dashboard (requires a signed-in session) */}
+          <Route element={<RequireAuth />}>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Overview />} />
+              <Route path="evidence-logs" element={<EvidenceLogs />} />
+              <Route path="mitigation-rules" element={<MitigationRules />} />
+              <Route path="protection-settings" element={<ProtectionSettings />} />
+              <Route path="domains-siem" element={<DomainsSiem />} />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>

@@ -1,20 +1,31 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
-import { ArrowRight, Sun, Moon } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { signin, ApiError } from '../lib/api';
 
 export default function SignIn() {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, this would authenticate
-    console.log('Sign in:', formData);
-    // Redirect to dashboard
-    window.location.href = '/';
+    setError(null);
+    setSubmitting(true);
+    try {
+      const user = await signin(formData.email, formData.password);
+      navigate(user.onboardingComplete ? '/' : '/onboarding');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Sign in failed. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,8 +82,12 @@ export default function SignIn() {
               <label htmlFor="remember" className="text-sm" style={{ color: 'var(--text-secondary)' }}>Remember me</label>
             </div>
 
-            <button type="submit" className="group btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2">
-              Sign in
+            {error && (
+              <p className="text-sm" style={{ color: 'var(--accent-red, #ef4444)' }}>{error}</p>
+            )}
+
+            <button type="submit" disabled={submitting} className="group btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+              {submitting ? 'Signing in…' : 'Sign in'}
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
             </button>
           </form>

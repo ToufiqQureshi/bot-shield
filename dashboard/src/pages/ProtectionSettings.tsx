@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Info, Shield, Zap, Ghost, Lock } from 'lucide-react';
+import { getProtectionSettings, updateProtectionSettings, ApiError } from '../lib/api';
 
 export default function ProtectionSettings() {
   const [blockThreshold, setBlockThreshold] = useState(90);
@@ -12,12 +13,52 @@ export default function ProtectionSettings() {
   const [rateLimitEnabled, setRateLimitEnabled] = useState(true);
   const [rateLimitRpm, setRateLimitRpm] = useState(100);
 
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    getProtectionSettings()
+      .then((s) => {
+        setBlockThreshold(s.blockThreshold);
+        setChallengeThreshold(s.challengeThreshold);
+        setChallengeType(s.challengeType === 'captcha' ? 'captcha' : 'pow');
+        setHoneypotEnabled(s.honeypotEnabled);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load settings.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setError(null);
+    setSaved(false);
+    setSaving(true);
+    try {
+      await updateProtectionSettings({ blockThreshold, challengeThreshold, challengeType, honeypotEnabled });
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in">
       {/* Header */}
-      <div>
-        <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Protection Settings</h1>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Configure security modules and edge behavior</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Protection Settings</h1>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Configure security modules and edge behavior</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {saved && <span className="text-xs text-green-400">Saved</span>}
+          {error && <span className="text-xs" style={{ color: 'var(--accent-red, #ef4444)' }}>{error}</span>}
+          <button onClick={handleSave} disabled={loading || saving} className="btn-primary text-xs px-4 py-2 disabled:opacity-60">
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -168,21 +209,12 @@ export default function ProtectionSettings() {
                   <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>Delay responses to waste bot compute time</p>
                 </div>
 
-                <div>
-                  <label className="text-xs block mb-1.5" style={{ color: 'var(--text-primary)' }}>Honeypot Endpoints</label>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className="text-orange-400">/api/v1/admin/users</span>
-                      <span className="badge badge-gray">Active</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className="text-orange-400">/internal/secrets</span>
-                      <span className="badge badge-gray">Active</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span style={{ color: 'var(--text-faint)' }}>+ Add endpoint</span>
-                    </div>
-                  </div>
+                <div className="rounded p-3 flex items-start gap-2" style={{ background: 'var(--code-bg)', border: '1px solid var(--border-primary)' }}>
+                  <Info size={14} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    The trap link is injected automatically into deceived responses — there's no configurable
+                    endpoint list yet (tarpit delay and custom honeypot paths aren't wired to the backend).
+                  </p>
                 </div>
               </div>
             )}

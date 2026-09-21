@@ -1,45 +1,85 @@
-import { useState } from 'react';
-import { Plus, Trash2, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react';
-import { managedRules as initialRules, exceptions as initialExceptions } from '../data/mockData';
+import { useEffect, useState } from 'react';
+import { Plus, Trash2, ToggleLeft, ToggleRight, AlertCircle, Lock } from 'lucide-react';
+import {
+  listRules,
+  createRule,
+  toggleRule as apiToggleRule,
+  ApiError,
+  type ManagedRule,
+  type CustomRule,
+  type RuleCondition,
+} from '../lib/api';
 
 const ruleFields = ['JA4 Fingerprint', 'Threat Score', 'IP Address', 'ASN', 'User-Agent', 'Request Path', 'Request Method', 'Geo', 'TLS Version'];
 const operators = ['EQUALS', 'CONTAINS', 'MATCHES', '>', '<', '>=', '<='];
 const actions = ['BLOCK', 'CHALLENGE', 'DECEIVE', 'PASS', 'LOG'];
 
-interface RuleCondition {
-  field: string;
-  operator: string;
-  value: string;
-}
-
 export default function MitigationRules() {
-  const [rules, setRules] = useState(initialRules);
-  const [exceptions, setExceptions] = useState(initialExceptions);
+  const [managedRules, setManagedRules] = useState<ManagedRule[]>([]);
+  const [customRules, setCustomRules] = useState<CustomRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const [showBuilder, setShowBuilder] = useState(false);
   const [ruleName, setRuleName] = useState('');
   const [conditions, setConditions] = useState<RuleCondition[]>([{ field: 'JA4 Fingerprint', operator: 'EQUALS', value: '' }]);
   const [action, setAction] = useState('BLOCK');
+  const [createErr, setCreateErr] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
-  const toggleRule = (id: string) => {
-    setRules(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+  const load = () => {
+    setLoading(true);
+    setLoadError(null);
+    listRules()
+      .then((r) => {
+        setManagedRules(r.managedRules);
+        setCustomRules(r.customRules);
+      })
+      .catch((err) => setLoadError(err instanceof ApiError ? err.message : 'Could not load rules.'))
+      .finally(() => setLoading(false));
   };
 
-  const addCondition = () => {
-    setConditions([...conditions, { field: 'JA4 Fingerprint', operator: 'EQUALS', value: '' }]);
+  useEffect(load, []);
+
+  const handleToggleCustom = async (rule: CustomRule) => {
+    const next = !rule.enabled;
+    setCustomRules(customRules.map(r => r.id === rule.id ? { ...r, enabled: next } : r));
+    try {
+      await apiToggleRule(rule.id, next);
+    } catch {
+      // Roll back on failure so the UI never claims a state the
+      // backend didn't actually save.
+      setCustomRules(customRules.map(r => r.id === rule.id ? { ...r, enabled: rule.enabled } : r));
+    }
   };
 
-  const removeCondition = (idx: number) => {
-    setConditions(conditions.filter((_, i) => i !== idx));
-  };
-
+  const addCondition = () => setConditions([...conditions, { field: 'JA4 Fingerprint', operator: 'EQUALS', value: '' }]);
+  const removeCondition = (idx: number) => setConditions(conditions.filter((_, i) => i !== idx));
   const updateCondition = (idx: number, key: keyof RuleCondition, value: string) => {
     const updated = [...conditions];
     updated[idx] = { ...updated[idx], [key]: value };
     setConditions(updated);
   };
 
-  const removeException = (id: string) => {
-    setExceptions(exceptions.filter(e => e.id !== id));
+  const handleCreateRule = async () => {
+    setCreateErr(null);
+    if (!ruleName.trim() || conditions.some(c => !c.value.trim())) {
+      setCreateErr('Give the rule a name and fill in every condition value.');
+      return;
+    }
+    setCreating(true);
+    try {
+      const rule = await createRule(ruleName.trim(), conditions, action);
+      setCustomRules([rule, ...customRules]);
+      setShowBuilder(false);
+      setRuleName('');
+      setConditions([{ field: 'JA4 Fingerprint', operator: 'EQUALS', value: '' }]);
+      setAction('BLOCK');
+    } catch (err) {
+      setCreateErr(err instanceof ApiError ? err.message : 'Could not create rule.');
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -54,6 +94,13 @@ export default function MitigationRules() {
           <Plus size={12} /> Custom Rule
         </button>
       </div>
+
+      {loadError && (
+        <div className="card p-4 flex items-center gap-2">
+          <AlertCircle size={14} className="text-red-400" />
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{loadError}</p>
+        </div>
+      )}
 
       {/* Visual Rule Builder */}
       {showBuilder && (
@@ -129,12 +176,10 @@ export default function MitigationRules() {
                   <button
                     key={a}
                     onClick={() => setAction(a)}
-                    className={`px-3 py-1.5 text-xs rounded font-medium transition-colors ${
-                      action === a ? '' : ''
-                    }`}
+                    className="px-3 py-1.5 text-xs rounded font-medium transition-colors"
                     style={{
                       background: action === a ? (a === 'BLOCK' ? '#7f1d1d' : a === 'CHALLENGE' ? '#713f12' : a === 'DECEIVE' ? '#7c2d12' : a === 'PASS' ? '#14532d' : 'var(--bg-tertiary)') : 'var(--input-bg)',
-                      border: `1px solid ${action === a ? 'var(--border-secondary)' : 'var(--border-secondary)'}`,
+                      border: '1px solid var(--border-secondary)',
                       color: action === a ? 'var(--text-primary)' : 'var(--text-muted)',
                     }}
                   >
@@ -150,7 +195,7 @@ export default function MitigationRules() {
               <span className="text-blue-400">IF</span>{' '}
               {conditions.map((c, i) => (
                 <span key={i}>
-                  {i > 0 && <><span style={{ color: 'var(--text-muted)' }}> AND </span></>}
+                  {i > 0 && <span style={{ color: 'var(--text-muted)' }}> AND </span>}
                   <span className="text-green-400">[{c.field}]</span>{' '}
                   <span className="text-yellow-400">{c.operator}</span>{' '}
                   <span className="text-orange-400">[{c.value || '...'}]</span>
@@ -160,9 +205,13 @@ export default function MitigationRules() {
               <span className="text-red-400">[{action}]</span>
             </div>
 
+            {createErr && <p className="text-xs" style={{ color: 'var(--accent-red, #ef4444)' }}>{createErr}</p>}
+
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setShowBuilder(false)} className="btn-secondary text-xs">Cancel</button>
-              <button onClick={() => setShowBuilder(false)} className="btn-primary text-xs">Create Rule</button>
+              <button onClick={handleCreateRule} disabled={creating} className="btn-primary text-xs disabled:opacity-60">
+                {creating ? 'Creating…' : 'Create Rule'}
+              </button>
             </div>
           </div>
         </div>
@@ -173,15 +222,44 @@ export default function MitigationRules() {
         <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-primary)' }}>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Managed Rules</h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Pre-configured rules maintained by HakaiShield</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Always-on detection layers maintained by HakaiShield — not user-toggleable</p>
           </div>
-          <span className="badge badge-blue">{rules.filter(r => r.enabled).length} active</span>
+          <span className="badge badge-blue">{managedRules.length} active</span>
         </div>
         <div className="divide-y" style={{ borderColor: 'var(--border-primary)' }}>
-          {rules.map(rule => (
-            <div key={rule.id} className="px-5 py-3 flex items-center justify-between transition-colors" style={{ background: 'transparent' }}>
+          {loading ? (
+            <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+          ) : managedRules.map(rule => (
+            <div key={rule.id} className="px-5 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                <button onClick={() => toggleRule(rule.id)} className="flex-shrink-0">
+                <Lock size={16} className="flex-shrink-0" style={{ color: 'var(--text-faint)' }} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{rule.name}</p>
+                  <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{rule.description}</p>
+                </div>
+              </div>
+              <span className="badge badge-green flex-shrink-0 ml-4">Active</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom Rules */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-primary)' }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Custom Rules</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Rules you've authored, evaluated in the order created</p>
+          </div>
+        </div>
+        <div className="divide-y" style={{ borderColor: 'var(--border-primary)' }}>
+          {!loading && customRules.length === 0 && (
+            <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>No custom rules yet — use "Custom Rule" above to add one.</p>
+          )}
+          {customRules.map(rule => (
+            <div key={rule.id} className="px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <button onClick={() => handleToggleCustom(rule)} className="flex-shrink-0">
                   {rule.enabled ? (
                     <ToggleRight size={24} className="text-blue-400" />
                   ) : (
@@ -190,59 +268,25 @@ export default function MitigationRules() {
                 </button>
                 <div className="min-w-0">
                   <p className="text-sm font-medium" style={{ color: rule.enabled ? 'var(--text-primary)' : 'var(--text-muted)' }}>{rule.name}</p>
-                  <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{rule.description}</p>
+                  <p className="text-xs truncate font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {rule.conditions.map(c => `${c.field} ${c.operator} ${c.value}`).join(' AND ')} → {rule.action}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{rule.hits.toLocaleString()} hits</span>
-                <span className={`badge ${rule.enabled ? 'badge-green' : 'badge-gray'}`}>
-                  {rule.enabled ? 'Active' : 'Disabled'}
-                </span>
-              </div>
+              <span className={`badge ${rule.enabled ? 'badge-green' : 'badge-gray'} flex-shrink-0 ml-4`}>
+                {rule.enabled ? 'Active' : 'Disabled'}
+              </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Custom Exceptions */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-primary)' }}>
-          <div>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Custom Exceptions</h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Whitelisted IPs, bots, and fingerprints</p>
-          </div>
-          <button className="btn-secondary text-xs flex items-center gap-1.5">
-            <Plus size={12} /> Add Exception
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Value</th>
-                <th>Reason</th>
-                <th>Created</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {exceptions.map(ex => (
-                <tr key={ex.id}>
-                  <td><span className="badge badge-blue">{ex.type}</span></td>
-                  <td className="font-mono text-xs" style={{ color: 'var(--text-primary)' }}>{ex.value}</td>
-                  <td className="text-xs">{ex.reason}</td>
-                  <td className="text-xs" style={{ color: 'var(--text-muted)' }}>{ex.createdAt}</td>
-                  <td>
-                    <button onClick={() => removeException(ex.id)} className="hover:text-red-400 transition-colors" style={{ color: 'var(--text-muted)' }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Custom Exceptions — not built yet */}
+      <div className="card p-4 flex items-center gap-3">
+        <AlertCircle size={16} className="text-yellow-400 shrink-0" />
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Custom exceptions (per-IP/JA4 allowlisting) aren't built yet — no endpoint exists to create or remove them.
+        </p>
       </div>
     </div>
   );

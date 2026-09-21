@@ -1,17 +1,37 @@
 import { useState } from 'react';
-import { Globe, Webhook, Plus, CheckCircle2, XCircle, AlertCircle, ExternalLink } from 'lucide-react';
-import { domains, siemIntegrations } from '../data/mockData';
+import { useOutletContext } from 'react-router-dom';
+import { Globe, Webhook, Plus, AlertCircle, X } from 'lucide-react';
+import { addDomain, ApiError, type Domain } from '../lib/api';
+import type { LayoutContext } from '../components/Layout';
 
 export default function DomainsSiem() {
-  const [domainList] = useState(domains);
-  const [integrations, setIntegrations] = useState(siemIntegrations);
+  const { domains, domainsLoading } = useOutletContext<LayoutContext>();
+  const [domainList, setDomainList] = useState<Domain[] | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newDomain, setNewDomain] = useState('');
+  const [newOrigin, setNewOrigin] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const toggleIntegration = (id: string) => {
-    setIntegrations(integrations.map(i =>
-      i.id === id
-        ? { ...i, status: i.status === 'connected' ? 'disconnected' : 'connected', lastSync: i.status === 'connected' ? 'Never' : 'Just now' }
-        : i
-    ));
+  // domains from Layout's initial fetch, plus anything added in this
+  // session without waiting for a full page reload.
+  const list = domainList ?? domains;
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const created = await addDomain(newDomain.trim(), newOrigin.trim());
+      setDomainList([created, ...list]);
+      setShowAdd(false);
+      setNewDomain('');
+      setNewOrigin('');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not add domain.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -32,61 +52,77 @@ export default function DomainsSiem() {
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Sites routed through HakaiShield edge</p>
             </div>
           </div>
-          <button className="btn-primary text-xs flex items-center gap-1.5">
+          <button onClick={() => setShowAdd(true)} className="btn-primary text-xs flex items-center gap-1.5">
             <Plus size={12} /> Add Domain
           </button>
         </div>
+
+        {showAdd && (
+          <form onSubmit={handleAdd} className="px-5 py-4 border-b space-y-3" style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-secondary)' }}>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>Add a domain</p>
+              <button type="button" onClick={() => setShowAdd(false)} style={{ color: 'var(--text-muted)' }}><X size={14} /></button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input
+                required
+                placeholder="app.example.com"
+                value={newDomain}
+                onChange={(e) => setNewDomain(e.target.value)}
+                className="px-3 py-2 rounded text-xs"
+                style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
+              />
+              <input
+                required
+                placeholder="origin, e.g. 10.0.1.50:8080"
+                value={newOrigin}
+                onChange={(e) => setNewOrigin(e.target.value)}
+                className="px-3 py-2 rounded text-xs"
+                style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
+              />
+            </div>
+            {error && <p className="text-xs" style={{ color: 'var(--accent-red, #ef4444)' }}>{error}</p>}
+            <button type="submit" disabled={submitting} className="btn-primary text-xs px-4 py-2 disabled:opacity-60">
+              {submitting ? 'Adding…' : 'Add domain'}
+            </button>
+          </form>
+        )}
+
         <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Domain</th>
-                <th>Origin</th>
-                <th>TLS Certificate</th>
-                <th>Status</th>
-                <th>Requests</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {domainList.map(domain => (
-                <tr key={domain.id}>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{domain.domain}</span>
-                    </div>
-                  </td>
-                  <td className="font-mono text-xs">{domain.origin}</td>
-                  <td>
-                    <div className="flex items-center gap-1.5">
-                      {domain.certStatus === 'valid' ? (
-                        <CheckCircle2 size={14} className="text-green-400" />
-                      ) : (
-                        <AlertCircle size={14} className="text-yellow-400" />
-                      )}
-                      <span className="text-xs">
-                        {domain.certStatus === 'valid' ? 'Valid' : 'Expiring'}
-                      </span>
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>({domain.certExpiry})</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge badge-green">{domain.status}</span>
-                  </td>
-                  <td className="font-mono text-xs">{domain.requests}</td>
-                  <td>
-                    <button className="transition-colors" style={{ color: 'var(--text-muted)' }}>
-                      <ExternalLink size={14} />
-                    </button>
-                  </td>
+          {domainsLoading && domainList === null ? (
+            <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>Loading domains…</p>
+          ) : list.length === 0 ? (
+            <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>No domains yet — add one to start routing traffic through hakaishield.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th>Origin</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {list.map(domain => (
+                  <tr key={domain.id}>
+                    <td>
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{domain.domain}</span>
+                    </td>
+                    <td className="font-mono text-xs">{domain.origin}</td>
+                    <td>
+                      <span className={`badge ${domain.status === 'active' ? 'badge-green' : 'badge-yellow'}`}>
+                        {domain.status === 'pending_verification' ? 'pending' : domain.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
-      {/* SIEM Integrations */}
+      {/* SIEM Integrations — not built yet */}
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Webhook size={16} style={{ color: 'var(--text-muted)' }} />
@@ -95,65 +131,12 @@ export default function DomainsSiem() {
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Export logs and events to your security stack</p>
           </div>
         </div>
-
-        <div className="grid md:grid-cols-2 gap-3">
-          {integrations.map(integration => (
-            <div key={integration.id} className="card p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold" style={{
-                    background: integration.name === 'Datadog' ? '#1a1000' :
-                               integration.name === 'Splunk' ? '#1a0f00' :
-                               integration.name === 'AWS S3' ? '#0a1a0a' : '#0a0a1a',
-                    border: '1px solid var(--border-secondary)',
-                    color: integration.name === 'Datadog' ? '#632ca6' :
-                           integration.name === 'Splunk' ? '#e85d04' :
-                           integration.name === 'AWS S3' ? '#ff9900' : '#0077cc',
-                  }}>
-                    {integration.name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{integration.name}</p>
-                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{integration.description}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {integration.status === 'connected' ? (
-                    <CheckCircle2 size={14} className="text-green-400" />
-                  ) : (
-                    <XCircle size={14} style={{ color: 'var(--text-faint)' }} />
-                  )}
-                  <span className={`text-xs ${integration.status === 'connected' ? 'text-green-400' : ''}`} style={{ color: integration.status === 'connected' ? undefined : 'var(--text-muted)' }}>
-                    {integration.status === 'connected' ? 'Connected' : 'Disconnected'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
-                <div className="flex gap-4">
-                  <div>
-                    <p className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>Last Sync</p>
-                    <p className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{integration.lastSync}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>Events</p>
-                    <p className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{integration.events}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleIntegration(integration.id)}
-                  className={`text-xs px-3 py-1.5 rounded font-medium ${
-                    integration.status === 'connected'
-                      ? 'text-blue-400 hover:text-blue-300'
-                      : 'text-blue-400 hover:text-blue-300'
-                  }`}
-                  style={{ border: `1px solid ${integration.status === 'connected' ? 'var(--border-secondary)' : '#1e3a5f'}` }}
-                >
-                  {integration.status === 'connected' ? 'Configure' : 'Connect'}
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="card p-4 flex items-center gap-3">
+          <AlertCircle size={16} className="text-yellow-400 shrink-0" />
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            SIEM export (Datadog, Splunk, S3, webhooks) isn't built yet — this section is a placeholder until a real
+            integration ships, rather than a working toggle that would connect to nothing.
+          </p>
         </div>
       </div>
     </div>
