@@ -1190,3 +1190,35 @@ Those are already part of the engineering job.
 > work.**
 
 **That is the standard for every part of hakaishield.**
+
+## When to use graphify vs archify
+
+Two different tools are installed. They do not overlap:
+
+- **graphify** — *understanding* an existing codebase. Read-only. Answers
+  "what calls what", "how does X connect to Y", "what's the blast radius of
+  changing this file". Use it before reading raw source when
+  `graphify-out/graph.json` exists (see the `## graphify` section below —
+  this is enforced by a hook, not optional).
+- **archify** — *explaining/sharing* a system, workflow, or plan as a
+  standalone interactive HTML diagram. Use it when the owner (or a PR
+  description, an incident writeup, an onboarding doc) needs a visual —
+  e.g. "diagram the deception+honeypot request flow", "show the scoring
+  pipeline as a sequence diagram", "visualize the JA4 evidence trail for
+  the owner". It produces a shareable artifact, not something Claude
+  queries internally. Reach for `graphify path`/`graphify explain` first to
+  get the facts right, then hand those facts to archify if a diagram is
+  what's actually being asked for.
+
+Rule of thumb: graphify answers Claude's own questions about the code;
+archify produces something a human looks at.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
