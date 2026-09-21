@@ -3091,3 +3091,118 @@ list (payments, email, rule/settings enforcement, SIEM, WAF, traffic
 chart, immediate domain enforcement, multi-domain scoping,
 false-positive button, the two npm audit CVEs) is now tracked in
 `docs/ROADMAP.md` item 12 rather than duplicated here.
+
+## 2026-09-21 — Playwright end-to-end check found and fixed a real CORS bug, plus fake billing UI
+
+Changed:
+  - **CORS/routing bug (real, would have broken every authenticated
+    dashboard call from a browser):** every `mux.HandleFunc` for the
+    account/domains/rules/settings API in `backend/main.go` was
+    registered with a Go 1.22+ method-prefixed pattern (e.g.
+    `"POST /api/v1/auth/signup"`). `net/http`'s `ServeMux` rejects a
+    request whose method doesn't match a method-prefixed pattern
+    *before it ever reaches the handler* — so a browser's CORS
+    preflight `OPTIONS` request (sent automatically for any request
+    carrying a custom `Authorization` header, i.e. every authenticated
+    call, and for the `Content-Type: application/json` POSTs) 404'd/405'd
+    at the mux, never reaching each handler's own
+    `if r.Method == http.MethodOptions { return }` short-circuit. Every
+    curl-based test in the previous two entries passed because curl
+    doesn't send a preflight — only a real browser does. Fixed by
+    dropping the method prefix from all eleven routes in that block;
+    every handler already checks `r.Method` itself (directly, or via
+    `RequireAuth`), so the mux doesn't need to gate on method too.
+  - **Fake billing UI (real, a trust/honesty problem, not just an
+    unfinished feature):** `Subscription.tsx` displayed a fully
+    fabricated "Growth plan, $500/mo, 4.2M/10M requests used, 7/10
+    domains, next billing Oct 1 2026" summary and three fake "Paid"
+    invoices with working-looking "Download" buttons — all static
+    mock data presented as the account's real state. `Payment.tsx`
+    collected a card number/expiry/CVC into React state, claimed
+    *"Secure payment processed by Stripe. Your card information is
+    encrypted and never stored on our servers"* — with no Stripe
+    integration anywhere in the codebase — then on submit did a
+    `console.log` and a fake redirect pretending payment succeeded.
+    Both violate CLAUDE.md Section 27 more seriously than an empty
+    state would: this wasn't "missing," it was actively lying, and the
+    payment page's specific claim about Stripe/encryption while
+    collecting real-looking card fields is the kind of thing that
+    could get someone's actual card number typed into a form that
+    goes nowhere. Rewrote both: `Subscription.tsx` keeps the
+    plan-comparison cards (real marketing content) but replaces the
+    fake current-plan/usage/invoice sections with an explicit "billing
+    isn't wired up yet" notice and a link to `/contact`; `Payment.tsx`
+    is now a plain "payments aren't set up yet, contact us" page with
+    no card form at all.
+  - **Minor `dashboard/index.html` bugs found alongside:**
+    `<html lang="zh-CN">` on an English product (this codebase appears
+    to have been scaffolded by a Chinese-language tool originally —
+    the inline `<script>` comments are still in Chinese) → `lang="en"`;
+    `<script src="/src/main.jsx">` when the actual file is
+    `main.tsx` (harmless in practice — Vite's dev server and
+    `vite build` both resolve it transparently — but still wrong and
+    fixed); no favicon link, causing a 404 in the browser console on
+    every page load → added `<link rel="icon" href="data:," />` (an
+    intentionally empty icon rather than designing a real one, just to
+    stop the 404).
+
+Why: owner asked for a real Playwright-driven check of what still
+needs fixing, not another round of curl/typecheck verification. curl
+and `tsc`/`vite build` cannot catch a browser-only failure mode like a
+missing CORS preflight path, and neither catches a page that renders
+fine but tells the user something false.
+
+Tested how (Playwright, Python, against a live backend on real
+Postgres 15 + Redis, not mocked):
+  - First run (before the CORS fix) reproduced the bug directly: signup
+    submitted, page stayed on `/sign-up`, console showed
+    `Access to fetch at '.../auth/signup' ... blocked by CORS policy:
+    ... No 'Access-Control-Allow-Origin' header is present`. Confirmed
+    the same request succeeded via `curl` (no preflight sent) to rule
+    out a backend logic bug before checking the routing layer.
+  - After the fix: full authenticated flow in a real, visible Chrome
+    browser (`channel="chrome", headless=False` — the owner asked to
+    see it) — signup → onboarding → add a domain (real `201` from
+    `POST /domains`, domain visible in the UI) → Overview shows real
+    stats and the honest "no time-series chart yet" notice → Evidence
+    Logs renders its real (empty) table → create + the managed-rules
+    list render correctly → Protection Settings saves and shows
+    "Saved" → sign out → visiting `/` while signed out correctly
+    redirects to `/sign-in` (route guard works). Zero console errors
+    across the entire flow.
+  - Swept all 13 unauthenticated routes (`/landing`, `/pricing`,
+    `/changelog`, `/docs`, `/contact`, `/about`, `/terms`, `/privacy`,
+    `/sign-in`, `/sign-up`, `/forgot-password`, `/subscription`,
+    `/payment`) — all return 200, zero console errors after the
+    favicon fix, and `/subscription`/`/payment` confirmed to show the
+    new honest notices instead of the old fake data.
+  - `npm run typecheck` and `npm run build` clean after all frontend
+    changes; `go build`, `go vet`, `gofmt -l .`, `go test ./...` clean
+    after the `main.go` routing fix.
+
+Known gaps / follow-up:
+  - This was found by testing against a **local dev server
+    (`localhost:3000` talking to `localhost:18080`)**, which is
+    same-origin-adjacent enough that some browsers/configurations are
+    more lenient than a real cross-origin production deployment
+    (dashboard and API likely on different real domains) would be.
+    The mux fix is correct regardless (method-prefixed patterns reject
+    OPTIONS unconditionally, not just under strict CORS), but the
+    *production* CORS configuration (`Access-Control-Allow-Origin: *`
+    everywhere) should be revisited before a real multi-tenant
+    deployment — wildcard origin on authenticated endpoints is
+    permissive by default and works for local dev, not necessarily
+    what a production deployment wants.
+  - The Chinese-language artifacts in `dashboard/index.html` (script
+    comments, the original `lang="zh-CN"`) suggest this dashboard's
+    initial scaffold came from a Chinese-language AI tool/template.
+    Only the `lang` attribute (a real, user-visible bug — screen
+    readers and browser translate prompts read this) was fixed; the
+    inline comments were left as-is since they don't affect behavior
+    and rewriting comment prose wasn't asked for.
+  - `/pricing` and `/landing` don't currently link to `/payment` or
+    `/subscription` at all (checked via grep) — so the now-honest
+    placeholder pages are reachable but not yet linked from the
+    marketing funnel. Not changed, since deciding *whether* to surface
+    a "not available yet" billing page in the funnel is a product
+    call, not a bug fix.

@@ -548,7 +548,11 @@ always the operator.
          nobody has provided an account/API key yet. Needs
          `POST /payment/create-intent`, `POST /payment/webhook`,
          `POST /subscription/upgrade` and Stripe SDK integration.
-         `Subscription`/`Payment` pages are unwired until this exists.
+         `Subscription`/`Payment` pages show an honest "not set up
+         yet" notice (fixed 2026-09-21 — they previously showed
+         fabricated plan/usage/invoice data and a card form that
+         falsely claimed to be processed by Stripe; see
+         `docs/DECISIONS.md`) rather than being unwired silently.
       2. **Email (SendGrid/SES).** Blocked on a real API key. Needs
          `POST /auth/verify-email`, `POST /auth/forgot-password`,
          `POST /auth/reset-password` — none of the three exist in the

@@ -160,17 +160,25 @@ func main() {
 		rulesStore := rules.NewStore(db.DB)
 		settingsStore := settings.NewStore(db.DB)
 
-		mux.HandleFunc("POST /api/v1/auth/signup", api.SignupHandler(accountStore))
-		mux.HandleFunc("POST /api/v1/auth/signin", api.SigninHandler(accountStore, issuer))
-		mux.HandleFunc("GET /api/v1/auth/me", api.MeHandler(accountStore, issuer))
-		mux.HandleFunc("POST /api/v1/onboarding/complete", api.OnboardingCompleteHandler(accountStore, issuer))
+		// No method prefix on any of these patterns: net/http's
+		// ServeMux would reject a browser's CORS preflight OPTIONS
+		// request at the routing layer before it ever reached a
+		// handler's own OPTIONS short-circuit, breaking every one of
+		// these from a browser (found via an end-to-end Playwright
+		// run — see docs/PROGRESS.md). Every handler below already
+		// checks r.Method itself (directly, or via RequireAuth), so
+		// the mux doesn't need to gate on method too.
+		mux.HandleFunc("/api/v1/auth/signup", api.SignupHandler(accountStore))
+		mux.HandleFunc("/api/v1/auth/signin", api.SigninHandler(accountStore, issuer))
+		mux.HandleFunc("/api/v1/auth/me", api.MeHandler(accountStore, issuer))
+		mux.HandleFunc("/api/v1/onboarding/complete", api.OnboardingCompleteHandler(accountStore, issuer))
 		mux.HandleFunc("/api/v1/domains", api.DomainsHandler(issuer))
-		mux.HandleFunc("GET /api/v1/rules", api.RulesListHandler(rulesStore, issuer))
-		mux.HandleFunc("POST /api/v1/rules/custom", api.CreateRuleHandler(rulesStore, issuer))
-		mux.HandleFunc("PUT /api/v1/rules/{id}/toggle", api.ToggleRuleHandler(rulesStore, issuer))
+		mux.HandleFunc("/api/v1/rules", api.RulesListHandler(rulesStore, issuer))
+		mux.HandleFunc("/api/v1/rules/custom", api.CreateRuleHandler(rulesStore, issuer))
+		mux.HandleFunc("/api/v1/rules/{id}/toggle", api.ToggleRuleHandler(rulesStore, issuer))
 		mux.HandleFunc("/api/v1/settings/protection", api.ProtectionSettingsHandler(settingsStore, issuer))
-		mux.HandleFunc("GET /api/v1/dashboard/top-offenders", api.TopOffendersHandler(store, issuer))
-		mux.HandleFunc("GET /api/v1/dashboard/evidence-logs", api.EvidenceLogsHandler(store, issuer))
+		mux.HandleFunc("/api/v1/dashboard/top-offenders", api.TopOffendersHandler(store, issuer))
+		mux.HandleFunc("/api/v1/dashboard/evidence-logs", api.EvidenceLogsHandler(store, issuer))
 		log.Print("hakaishield: account/domains/rules/settings API enabled")
 	} else {
 		log.Print("hakaishield: -db-url and/or -jwt-secret not set, account/domains/rules/settings API disabled")

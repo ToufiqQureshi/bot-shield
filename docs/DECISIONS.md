@@ -10,6 +10,90 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Removed the fake billing UI instead of leaving it as a known gap — 2026-09-21
+
+**Decision:** `Subscription.tsx` and `Payment.tsx` no longer show
+fabricated account state (a fake "Growth plan, $500/mo, 4.2M/10M
+requests" summary, three fake "Paid" invoices, and a card-collecting
+form that falsely claimed "Secure payment processed by Stripe").
+Both pages now show a plain "not wired up yet, contact us" notice.
+
+**Why this got fixed instead of just logged as a gap:** everything
+else deferred this session (SIEM, WAF, traffic chart) was an *absence*
+— a section that does nothing and says so. This was different: a form
+that looks exactly like a real Stripe checkout, explicitly claims
+Stripe processes and encrypts the card data, and then does a
+`console.log` + fake success redirect. A real user has no way to tell
+this apart from a working payment form except by inspecting network
+traffic. That crosses from "unfinished feature" into "actively
+misleading, and specifically about payment security" — CLAUDE.md
+Section 27 exists for exactly this shape of problem, and unlike the
+other placeholders, leaving it in place risked a real person typing a
+real card number into it.
+
+**Why not just add a warning banner instead of removing the form:** a
+banner next to a form that still visually looks and behaves like a
+working checkout doesn't fix the actual risk — the field pattern
+(`1234 5678 9012 3456` placeholder, CVC, expiry, "Pay $X and
+subscribe") signals "this is real" more loudly than a small notice
+signals "this isn't." Removing the card-collecting form entirely was
+the only version of this that couldn't be misread.
+
+**Alternatives considered:** stub in a real Stripe test-mode
+integration — rejected for this pass; that's real backend/API-key work
+(`docs/ROADMAP.md` item 12.1), not a UI honesty fix, and conflating the
+two would have meant either shipping a half-wired Stripe integration
+or delaying the honesty fix behind it.
+
+**Revisit when:** real Stripe credentials exist and payment gets built
+for real (`docs/ROADMAP.md` item 12.1) — at that point this page
+becomes the real checkout instead of a placeholder.
+
+---
+
+## Dropped Go 1.22+ method-prefixed route patterns for the dashboard API — 2026-09-21
+
+**Decision:** every `mux.HandleFunc` registration for the
+account/domains/rules/settings API in `backend/main.go` (11 routes)
+uses a bare path (`"/api/v1/auth/signup"`) instead of a
+method-prefixed pattern (`"POST /api/v1/auth/signup"`). Each handler
+checks `r.Method` itself instead.
+
+**Why:** `net/http`'s `ServeMux` (Go 1.22+) rejects any request whose
+method doesn't match a method-prefixed pattern *at the routing layer*,
+before the handler runs. A browser's CORS preflight is always an
+`OPTIONS` request, so every method-prefixed route in this API was
+unreachable by preflight — the request never got far enough to hit
+each handler's own `if r.Method == http.MethodOptions { return }`
+short-circuit and its `Access-Control-Allow-Origin` header. Every
+`curl`-based test in the two previous sessions' entries passed anyway,
+because `curl` doesn't send a preflight; only a real browser does.
+Found by an actual Playwright run in a real Chrome browser — see
+`docs/PROGRESS.md`'s matching 2026-09-21 entry for the reproduction
+and the full fix verification.
+
+**Why drop the prefix instead of registering a second OPTIONS-only
+route per path:** every handler already validates its own method
+(either directly or via `RequireAuth`'s common CORS/method handling),
+so a second registration per route would be pure duplication for no
+benefit — the bare-path pattern plus the existing per-handler checks
+already produce the same behavior with less surface area.
+
+**Known gap this doesn't cover:** production CORS posture.
+`Access-Control-Allow-Origin: *` is set on every one of these routes,
+which is fine for local dev (dashboard and backend both on
+`localhost`) but permissive by default for a real deployment where the
+dashboard and API are on different real domains. Not changed here —
+scoping allowed origins is a separate decision from "does the
+preflight even reach the handler," and conflating them would have
+delayed the actual bug fix.
+
+**Revisit when:** a real multi-tenant production deployment is being
+configured — origin allowlisting should be decided then, not
+defaulted to `*` by inertia.
+
+---
+
 ## Dashboard wiring: real account/domains/rules/settings API, same binary, no separate control-plane service — 2026-09-21
 
 **Decision:** wired `dashboard/` (previously a UI-only scaffold with mock data — see the 2026-09-21 "Brought the untracked dashboard frontend into the repo" entry) to a real backend API served by the same `hakaishield` binary: `pkg/account` (users + bcrypt), `pkg/auth` (JWT issue/verify), `pkg/rules` (custom mitigation rules), `pkg/settings` (protection thresholds), plus new handlers under `pkg/api` (`auth.go`, `domains.go`, `rules.go`, `settings.go`, `dashboard_extra.go`) gated behind two new flags, `-db-url` and `-jwt-secret`. Domains reuse the existing `tenants` table (extended with `owner_user_id`, `name`, `status`, `created_at`) rather than a new table — a "domain" in the dashboard's terms is exactly what `tenant.Store` already models.
