@@ -2660,3 +2660,112 @@ Known gaps / follow-up:
     catches code smells and correctness bugs, not algorithmic cost.
     That needs profiling (`net/http/pprof`) against real traffic, not
     a linter, and is still open.
+
+## 2026-09-20 — Consolidated PR #10 + PR #11 into one hardened change
+
+Reviewed both open PRs, kept what was real, and rebuilt the parts that
+would not have survived production traffic.
+
+### What shipped
+
+- **Deception payload (`pkg/deception`)** — rewritten. It now also
+  carries the honeypot bait link, so the trap is actually reachable;
+  before this, nothing in the tree ever emitted the trap path and no
+  crawler could have found it, despite the comment claiming the link
+  was "injected into challenge pages and HTML responses".
+- **Honeypot (`pkg/signals/honeypot.go`)** — rewritten, see below.
+- **`honeypot_trap` scoring signal** — 50 points, named in the evidence
+  trail, tenant-scoped via a new `RequestFacts.Tenant` field.
+
+### Bugs found and fixed
+
+1. **Honeypot trips hard-blocked innocent users across every tenant.**
+   The original wrote each trip into the shared `ja4:scrapers` map,
+   which `score.go` reads for its 100-point `ja4_blocklist` check. JA4
+   is a browser-build fingerprint, not a machine ID, so one scraper
+   using real Chrome TLS would have permanently blocked every genuine
+   Chrome user of that version on every customer site, from a single
+   request. Now scoped to (tenant, IP, JA4), TTL'd, and scored rather
+   than blocked. See `DECISIONS.md`.
+2. **Unbounded memory in the proxy response hook.** `ModifyResponse`
+   called `io.ReadAll` on the origin body for every deceived request,
+   before checking Content-Type — so a deceived request for a video or
+   a large download pinned the whole file in heap. Now: Content-Type
+   and status are checked before the body is touched, the read is
+   capped at 512 KiB with a single exact-sized allocation, and an
+   over-cap body is streamed through unmodified rather than buffered or
+   truncated. A measured ~10 MB of allocation churn per over-cap
+   request is now ~0.
+3. **Unbounded goroutines on an attacker-callable path.** Each trip
+   spawned a goroutine doing two Redis round trips. Hitting the trap in
+   a loop was a free goroutine and Redis amplifier. Removed; the
+   Redis `Publish` it did had no subscriber anywhere in the tree.
+4. **Unbounded map growth.** Neither the honeypot state nor
+   `scraperJA4s` had a ceiling. Both are capped now, and a repeat trip
+   from a known caller refreshes in place instead of adding an entry —
+   so hammering the trap costs no memory at all.
+5. **Accessibility failure in the payload.** `aria-hidden:true` was
+   written inside the CSS `style` attribute, where it is not a property
+   and does nothing — a screen reader would have read the poison text
+   aloud to a blind visitor. It is a real HTML attribute now, and the
+   bait link carries `tabindex="-1"` and `rel="nofollow"`.
+6. **Honeypot ran before the tenant lookup**, so anyone pointing a DNS
+   record at the service could write into detection state for a host we
+   do not serve. Moved below the lookup.
+7. **Payload injection lowercased the whole document** to find
+   `</body>`, doubling the allocation per deceived response. Replaced
+   with a case-insensitive tail search that allocates nothing.
+
+### Dropped
+
+- **PR #10's dependency downgrade** (Go 1.25→1.23, fingerproxy
+  v1.2.3→v0.6.1, pgx, go-redis, sentry). Discarded wholesale.
+- **`pkg/forensics`** (298 lines, no caller). Reasoning in
+  `DECISIONS.md`; preserved in PR #10's branch history.
+- PR #10's committed binaries, Go toolchain tarball, `coverage.out` and
+  self-declared production-readiness report, plus the `.gitignore`
+  corruption that let them in (markdown fences written into the file,
+  which also dropped `/bin/`, `.gocache/`, `*.exe` and added a `pkg/`
+  rule that would have ignored the entire backend source tree).
+- **`rdb` from `NewGuard`** — the honeypot was its only consumer, and
+  it no longer needs Redis. `StartJA4Sync` still takes its own client.
+
+Why: see `DECISIONS.md`. In short, both PRs contained genuinely useful
+ideas wrapped in implementations that would have failed under real
+traffic — the honeypot by blocking innocents, the deception hook by
+running the node out of memory.
+
+Tested how:
+  - `go build ./...`, `go vet ./...`, `gofmt -l .` — clean.
+  - `go test -race ./...` — all packages pass, race detector clean.
+  - `golangci-lint run ./...` — 0 issues.
+  - New end-to-end test (`TestHoneypotTrapEndToEnd`) walks the real
+    loop: deceived visitor receives HTML containing the trap link →
+    fetching that link returns 404 and is recorded → the trip is then
+    visible to scoring for that caller and no one else.
+  - Mutation checks, all three failed as they should and passed again
+    once restored:
+      * removed the tenant from the honeypot key → the cross-tenant
+        assertion failed.
+      * removed the honeypot entry cap → state grew to 55,000 against a
+        50,000 ceiling.
+      * raised the response cap to 64 MiB → the over-cap body was
+        rewritten instead of passed through.
+  - `BenchmarkHoneypotTrippedEmpty`: 1.1 ns/op, 0 B/op, 0 allocs/op —
+    the check added to every request costs nothing on a node where the
+    trap has never been tripped, which is the normal state.
+  - `BenchmarkGuardServeHTTP`: 35 µs/op, unchanged against main.
+
+Known gaps / follow-up:
+  - The trap link only reaches traffic already being deceived. Bots
+    that never reach the deceive decision never see it. Injecting it
+    into challenge pages is the obvious next step.
+  - Honeypot trips are per-node. A bot hitting a different node starts
+    clean. Cross-node propagation needs a bounded writer and a TTL'd,
+    tenant-scoped Redis key — deliberately not the shared blocklist.
+  - Client-telemetry scoring (the dropped forensics work) remains
+    unbuilt; see `DECISIONS.md` for what it needs.
+  - The 512 KiB response cap means a deceived visitor requesting an
+    unusually large HTML page gets it unpoisoned. Streaming the
+    injection with a fixed tail window would remove the cap entirely;
+    not done without evidence that it matters (`CLAUDE.md` Section 7).

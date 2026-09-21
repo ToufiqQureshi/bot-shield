@@ -4,7 +4,9 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -12,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ToufiqQureshi/bot-shield/pkg/deception"
 	"github.com/ToufiqQureshi/bot-shield/pkg/signals"
 )
 
@@ -87,6 +90,128 @@ var DefaultOriginTransport = &http.Transport{
 	ExpectContinueTimeout: 1 * time.Second,
 }
 
+// maxDeceptionBodyBytes caps how much of an origin response we will hold
+// in memory to rewrite it. The old version of this hook called
+// io.ReadAll on the origin body, which meant one deceived request for a
+// large file pinned that whole file in heap — and enough of them at once
+// would take the process down in front of every customer on the node.
+// Real HTML documents sit an order of magnitude below this, and anything
+// larger is streamed through untouched rather than buffered or
+// truncated. The cap is what a chunked response (one that declares no
+// length) is allowed to cost us, so it is deliberately not generous.
+const maxDeceptionBodyBytes = 512 << 10 // 512 KiB
+
+// initialDeceptionBufBytes is the starting buffer for a response that
+// declares no length (a chunked one, which is what dynamic pages
+// usually are). It comfortably holds a typical HTML document, so the
+// common case is a single allocation well under the cap.
+const initialDeceptionBufBytes = 64 << 10 // 64 KiB
+
+// readBody fills buf from the response body. A short read is the end of
+// the document and is not an error; a real failure closes the body and
+// is returned, because a partially drained body can no longer be
+// forwarded intact and the visitor must get ErrorHandler's page rather
+// than a silently truncated one.
+func readBody(resp *http.Response, buf []byte) (int, error) {
+	n, err := io.ReadFull(resp.Body, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		_ = resp.Body.Close()
+		return n, err
+	}
+	return n, nil
+}
+
+// deceiveResponse injects the deception payload into HTML served to
+// traffic the guard decided to deceive. Every early return leaves the
+// response exactly as the origin sent it: failing to poison a scraper
+// is a missed opportunity, while corrupting a real response is an
+// outage for the customer.
+func deceiveResponse(resp *http.Response) error {
+	if resp.Request == nil {
+		return nil
+	}
+	if DecisionFromContext(resp.Request.Context()) != signals.DecisionDeceive.String() {
+		return nil
+	}
+	// Only whole, uncompressed 200s. A 206 range or a 304 revalidation
+	// carries no complete document to rewrite, and rewriting one would
+	// break the client's reassembly or its cache.
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	if enc := resp.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
+		return nil
+	}
+	// Check the declared type before touching the body: this is what
+	// keeps a deceived request for a video or a ZIP from being read
+	// into memory only for the payload injector to decline it.
+	if !deception.IsInjectableContentType(resp.Header.Get("Content-Type")) {
+		return nil
+	}
+	// A declared length past the cap lets us skip the read entirely.
+	if resp.ContentLength > maxDeceptionBodyBytes {
+		return nil
+	}
+
+	// Size the buffer from the declared length when the origin gave us
+	// one, so an 80 KiB page costs 80 KiB and not the whole cap. A
+	// chunked response declares nothing, so it starts at a realistic
+	// page size and grows only if it has to.
+	//
+	// io.ReadAll is deliberately not used: it starts at 512 bytes and
+	// doubles, which measured at roughly 10 MB of churn per over-cap
+	// response — on a hook that runs in front of customer traffic.
+	// Reading one byte past the cap is what makes an over-long body
+	// detectable without buffering all of it.
+	size := initialDeceptionBufBytes
+	if resp.ContentLength >= 0 && resp.ContentLength <= maxDeceptionBodyBytes {
+		size = int(resp.ContentLength) + 1
+	}
+
+	buf := make([]byte, size)
+	n, err := readBody(resp, buf)
+	if err != nil {
+		return err
+	}
+
+	if n == size && size <= maxDeceptionBodyBytes {
+		// Filled the starting buffer without reaching the cap: either a
+		// chunked response larger than a typical page, or an origin that
+		// under-declared its length. Grow once, straight to the cap,
+		// rather than doubling our way there.
+		grown := make([]byte, maxDeceptionBodyBytes+1)
+		copy(grown, buf)
+		more, err := readBody(resp, grown[n:])
+		if err != nil {
+			return err
+		}
+		buf, n, size = grown, n+more, maxDeceptionBodyBytes+1
+	}
+	body := buf[:n]
+
+	if n == size {
+		// Too large to rewrite: hand back what we read followed by the
+		// rest of the stream, so the visitor still gets the real
+		// response byte for byte.
+		resp.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.MultiReader(bytes.NewReader(body), resp.Body), resp.Body}
+		return nil
+	}
+	_ = resp.Body.Close()
+
+	transformed := deception.InjectPayload(body)
+
+	resp.Body = io.NopCloser(bytes.NewReader(transformed))
+	resp.ContentLength = int64(len(transformed))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(transformed)))
+	// The body no longer matches the origin's validator, so leaving it
+	// would let a cache or browser revalidate into the unpoisoned copy.
+	resp.Header.Del("Etag")
+	return nil
+}
+
 // NewOriginProxy sets up the HTTP proxy to the origin server.
 // It forces TLS since a WAF that doesn't protect the origin connection
 // is just security theater.
@@ -110,6 +235,7 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>502 Bad Gateway</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}h1{font-size:2rem;color:#f85149;}p{color:#8b949e;}</style></head><body><div style="text-align:center;"><h1>502 Bad Gateway</h1><p>Origin server connection failed or timed out.</p><small style="color:#484f58;">Protected by BotShield</small></div></body></html>`))
 		},
+		ModifyResponse: deceiveResponse,
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(u)
 			// SetURL would point Host at the origin; the origin serves
@@ -148,9 +274,12 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 			if dec := DecisionFromContext(r.In.Context()); dec != "" {
 				r.Out.Header.Set(decisionHeader, dec)
 				r.Out.Header.Set(scoreHeader, strconv.Itoa(ScoreFromContext(r.In.Context())))
+				if dec == signals.DecisionDeceive.String() {
+					// Strip Accept-Encoding so origin returns uncompressed HTML that can be transformed.
+					r.Out.Header.Del("Accept-Encoding")
+				}
 			}
 		},
 	}
 	return p, nil
 }
-

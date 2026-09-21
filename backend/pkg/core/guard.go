@@ -41,6 +41,13 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ja4 := JA4FromContext(r.Context())
+
+	ip := r.RemoteAddr
+	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
+		ip = ip[:idx]
+	}
+
 	// Look up the tenant by the incoming Host header.
 	// Strip port if present, as DNS/CNAME doesn't include it.
 	host := r.Host
@@ -56,12 +63,34 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ja4 := JA4FromContext(r.Context())
 	enforced := tenant.Config.Mode == config.ModeEnforce
 
-	ip := r.RemoteAddr
-	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
-		ip = ip[:idx]
+	// Honeypot trap. The trap link is injected into deceived HTML
+	// responses (pkg/deception) and is invisible to humans, so a fetch
+	// of this path is evidence that something walked the DOM. It is
+	// recorded against this tenant only, and scored rather than blocked
+	// outright — the decision still comes from combined signals.
+	//
+	// This is deliberately below the tenant lookup: recording against a
+	// host we don't serve would let anyone pointing a DNS record at us
+	// write into detection state for free.
+	if r.URL.Path == signals.HoneypotPath {
+		// Only the first trip from a caller is counted. The trail is a
+		// fixed-size ring buffer, so recording every hit would let one
+		// bot in a loop evict this customer's real decision history.
+		if firstTrip := signals.RecordHoneypotTrip(tenant.ID, ip, ja4); firstTrip {
+			tenant.Stats.Record(signals.DecisionBlock)
+			tenant.Trail.Record(evidence.Evidence{
+				JA4:      ja4,
+				Signals:  []string{"honeypot_trap"},
+				Decision: signals.DecisionBlock.String(),
+				Enforced: enforced,
+			})
+		}
+		// A 404 gives the crawler nothing back: no hint the path was
+		// special, and no body worth fetching again.
+		http.NotFound(w, r)
+		return
 	}
 
 	// SEO & Search Engine Crawler Protection:
@@ -110,6 +139,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		UA:     r.UserAgent(),
 		Header: r.Header,
 		Path:   r.URL.Path,
+		Tenant: tenant.ID,
 	}
 	score := signals.Score(facts)
 	decision := signals.DecideWithPolicy(score, tenant.Config.Policy)
@@ -149,4 +179,3 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tenant.Origin.ServeHTTP(w, r)
 	}
 }
-
