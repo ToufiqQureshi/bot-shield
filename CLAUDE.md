@@ -1227,18 +1227,32 @@ Never hide incomplete work behind "done".
 
 Docs and commit messages are long on purpose. **Chat replies are not.**
 
-- Default to **5 lines or fewer**. A one-line answer is a good answer.
-- Lead with the answer. No preamble, no recap of what was just asked.
-- Report what changed, not how it was done. The commit message has the how.
-- Skip the tables, headers and bullet lists unless the answer is genuinely a
-  list. Prose in two lines beats a formatted wall.
-- Owner asks a question → answer it. Do not attach a status update.
-- Do not re-explain something already said in this conversation.
-- Hinglish, plain words.
+**Cut words, not information.** The owner wants the same facts, the same
+caveats and the same trade-offs — in a fraction of the space. A short reply
+that drops the catch, the number, or the risk is worse than a long one, not
+better. Density is the goal, not thinness.
 
-Longer is allowed only when the owner asks for detail, or when a real
-trade-off needs stating before they decide — and then still as short as it
-can honestly be.
+What goes:
+
+- Preamble, recap of the question, "great question", restating the task
+- Headers, tables and bullets when two lines of prose would do
+- How it was done — the commit message has that
+- Anything already said in this conversation
+- A status update bolted onto the answer to a question
+
+What stays, always:
+
+- The answer itself, first line
+- Numbers, names, exact flags and file paths
+- The catch, the risk, the thing that will bite them
+- What is NOT done, when that is part of the truth
+
+Default **5 lines or fewer**. One line is a good answer. Hinglish, plain
+words.
+
+Longer is allowed when the owner asks for detail, or when a real trade-off
+needs stating before they decide — and then still as short as it can honestly
+be.
 
 The §31 report format below applies to **finished feature work**, not to
 every reply.
