@@ -221,6 +221,9 @@ fallback, not a slower default.
 
 ## Learned scoring, shadow only — BUILT
 
+> New to this? `docs/SCORING_EXPLAINED.md` walks through it from zero with
+> worked numbers. This section is the summary.
+
 `pkg/signals` scores a request by adding fixed hand-chosen weights for each
 check that fired and comparing the total to a fixed threshold. That is a linear
 model whose coefficients nobody measured.

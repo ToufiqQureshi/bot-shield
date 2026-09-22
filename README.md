@@ -108,6 +108,10 @@ Two read-only endpoints are served alongside your traffic:
 
 ### Learned scoring (shadow only)
 
+> Working on this? [`docs/SCORING_EXPLAINED.md`](docs/SCORING_EXPLAINED.md)
+> explains how scoring and the model work from zero, with worked numbers and
+> no machine-learning background assumed.
+
 hakaishield's scoring weights are chosen by hand: a fragmented handshake
 is worth 50, a header anomaly 25, and so on. Those are reasonable
 guesses, but they are guesses.

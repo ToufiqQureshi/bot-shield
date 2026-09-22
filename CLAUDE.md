@@ -185,6 +185,7 @@ contains the answer.
 | `DECISIONS.md` | Why important choices were made |
 | `RESEARCH.md` | Threats, techniques, vendors, libraries, research |
 | `PROGRESS.md` | What actually happened in previous work |
+| `SCORING_EXPLAINED.md` | How scoring and the learned model work, from zero — the onboarding read for anyone touching either |
 | `LEARNED_SCORING.md` | How the learned scoring model gets its data, and what must be true before it may decide anything |
 | `CLAUDE.md` | How engineering work must be performed |
 

@@ -8,6 +8,10 @@
 > be true before a learned model is allowed to decide anything.
 >
 > Read this before building ROADMAP item 26.
+>
+> **New to the project?** Read `docs/SCORING_EXPLAINED.md` first. It explains
+> how scoring and the model actually work, with worked numbers, and assumes no
+> machine-learning background. This document assumes you have read it.
 
 ---
 

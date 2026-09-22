@@ -4076,3 +4076,40 @@ Remaining gaps:
     there is evidence the loss matters.
   - `DeleteSamplesBefore` exists but nothing calls it on a schedule.
   - No dashboard surface for any of this, and still none for `Evidence.Model`.
+
+### 2026-09-22 - docs/SCORING_EXPLAINED.md, the onboarding read
+
+Added `docs/SCORING_EXPLAINED.md`: how scoring and the learned model actually
+work, written for someone who has just joined and has no machine-learning
+background. Linked from `README.md`, `CLAUDE.md`'s document table,
+`docs/ARCHITECTURE.md` and the top of `docs/LEARNED_SCORING.md`.
+
+The split between the three scoring documents is now:
+  - `SCORING_EXPLAINED.md` - how it works (read first)
+  - `LEARNED_SCORING.md` - the design, the traps, the open decisions
+  - `DECISIONS.md` / `RESEARCH.md` - why logistic regression and not a hosted
+    model
+
+Content: the nine checks and why they are deliberately different kinds of
+evidence; the hand-tuned arithmetic and where 50/25/100 came from; the
+realisation that the rule scorer is already a linear model, which is what
+decides that the answer is logistic regression rather than anything larger;
+log-odds and the sigmoid explained from scratch, including why weights in
+log-odds space are what makes `Explain` possible at all; gradient descent in
+five lines; the two label sources and the two that look usable and are not;
+selection bias; the safety rails with the reason each one exists; how to run
+every step; how to read the training output; a list of mistakes that look
+right; a code map; and a glossary.
+
+The worked examples use real weights from an actual training run and outputs
+verified by running `Predict` against them, not illustrative numbers. Four
+cases are walked through, two of them chosen because they are uncomfortable:
+
+  - `header_anomaly` alone: the model allows it (6.9%) where the rules
+    challenge it (score 25). A genuine disagreement, used to show what shadow
+    mode is for rather than hidden.
+  - `scripting_tool` alone: the model is *more* confident (95.9%) than a
+    two-signal case that blocks (95.7%), and still only challenges. The
+    clearest demonstration of the no-lone-signal rule.
+
+No code changed in this entry.
