@@ -6,6 +6,7 @@ import (
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/decide"
 	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
@@ -20,6 +21,12 @@ type Guard struct {
 	store     *tenant.Store
 	challenge *challenge.Challenge
 	clientIP  *ClientIPResolver
+	// model, when set, scores every request alongside the rule scorer and
+	// records what it would have done. It never decides anything: a model
+	// is allowed to enforce only after its recorded disagreements have
+	// been looked at on real traffic. Nil is the normal state and costs
+	// nothing.
+	model *decide.Model
 }
 
 // NewGuard combines the tenant store with a challenge.Challenge instance
@@ -36,6 +43,17 @@ func NewGuardWithClientIPResolver(store *tenant.Store, challenge *challenge.Chal
 		clientIP = &ClientIPResolver{}
 	}
 	return &Guard{store: store, challenge: challenge, clientIP: clientIP}
+}
+
+// WithShadowModel attaches a trained model that scores alongside the rule
+// scorer without affecting any decision. Passing nil turns it off again.
+//
+// Call it during setup, before the guard serves traffic. The model is
+// read-only once attached, so requests share it without locking, but
+// swapping it on a guard that is already serving would be a data race.
+func (g *Guard) WithShadowModel(m *decide.Model) *Guard {
+	g.model = m
+	return g
 }
 
 // ServeHTTP decides per request. A visitor who already solved a
@@ -169,6 +187,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Score:    score,
 		Decision: decision.String(),
 		Enforced: enforced,
+		Model:    g.shadowOpinion(evaluation.Fired, decision),
 	})
 
 	// The dashboard wants to know what would have happened, but the
@@ -194,5 +213,41 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.challenge.Serve(w, r)
 	default:
 		tenant.Origin.ServeHTTP(w, r)
+	}
+}
+
+// shadowOpinion scores a request with the learned model, if one is
+// loaded, and returns what it would have decided. It returns nil when no
+// model is configured, which is the normal case and the reason this costs
+// nothing by default.
+//
+// Disagreements are counted, not just recorded: the trail is a bounded
+// ring buffer that a busy tenant overwrites within minutes, so a counter
+// is the only thing that survives long enough to answer "how often does
+// the model differ from the rules?" — which is the question that decides
+// whether a model may ever enforce.
+func (g *Guard) shadowOpinion(fired uint32, ruleDecision signals.Decision) *evidence.ModelOpinion {
+	if g.model == nil {
+		return nil
+	}
+
+	p := g.model.Predict(fired)
+	if p.Decision == ruleDecision {
+		observability.Inc("model_shadow_agree_total")
+	} else {
+		observability.Inc("model_shadow_disagree_total")
+	}
+
+	contributions := g.model.Explain(fired)
+	reasons := make([]evidence.ModelReason, len(contributions))
+	for i, c := range contributions {
+		reasons[i] = evidence.ModelReason{Feature: c.Feature, Weight: c.Weight}
+	}
+
+	return &evidence.ModelOpinion{
+		Decision:    p.Decision.String(),
+		Probability: p.Probability,
+		Confidence:  p.Confidence,
+		Reasons:     reasons,
 	}
 }

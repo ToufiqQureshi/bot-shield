@@ -76,6 +76,7 @@ cd backend && go build -o hakaishield .
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — hakaishield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
 | `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
+| `-model` | A trained decision model (see below) to score alongside the rules. It records what it would have decided and never affects a decision. Unset leaves it off. A model that does not match this build's checks refuses to start. |
 | `-db-url` | PostgreSQL URL for your Supabase project's database (Project Settings → Database in the Supabase dashboard). Required, along with `-supabase-url`, for the dashboard's domains/rules/settings API. |
 | `-supabase-url` | Your Supabase project URL (e.g. `https://xxxx.supabase.co`). Used to verify dashboard session JWTs against that project's published JWKS — no shared secret needed. Required, along with `-db-url`, for that same API. |
 
@@ -103,6 +104,52 @@ Two read-only endpoints are served alongside your traffic:
 |---|---|
 | `GET /api/v1/dashboard/stats` | Running totals: requests seen, passed, challenged, blocked, plus `mode` and `enforcing` so the counts can't be read out of context. No per-visitor data, so it needs no token. |
 | `GET /api/v1/dashboard/evidence` | The last 1000 decisions (24h max), newest first: timestamp, JA4, which signals fired, score, decision, and whether it was `enforced`. Accepts `?limit=N`. **Requires `Authorization: Bearer <-evidence-token>`.** |
+
+### Learned scoring (shadow only)
+
+hakaishield's scoring weights are chosen by hand: a fragmented handshake
+is worth 50, a header anomaly 25, and so on. Those are reasonable
+guesses, but they are guesses.
+
+`-model` loads a model that answers the same question from the same
+signals with weights **fitted to real labelled traffic**. It returns a
+typed decision, a calibrated probability, a confidence, and a breakdown
+of exactly what each signal contributed — so it stays as explainable as
+the rules it sits beside.
+
+It costs 14 nanoseconds and zero allocations per request: it is a dot
+product over the checks that already ran, in-process, with no network
+call and no per-request API charge.
+
+**It never decides anything.** It scores alongside the rule engine and
+its opinion is recorded in the evidence trail under `model`, next to the
+decision your visitor actually got. That is how a model earns the right
+to enforce — by being compared against the rules on your real traffic
+first. It also will not block on a single signal, however certain it is.
+
+Build a model with the offline trainer, from one JSON object per line in
+the shape the evidence trail already records:
+
+```bash
+# labelled.jsonl
+# {"signals":["ua_mismatch","header_anomaly"],"automated":true}
+# {"signals":[],"automated":false}
+
+go run ./cmd/hakaishield-train -in labelled.jsonl -out model.json
+./hakaishield -target https://example.com -model model.json
+```
+
+The trainer holds back a fifth of the data and reports how the model did
+on traffic it was *not* trained on, along with false positives and false
+negatives separately — a model that does well on the data it was fitted
+to and poorly on the rest has memorised your sample, not learned your
+traffic.
+
+The hard part is the `automated` label, not the training. It has to come
+from something that actually knows — a solved challenge, a verified
+good-bot reverse lookup, your own report. Labelling from hakaishield's
+current score would only teach the model to repeat the guesses it exists
+to improve on.
 
 The evidence endpoint is off unless you set a token, and it never gets
 wildcard CORS — it returns visitor fingerprints, and left open it would

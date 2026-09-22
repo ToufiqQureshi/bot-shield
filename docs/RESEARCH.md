@@ -585,3 +585,63 @@ Sources: [okasi/bot-signal](https://github.com/okasi/bot-signal),
 [Cap — open-source CAPTCHA comparison](https://github.com/tiagozip/cap),
 [Nepenthes](https://nepenthes.online/),
 [Pinggy — AI crawlers cost more CPU than real traffic](https://pinggy.io/blog/ai_crawlers_cost_more_cpu_than_real_traffic/).
+
+## 2026-09-22 — "System One" models (TypeSafe Jev) and what they mean for scoring
+
+TypeSafe AI launched **Jev** on 2026-09-15 ($40M seed, DCVC; founder Diogo
+Almeida, ex-OpenAI). It is not a language model. Instead of generating text
+token by token, it takes unstructured program state plus a typed question and
+returns a typed value with a probability and a confidence score in one parallel
+pass. Because the valid outputs are fixed by a schema up front, it cannot
+hallucinate or emit a type error. Reported latency is 70–500 ms at roughly
+$0.042 per million input tokens, pitched as 100–200x faster and cheaper than an
+LLM for decision and classification work. Target use cases are real-time loops:
+games, robots, simulations, and agent harnesses that need one judgement.
+
+Community ports appeared within a week, all aimed at local Apple Silicon
+inference and none official: `bnsd55/jevmlx` (Jev-style parallel constrained
+decisions over any MLX model), `daseinlabs/open-jev` (one prefill, KV cache
+expanded across an option batch, every option scored in one padded forward
+pass), `laya-mlx` (MLX port of the Laya checkpoints, ~13 ms median), and
+Core ML/ANE builds in Swift (`siren2345/jevlocal-mac`, `jev_apple_npu`,
+`GodModeAI2025/JevCoreML`).
+
+### Why none of this ships in hakaishield
+
+Calling a hosted System One model per request is the wrong shape for us on
+three counts, each a documented project rule:
+
+- **Cost and latency (Sections 15, 19).** 70–500 ms of network round trip per
+  request against a guard that currently spends ~36 µs end to end. It is also a
+  per-request external API charge on traffic that is already our hosting cost.
+- **Failure behaviour (Section 15).** An external dependency in the request
+  path needs a timeout and a fail-open path, which hands anyone who can make
+  the dependency slow a way to switch our scoring off.
+- **Explainability.** Our differentiator is request-level evidence a customer
+  can argue with. A hosted probability is not evidence we can defend.
+
+The MLX and Core ML ports are Apple Silicon local inference. The backend is Go
+on Linux. They do not apply.
+
+### What is worth taking
+
+The **shape**, not the model. The useful idea is that a decision system should
+return a typed value with a calibrated probability and a confidence, rather
+than a number a human has to interpret — and that the weights behind it should
+be measured rather than guessed.
+
+Our scorer already has that shape: `pkg/signals` turns a request into a small
+set of fired binary checks, adds fixed weights, and compares the total to a
+threshold. That is a linear model whose coefficients were chosen by hand. The
+honest version of "build our own Jev" is therefore not a transformer, an MLX
+port, or a hosted call. It is logistic regression over the checks we already
+run, trained on our own labelled traffic, inferring in-process in Go.
+
+That is what `pkg/decide` implements: 14 ns per request, zero allocations, no
+network, and a per-feature contribution breakdown that keeps the evidence trail
+intact. See `docs/DECISIONS.md`, "Learned decision weights are a linear model
+over existing signals".
+
+Sources: typesafe.ai/blog/introducing-system-one-models-and-jev;
+thenewstack.io/typesafe-jev-system-one; tomshardware.com (2026-09);
+datacamp.com/blog/system-one-models-jev; en.wikipedia.org/wiki/Jev_(AI_model).

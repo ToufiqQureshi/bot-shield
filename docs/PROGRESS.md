@@ -3699,3 +3699,162 @@ Remaining gaps:
   - Domain ownership verification and ACME onboarding are still not built. Pending domains still do not route by Host, but there is no verified transition to active yet.
   - Redis keys for velocity/crawl are still not tenant-scoped.
   - Custom mitigation rules and protection settings are still CRUD-only and do not alter live scoring/enforcement.
+
+## 2026-09-22 - Learned scoring weights (`pkg/decide`), shadow only
+
+Changed:
+  - `pkg/decide` (new): logistic regression over the checks `pkg/signals`
+    already runs. `Predict` returns a typed `signals.Decision` plus a
+    calibrated probability, a confidence, and the number of checks that fired;
+    `Explain` returns each fired check's exact push on the result in log-odds.
+    `Train` fits weights by deterministic batch gradient descent with L2;
+    `Score` reports log loss, accuracy, and false positives and false negatives
+    separately. `Load`/`Save` persist a model as JSON. No new dependency.
+  - `pkg/signals/score.go`: `Evaluation.Fired`, a bitmask where bit i is set
+    when `checks[i]` fired, plus `FeatureNames()`. The bitmask and the signal
+    names are produced by the same loop over the same list, so a model scores
+    exactly the checks a customer is shown. Zero allocation.
+  - `pkg/evidence`: `Evidence.Model` (`*ModelOpinion`), omitted entirely when
+    no model is loaded, so existing evidence JSON is unchanged.
+  - `pkg/core/guard.go`: optional shadow model via `WithShadowModel`. It scores
+    every request alongside the rules and records what it would have decided.
+    It cannot reach a decision path — the only call site returns an evidence
+    record. Agreements and disagreements are counted
+    (`model_shadow_agree_total`, `model_shadow_disagree_total`) because the
+    trail is a bounded ring buffer a busy tenant overwrites within minutes.
+  - `main.go`: `-model <file>`. A model that does not match this build's checks
+    is fatal at startup rather than ignored.
+  - `cmd/hakaishield-train` (new): offline trainer. Reads labelled traffic as
+    one JSON object per line in the shape the evidence trail already records
+    (`{"signals":[...],"automated":bool}`), holds back a fifth, and reports
+    both scores on stderr before writing the model.
+
+Why:
+  - The scoring weights in `pkg/signals` (50/50/25/50/50, threshold 100) are
+    hand-chosen guesses. That structure is already a linear model; only its
+    coefficients are unmeasured. Fitting them to labelled traffic changes where
+    the numbers come from, not the architecture.
+  - This started as a question about TypeSafe's Jev (a hosted "System One"
+    model) and its MLX/Core ML ports. Those were rejected: 70-500 ms per
+    request against a ~36 us guard, a per-request external charge, a
+    request-path dependency that fails open, and a probability we could not
+    defend as evidence. The MLX and Core ML work targets local Apple Silicon;
+    the backend is Go on Linux. See `docs/RESEARCH.md` and `docs/DECISIONS.md`.
+
+Tests and verification:
+  - New: `pkg/decide/model_test.go`, `pkg/decide/train_test.go`,
+    `pkg/decide/decide_bench_test.go`, `pkg/signals/features_test.go`,
+    `pkg/core/shadowmodel_test.go`, `cmd/hakaishield-train/main_test.go`.
+  - Coverage includes each typed outcome, the no-lone-signal block rule,
+    contributions summing to the predicted log-odds, bits from checks the model
+    does not know, saturated and extreme weights, Save/Load round trip compared
+    by behaviour across every fired combination, eleven rejected model files,
+    one-class training data, samples from a different check list, training
+    divergence, deterministic retraining, log-loss clamping, and the trainer
+    refusing truncated lines, misspelled fields, unknown check names and empty
+    input.
+  - `go build ./...`, `go vet ./...`, `go test ./...` all pass.
+  - `go test -race ./pkg/decide/ ./pkg/core/ ./pkg/signals/ ./cmd/...` passes.
+  - End to end on 3,840 synthetic labelled requests: trainer produced a model,
+    the proxy loaded it, and the learned weights ranked the signals
+    independently of the hand-tuned ones - `scripting_tool` 6.98,
+    `honeypot_trap` 6.21, `crawl_pattern` 5.88, `ua_mismatch` 5.72,
+    `fragmented_handshake` 2.04, `header_anomaly` 1.22. That last one matching
+    the hand-tuned 25-vs-50 split is a sanity check on the pipeline, nothing
+    more: **the data was synthetic, so its 0.987 held-out accuracy and zero
+    false positives measure the arithmetic, not the product.**
+
+Mutation checks (each break applied, tests re-run, then restored):
+  - Removed the `count >= 2` block rule -> TestPredictNeverBlocksOnALoneSignal
+    failed as expected.
+  - Disabled the feature-name check in `Load` -> TestLoadRejectsUnusableModels
+    and TestFeatureMismatchIsIdentifiable failed as expected.
+  - Removed the one-class training guard -> TestTrainRefusesOneClassData failed
+    as expected.
+  - Dropped the unknown-bit mask from `Predict` ->
+    TestPredictIgnoresBitsOutsideTheModel failed as expected.
+  - Removed the log-loss clamp -> TestScoreHandlesSaturatedProbabilities failed
+    as expected.
+  - Removed the `Explain` sort ->
+    TestExplainListsOnlyFiredFeaturesStrongestFirst failed as expected.
+  - Set the fired bit for the wrong check index ->
+    TestFiredBitsAgreeWithSignalNames failed as expected.
+  - Made `FeatureNames` return the live slice -> TestFeatureNamesIsACopy failed
+    as expected.
+  - Let the model override the rule decision in the guard ->
+    TestShadowModelNeverChangesTheDecision failed as expected.
+  - Recorded an opinion with no real reasons, and one with no model loaded ->
+    the corresponding guard tests failed as expected.
+  - One mutation did not isolate as intended: removing only the weight
+    divergence guard in `Train` left the bias guard catching the same case, so
+    the test still passed. Both guards had to be removed for it to fail. Both
+    are kept - they cover different variables, and a NaN bias would make every
+    prediction NaN, which compares false against every threshold and lands
+    every request in `DecisionAllow`.
+
+Bugs found and fixed during this work:
+  - Two of the first tests written were wrong rather than the code: the
+    threshold arithmetic in TestPredictReturnsEachTypedOutcome did not actually
+    cross the bars it claimed, and TestShadowModelNeverChangesTheDecision
+    compared challenge-page bodies byte for byte, which differ by design
+    because each carries a fresh random nonce. The second now compares status,
+    whether the origin was reached, and the recorded decision and score.
+  - The finiteness check originally written into `Load` was unreachable:
+    `encoding/json` refuses any number it cannot hold in a float64, so NaN and
+    infinity cannot survive a model file. It was removed as dead code
+    (`CLAUDE.md` Section 21) and replaced with
+    TestJSONCannotCarryNonFiniteNumbers, which pins that assumption, plus
+    TestHugeButFiniteWeightsStaySane covering the case that is reachable.
+  - A one-use `newBytesReader` wrapper in the trainer was inlined and deleted
+    (`CLAUDE.md` Section 7).
+
+Security review:
+  - The model cannot influence any decision. `g.model` is read only inside
+    `shadowOpinion`, whose single call site is the evidence record;
+    TestShadowModelNeverChangesTheDecision fails if that changes.
+  - No new visitor-controlled input. The feature bitmask is derived from
+    `signals.Evaluate`, which is the existing scoring path.
+  - No tenant boundary crossed. The model is process-wide, immutable after
+    load, carries no tenant data, and `Predict` is a pure function of one
+    request's bitmask.
+  - A model file is operator input and is refused rather than repaired:
+    version, feature names, feature order, feature count, weight count,
+    threshold range and ordering, unknown JSON fields. The read is bounded at
+    1 MiB. A bad file is fatal at startup, so a running process never
+    misreports which model it is using.
+  - `Load` copies the decoded slices, so nothing a caller keeps can change what
+    a running guard scores with.
+
+Performance and cost:
+  - `BenchmarkPredict`: 14.12 ns/op, 0 B/op, 0 allocs/op.
+  - `BenchmarkExplain`: 155.9 ns/op, 176 B/op, 4 allocs/op - separate from
+    `Predict` for exactly this reason, and reached only where a decision is
+    already being recorded.
+  - Against `BenchmarkGuardServeHTTP` at ~36 us/op, that is about 0.04% of the
+    request path for the prediction and 0.4% for the explanation.
+  - No network call, no external API charge, no per-request storage. Training
+    runs offline and never in the request path.
+  - Memory: `Evidence.Model` adds roughly 300 bytes per trail record when a
+    model is loaded, bounded by the existing 1000-record ring buffer, so about
+    300 KB per tenant worst case and nothing at all when `-model` is unset.
+    That is comparable to what `Evidence.Signals` already holds.
+
+Remaining gaps:
+  - **The model has nothing trustworthy to train on.** Labels have to come from
+    something that actually knows a request's true nature - a solved challenge,
+    a verified good-bot reverse lookup, a customer report. Labelling from the
+    current rule score would teach the model to repeat the guesses it exists to
+    improve on. `ROADMAP.md` item 26 is the prerequisite; item 25 is marked
+    in-progress, not done, for this reason.
+  - No dashboard surface for `Evidence.Model`. The field is served by the
+    existing evidence endpoint but nothing in `dashboard/` reads it yet. That
+    is deliberate for this pass: there is no trained model to show, and a panel
+    rendering an absent field would be the kind of believable-looking empty
+    state `CLAUDE.md` Section 27 warns about. It should be wired when item 26
+    produces a real model.
+  - No hot reload. Swapping a model needs a restart, and `WithShadowModel` is
+    documented as setup-only because changing it on a serving guard would be a
+    data race.
+  - The trainer's holdout is the tail of the file, not a random split, so it is
+    reproducible but assumes whoever produced the file did not order it by
+    label.

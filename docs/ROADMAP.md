@@ -417,6 +417,32 @@ always the operator.
 
 ## P1 — makes it meaningfully harder to bypass
 
+- [~] **25. Learned scoring weights (`pkg/decide`)** — the scoring engine's
+      weights (item 5) are hand-chosen guesses. `pkg/decide` fits them to
+      labelled traffic instead: logistic regression over the same checks,
+      typed decision plus calibrated probability, confidence, and a
+      per-feature contribution breakdown. Pure Go, in-process, 14 ns and zero
+      allocations per request, no new dependency.
+
+      **Status: pipeline done, enforcement deliberately not.** The model runs
+      in shadow only (`-model`), recording what it would have decided next to
+      what the rules actually did. `cmd/hakaishield-train` fits a model from
+      labelled traffic in the shape the evidence trail already records.
+
+      **Blocked on labels, not code.** Training needs requests whose true
+      nature is known from something that actually knows — a solved challenge,
+      a verified good-bot reverse lookup, a customer report. Labelling from the
+      current rule score would only teach the model to repeat the guesses it
+      exists to improve on. The next step is item 26, not more model code.
+
+- [ ] **26. Label pipeline for learned scoring** — capture labelled traffic
+      that item 25 can actually train on. A solved JS challenge is a strong
+      human label and the guard already knows about it; a verified good-bot
+      reverse DNS lookup is a strong automated label. Persisting fired checks
+      plus the label, tenant-scoped and bounded, is the prerequisite for ever
+      enforcing a learned model. See `docs/DECISIONS.md`, "Learned decision
+      weights are a linear model over existing signals".
+
 - [ ] **19. Known-browser fingerprint database** — a maintained set of
       JA4 fingerprints for real browser builds, refreshed on a
       schedule, so `UAMismatch` can answer *"is this actually Chrome

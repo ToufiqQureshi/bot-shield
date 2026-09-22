@@ -23,6 +23,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 	"github.com/ToufiqQureshi/hakaishield/pkg/core"
 	"github.com/ToufiqQureshi/hakaishield/pkg/db"
+	"github.com/ToufiqQureshi/hakaishield/pkg/decide"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/rules"
 	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
@@ -99,6 +100,7 @@ func main() {
 	trustedProxyCIDRs := flag.String("trusted-proxy-cidrs", "", "comma-separated proxy CIDRs allowed to supply X-Forwarded-For; leave empty to trust only direct peers")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", os.Getenv("DATABASE_URL"), "PostgreSQL URL for the Supabase project's database (Project Settings > Database in the Supabase dashboard). Falls back to $DATABASE_URL (including from a local .env file) if unset.")
+	modelPath := flag.String("model", "", "trained decision model (pkg/decide) to score alongside the rules in shadow; it never affects a decision. Unset leaves it off.")
 	supabaseURL := flag.String("supabase-url", os.Getenv("SUPABASE_URL"), "Supabase project URL (e.g. https://xxxx.supabase.co); used to verify dashboard session JWTs against the project's published JWKS. Required, with -db-url, to enable the domains/rules/settings API. Falls back to $SUPABASE_URL (including from a local .env file) if unset.")
 	flag.Parse()
 
@@ -204,6 +206,18 @@ func main() {
 	}
 	guard := core.NewGuardWithClientIPResolver(store, challengeHandler, clientIPResolver)
 
+	// A model scores alongside the rules and is recorded, never acted on.
+	// A bad model file is fatal rather than ignored: starting anyway would
+	// look like the operator's model was running when it was not.
+	if *modelPath != "" {
+		model, err := loadShadowModel(*modelPath)
+		if err != nil {
+			log.Fatalf("hakaishield: -model: %v", err)
+		}
+		guard.WithShadowModel(model)
+		log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests); it records opinions and decides nothing", *modelPath, model.TrainedOn())
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/__hakaishield/challenge", challengeHandler.Handler())
 	mux.Handle("/__hakaishield/verify", challengeHandler.Handler())
@@ -306,4 +320,15 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("hakaishield: shutdown error: %v", err)
 	}
+}
+
+// loadShadowModel reads a trained model and checks it against the checks
+// this binary actually runs.
+func loadShadowModel(path string) (*decide.Model, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return decide.Load(f, signals.FeatureNames())
 }
