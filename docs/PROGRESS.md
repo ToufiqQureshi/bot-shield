@@ -3858,3 +3858,49 @@ Remaining gaps:
   - The trainer's holdout is the tail of the file, not a random split, so it is
     reproducible but assumes whoever produced the file did not order it by
     label.
+
+### 2026-09-22 - CI follow-up on the same work: lint, and a real bug behind it
+
+CI (`golangci-lint`) failed on the first push. 27 issues total: 13 already
+failing on `origin/main` (runs 26, 27 and 28 were red before this branch
+existed) and 14 introduced here. Both sets are fixed, in separate commits.
+
+One of the 14 was a real bug, not lint noise:
+  - `cmd/hakaishield-train` wrote its model under `defer f.Close()`. A write
+    that only fails when the file is flushed would have left a truncated model
+    on disk while the command exited 0, and the next thing to read it would be
+    the proxy at startup. The write moved into `saveModel(*decide.Model,
+    io.WriteCloser)` so the close error is returned.
+  - The first test written for it was vacuous: writing to a directory fails at
+    `os.Create`, before any close, so it passed with the bug reinstated. The
+    mutation check caught that. `TestSaveModelReportsACloseFailure` now uses a
+    writer that accepts every write and fails only on close; re-deferring the
+    close fails it.
+
+The rest were not bugs and were fixed rather than suppressed:
+  - G115 on `1 << uint(i)` in `pkg/decide` and `pkg/signals`: the conversions
+    were unnecessary. Go takes a signed shift count and every index is a range
+    index over a slice bounded to 32 entries, so dropping `uint()` is simpler
+    than the cast and removes the finding.
+  - G304 on the `-model`, `-in` and `-out` paths: opening the file named on the
+    command line is the feature, and no visitor-controlled value reaches it.
+    Annotated with `#nosec` and a reason.
+  - errcheck on read-only file closes and the stderr progress line: nothing was
+    written, so those close errors say nothing, and a failed progress line must
+    not stop a correctly trained model from being saved.
+
+The 13 pre-existing ones (`loadDotEnv`'s open/close/Setenv, the JWKS response
+body close, and redundant embedded-field selectors in `pkg/auth/jwt.go` and
+four test files) were cleared in their own commit. The lint step is one job, so
+this branch could not go green while they stood, and neither could main.
+
+Verification after both commits: `go vet ./...`, `gofmt -l .` (clean),
+`go build ./...`, `go test -race ./...` (all pass), and `golangci-lint run`
+reports **0 issues** across the whole backend for the first time.
+
+Mutation checks added:
+  - Re-deferred the model file's close -> TestSaveModelReportsACloseFailure
+    failed as expected.
+  - Set the fired bit for the wrong check index after dropping the `uint()`
+    cast -> TestFiredBitsAgreeWithSignalNames failed as expected, confirming
+    the shift change did not alter behaviour.
