@@ -278,8 +278,11 @@ object per line in the shape the evidence trail already records:
 ```
 
 **What is missing is labels, not code.** `automated` has to come from something
-that actually knows — a solved challenge, a verified good-bot reverse lookup, a
-customer report. See `docs/ROADMAP.md` items 25 and 26.
+that actually knows, and which sources qualify is less obvious than it looks —
+a solved challenge does, a verified good-bot lookup does not. The whole
+pipeline, the traps in it, and the gate a model has to pass before it may
+decide anything are written up in **`docs/LEARNED_SCORING.md`**. Roadmap items
+25 and 26.
 
 ---
 

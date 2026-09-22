@@ -3904,3 +3904,55 @@ Mutation checks added:
   - Set the fired bit for the wrong check index after dropping the `uint()`
     cast -> TestFiredBitsAgreeWithSignalNames failed as expected, confirming
     the shift change did not alter behaviour.
+
+### 2026-09-22 - docs/LEARNED_SCORING.md, and a correction to ROADMAP item 26
+
+Added `docs/LEARNED_SCORING.md`: the design for how a learned model actually
+gets fed, since the code is finished and the data is not. Linked from
+`README.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md` item 26, and the
+document table in `CLAUDE.md`.
+
+Writing it against the code turned up two things that contradict what item 26
+previously claimed, both now corrected there:
+
+  - **A verified good-bot lookup is not a usable label.** `guard.go` checks
+    `signals.IsVerifiedGoodBot` and forwards to the origin *before*
+    `signals.Evaluate` runs, so verified crawlers never produce a fired vector
+    to pair a label with. Worse, training on one would teach the model that
+    crawler-shaped traffic should be stopped - a false positive aimed at
+    legitimate bots, which is fine for the verified ones that bypass scoring
+    and not fine for every unverified client that resembles them.
+  - **A solved challenge label needs the vector parked server-side.** The
+    solve arrives on a later request than the one that was scored.
+    `pkg/challenge` already has a Redis `NonceStore`, so `nonce -> fired`
+    belongs there. It must not ride inside the challenge token: the token goes
+    to the client, and a signed list of which checks a bot tripped tells it
+    exactly what to fix - the same reasoning that keeps the evidence endpoint
+    token-gated and off wildcard CORS.
+
+Two further findings recorded in the new document rather than the roadmap:
+
+  - **`honeypot_trap` must be dropped from the feature vector of any sample it
+    labelled.** It is one of the nine checks; leaving it in means the model
+    learns the label back instead of learning from the other eight.
+  - **Selection bias is the real trap.** Under `PolicyBalanced` only traffic
+    scoring above zero is challenged, so every human label will come from a
+    human who already looked suspicious. That makes the data good for deciding
+    where the line goes and bad for the base rate. Three corrections are laid
+    out; the leaning is "let the model refine the suspicious band only", as the
+    smallest honest first claim. This is an open decision, flagged as such.
+
+Also written down: why training must never run automatically (a bot that
+deliberately solves challenges is injecting human labels for its own
+fingerprint, so auto-retraining hands an attacker a write channel into
+detection), the per-identity sample caps and tenant scoping that belong with
+the collector rather than after it, a storage sketch that keeps only the
+bitmask and label plus a version tag for the positional vector, and the
+checklist a model must clear before it is allowed to enforce - including that
+its held-out false positives must be *better than the rule scorer's*, not
+merely good.
+
+No code changed in this entry.
+
+Remaining gaps: unchanged. Item 26 is still not built; this makes it buildable
+by someone starting cold.

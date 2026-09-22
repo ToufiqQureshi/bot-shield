@@ -146,10 +146,15 @@ to and poorly on the rest has memorised your sample, not learned your
 traffic.
 
 The hard part is the `automated` label, not the training. It has to come
-from something that actually knows — a solved challenge, a verified
-good-bot reverse lookup, your own report. Labelling from hakaishield's
-current score would only teach the model to repeat the guesses it exists
-to improve on.
+from something that actually knows, independently of hakaishield's own
+score — labelling from that score would only teach the model to repeat
+the guesses it exists to improve on.
+
+Which sources qualify is less obvious than it looks: a solved challenge
+does, a honeypot trip does with one caveat, and a verified good-bot
+lookup does not. That, the collection pipeline, and the bar a model has
+to clear before it may decide anything are in
+[`docs/LEARNED_SCORING.md`](docs/LEARNED_SCORING.md).
 
 The evidence endpoint is off unless you set a token, and it never gets
 wildcard CORS — it returns visitor fingerprints, and left open it would

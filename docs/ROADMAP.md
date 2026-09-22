@@ -436,12 +436,35 @@ always the operator.
       exists to improve on. The next step is item 26, not more model code.
 
 - [ ] **26. Label pipeline for learned scoring** — capture labelled traffic
-      that item 25 can actually train on. A solved JS challenge is a strong
-      human label and the guard already knows about it; a verified good-bot
-      reverse DNS lookup is a strong automated label. Persisting fired checks
-      plus the label, tenant-scoped and bounded, is the prerequisite for ever
-      enforcing a learned model. See `docs/DECISIONS.md`, "Learned decision
-      weights are a linear model over existing signals".
+      that item 25 can actually train on. Persisting fired checks plus a
+      label, tenant-scoped and bounded, is the prerequisite for ever
+      enforcing a learned model.
+
+      **Read `docs/LEARNED_SCORING.md` before starting.** It works the
+      whole thing through, and two of its findings contradict the obvious
+      plan:
+
+      - A **solved JS challenge** is a good human label, but the solve
+        arrives on a later request than the one that was scored, so the
+        fired vector has to be parked against the challenge nonce
+        (`pkg/challenge` already has a Redis `NonceStore`). It must not
+        ride in the token — that hands a bot a signed list of the checks
+        it tripped.
+      - A **verified good-bot lookup is not a usable label**, contrary to
+        what this item used to say. `guard.go` forwards verified crawlers
+        *before* `signals.Evaluate` runs, so no vector exists — and
+        training on it would teach the model to stop crawler-shaped
+        traffic, which is a false positive aimed at legitimate bots.
+      - A **honeypot trip** works, but `honeypot_trap` must be dropped
+        from the vector of any sample it labelled, or the model just
+        learns the label back.
+      - **Selection bias** is the real trap: under PolicyBalanced only
+        score>0 traffic is challenged, so every human label comes from a
+        human who already looked suspicious. Pick a correction before
+        collecting, not after.
+
+      Also see `docs/DECISIONS.md`, "Learned decision weights are a linear
+      model over existing signals".
 
 - [ ] **19. Known-browser fingerprint database** — a maintained set of
       JA4 fingerprints for real browser builds, refreshed on a
