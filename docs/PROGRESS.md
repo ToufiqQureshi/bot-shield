@@ -4113,3 +4113,39 @@ cases are walked through, two of them chosen because they are uncomfortable:
     clearest demonstration of the no-lone-signal rule.
 
 No code changed in this entry.
+
+### 2026-09-22 - docs/WHAT_IS_BUILT.md, the owner's inventory
+
+Added `docs/WHAT_IS_BUILT.md`: a plain-language statement of what the product
+actually does today, written so the owner can explain it to a customer,
+investor or new hire without overclaiming. Linked from `README.md` and the
+`CLAUDE.md` document table.
+
+It exists because the code was written across many agent sessions and the
+owner had no single place to see the result. The other documents each answer
+one question well (`ARCHITECTURE` how it fits together, `SCORING_EXPLAINED`
+how scoring works, `ROADMAP` what is next); none of them answer "what do we
+have".
+
+Assembled by reading the repository, not from memory: the commit history, the
+roadmap's Done section, the package list, the dashboard pages, and the
+measured benchmark numbers already recorded in this file.
+
+The half worth having is section 5, "What is NOT built", stated plainly so it
+can be said first rather than discovered: mitigation rules and protection
+settings persist but do not affect live scoring; there is no billing (the fake
+billing UI was removed earlier and those pages now say so); there is no browser
+fingerprint database, which is the actual moat; no domain ownership
+verification or ACME; HTTP/1.1 only; the learned model has never enforced
+anything; and nothing has ever run against real production traffic.
+
+Section 6 states the one open decision that belongs to the owner rather than to
+engineering - the selection bias in the collected labels - and says so
+explicitly rather than leaving it in a design document nobody opens.
+
+Section 4 collects the measured numbers in one place (guard ~36us, JA4 14.3us,
+`decide.Predict` 14ns, `labels.Record` 102ns, ~6,800 lines of backend code
+against ~6,600 lines of test code, lint clean). All were measured in earlier
+entries of this file; none are estimates.
+
+No code changed in this entry.

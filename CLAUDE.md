@@ -179,6 +179,7 @@ contains the answer.
 
 | Document | Purpose |
 |---|---|
+| `WHAT_IS_BUILT.md` | Plain-language inventory of what actually works today and what does not — for explaining the product to someone |
 | `AGENT.md` | Product purpose and engineering standard |
 | `ARCHITECTURE.md` | Current architecture and system behavior |
 | `ROADMAP.md` | What should be built and current status |

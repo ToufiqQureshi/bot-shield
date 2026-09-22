@@ -14,6 +14,10 @@ Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or A
 - **Evidence-Based Decisions:** Transparent live stats and an evidence endpoint (`/api/v1/dashboard/evidence`) tell you exactly which signals triggered a block.
 - **Enterprise Ready:** Available as a hosted CNAME solution (zero installation) or deployed within your own infrastructure to meet strict data-residency regulations.
 
+> **New here, or need to explain this to someone?**
+> [`docs/WHAT_IS_BUILT.md`](docs/WHAT_IS_BUILT.md) is a plain-language inventory of
+> what actually works today, what does not, and the numbers you can quote.
+
 ## Why this exists
 
 Bot protection today comes in two shapes, and neither fits a mid-size
