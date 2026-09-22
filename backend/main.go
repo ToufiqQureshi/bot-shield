@@ -41,11 +41,13 @@ import (
 // library .env parser and pulling in a dependency for ~15 lines of
 // "split on the first '=', trim quotes" isn't worth it.
 func loadDotEnv(path string) {
-	f, err := os.Open(path)
+	// The path is this program's own, not anything a request supplies.
+	f, err := os.Open(path) // #nosec G304 -- fixed .env path chosen by the operator
 	if err != nil {
 		return // no .env file; nothing to load, not an error
 	}
-	defer f.Close()
+	// Read-only, so a close error says nothing useful.
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -60,7 +62,10 @@ func loadDotEnv(path string) {
 		key = strings.TrimSpace(key)
 		value = strings.Trim(strings.TrimSpace(value), `"'`)
 		if _, alreadySet := os.LookupEnv(key); !alreadySet {
-			os.Setenv(key, value)
+			// Setenv only fails on a key the OS rejects, such as one
+			// containing "=". Skipping that line is the right outcome
+			// and there is nowhere useful to report it this early.
+			_ = os.Setenv(key, value)
 		}
 	}
 }

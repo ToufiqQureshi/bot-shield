@@ -42,8 +42,8 @@ func newTestJWKS(t *testing.T) *testJWKS {
 					"kid": tj.kid,
 					"kty": "EC",
 					"crv": "P-256",
-					"x":   base64.RawURLEncoding.EncodeToString(tj.priv.PublicKey.X.Bytes()),
-					"y":   base64.RawURLEncoding.EncodeToString(tj.priv.PublicKey.Y.Bytes()),
+					"x":   base64.RawURLEncoding.EncodeToString(tj.priv.X.Bytes()),
+					"y":   base64.RawURLEncoding.EncodeToString(tj.priv.Y.Bytes()),
 				},
 			},
 		}

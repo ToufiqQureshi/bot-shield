@@ -34,8 +34,8 @@ func newTestAuth(t *testing.T) *testAuth {
 			"kid": ta.kid,
 			"kty": "EC",
 			"crv": "P-256",
-			"x":   base64.RawURLEncoding.EncodeToString(ta.priv.PublicKey.X.Bytes()),
-			"y":   base64.RawURLEncoding.EncodeToString(ta.priv.PublicKey.Y.Bytes()),
+			"x":   base64.RawURLEncoding.EncodeToString(ta.priv.X.Bytes()),
+			"y":   base64.RawURLEncoding.EncodeToString(ta.priv.Y.Bytes()),
 		}}})
 	})
 	ta.server = httptest.NewServer(mux)

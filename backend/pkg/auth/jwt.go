@@ -207,7 +207,7 @@ func (v *Verifier) refresh() error {
 	if err != nil {
 		return fmt.Errorf("auth: fetching jwks: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
@@ -259,7 +259,7 @@ func decodeECPublicKey(k jwk) (*ecdsa.PublicKey, error) {
 		X:     new(big.Int).SetBytes(xBytes),
 		Y:     new(big.Int).SetBytes(yBytes),
 	}
-	if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+	if !pub.IsOnCurve(pub.X, pub.Y) {
 		return nil, errors.New("public key point is not on P-256")
 	}
 	return pub, nil

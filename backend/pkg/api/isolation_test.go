@@ -40,8 +40,8 @@ func newIsolationAuth(t *testing.T) *isolationAuth {
 			"kid": ia.kid,
 			"kty": "EC",
 			"crv": "P-256",
-			"x":   base64.RawURLEncoding.EncodeToString(ia.priv.PublicKey.X.Bytes()),
-			"y":   base64.RawURLEncoding.EncodeToString(ia.priv.PublicKey.Y.Bytes()),
+			"x":   base64.RawURLEncoding.EncodeToString(ia.priv.X.Bytes()),
+			"y":   base64.RawURLEncoding.EncodeToString(ia.priv.Y.Bytes()),
 		}}})
 	})
 	ia.server = httptest.NewServer(mux)
