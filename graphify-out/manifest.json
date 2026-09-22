@@ -881,12 +881,6 @@
     "ast_hash": "c0167e09724451a9f3162fff5d71a02e",
     "semantic_hash": ""
   },
-  "docs/AUDIT_REPORT_2026-09-22.md": {
-    "mtime": 1790059986.825345,
-    "seen": 1790061506.6896255,
-    "ast_hash": "5d15dc577eb1df8b7a47a6bb36474672",
-    "semantic_hash": ""
-  },
   "docs/CODEX_HANDOFF_NEXT.md": {
     "mtime": 1790062300.3069978,
     "seen": 1790075718.3047295,
@@ -897,24 +891,6 @@
     "mtime": 1790058865.683117,
     "seen": 1790061506.6896255,
     "ast_hash": "81cdba7df7c5041d7934703c596529fb",
-    "semantic_hash": ""
-  },
-  "FEATURE_LIST.md": {
-    "mtime": 1790069111.846831,
-    "seen": 1790075718.3047295,
-    "ast_hash": "60221730582bf86149a2b52ae7a9eb4f",
-    "semantic_hash": ""
-  },
-  "SOFTWARE_ARCHITECTURE_AND_FEATURE_AUDIT.md": {
-    "mtime": 1790062054.9057405,
-    "seen": 1790075718.3047295,
-    "ast_hash": "a0afce76e7e70e51a4d07262ece35898",
-    "semantic_hash": ""
-  },
-  "docs/CODEX_HANDOFF.md": {
-    "mtime": 1790063145.1292198,
-    "seen": 1790075718.3047295,
-    "ast_hash": "4012a963344938ad82f4b647542e913e",
     "semantic_hash": ""
   }
 }
