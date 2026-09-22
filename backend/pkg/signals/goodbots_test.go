@@ -93,3 +93,41 @@ func TestIsVerifiedGoodBot_Spoofed(t *testing.T) {
 		t.Fatalf("expected spoofed Googlebot to be rejected")
 	}
 }
+
+func TestVerifyDNSRejectsLookalikeDomain(t *testing.T) {
+	origLookupAddr := lookupAddrFunc
+	origLookupIP := lookupIPFunc
+	defer func() {
+		lookupAddrFunc = origLookupAddr
+		lookupIPFunc = origLookupIP
+	}()
+
+	const spoofedIP = "198.51.100.43"
+	lookupAddrFunc = func(ctx context.Context, ip string) ([]string, error) {
+		return []string{"evilgooglebot.com."}, nil
+	}
+	lookupIPFunc = func(ctx context.Context, host string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP(spoofedIP)}, nil
+	}
+
+	if verifyDNS(spoofedIP, []string{".googlebot.com"}) {
+		t.Fatal("lookalike PTR domain must not pass good-bot verification")
+	}
+}
+
+func TestHostnameMatchesDomainRequiresBoundary(t *testing.T) {
+	cases := []struct {
+		host, domain string
+		want         bool
+	}{
+		{"crawl.googlebot.com", ".googlebot.com", true},
+		{"googlebot.com", ".googlebot.com", true},
+		{"evilgooglebot.com", ".googlebot.com", false},
+		{"googlebot.com.attacker.example", ".googlebot.com", false},
+	}
+	for _, tc := range cases {
+		if got := hostnameMatchesDomain(tc.host, tc.domain); got != tc.want {
+			t.Errorf("hostnameMatchesDomain(%q, %q) = %v, want %v", tc.host, tc.domain, got, tc.want)
+		}
+	}
+}

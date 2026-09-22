@@ -56,7 +56,7 @@ const (
 // than stored, so memory stays bounded (~12KB) no matter how many paths
 // one IP throws at it (CLAUDE.md Section 15).
 func CrawlPatternSuspected(f RequestFacts) bool {
-	if rdb == nil || f.IP == "" || !claimsBrowser(f.UA) || isStaticAsset(f.Path) {
+	if f.IP == "" || !claimsBrowser(f.UA) || isStaticAsset(f.Path) || !redisRequestAllowed() {
 		return false
 	}
 
@@ -73,7 +73,9 @@ func CrawlPatternSuspected(f RequestFacts) bool {
 	if _, err := pipe.Exec(ctx); err != nil {
 		// Fail open on Redis errors, like every other rate check, so a
 		// Redis outage never blocks real traffic.
+		redisHealth.failure(time.Now())
 		return false
 	}
+	redisHealth.success()
 	return count.Val() > maxDistinctPaths
 }

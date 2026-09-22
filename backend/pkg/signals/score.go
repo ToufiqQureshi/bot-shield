@@ -78,6 +78,15 @@ type RequestFacts struct {
 	Tenant string
 }
 
+// Evaluation is the complete result of evaluating one request. Keeping the
+// score and fired signal names together prevents request-path callers from
+// running stateful checks twice and producing evidence that disagrees with the
+// decision.
+type Evaluation struct {
+	Score   int
+	Signals []string
+}
+
 // checks is the single list every scoring check lives in, so a score
 // and the explanation shown for it can never disagree — adding a check
 // in one place and forgetting the other would make the evidence trail
@@ -120,27 +129,32 @@ var checks = []struct {
 	}},
 }
 
-// Score combines a request's known signals into one risk score.
-func Score(f RequestFacts) int {
-	total := 0
+// Evaluate runs every scoring check exactly once for one request. Some checks
+// update bounded Redis counters, so callers that need both a score and an
+// explanation must use this method rather than calling Score and Analyze
+// separately.
+func Evaluate(f RequestFacts) Evaluation {
+	e := Evaluation{}
 	for _, c := range checks {
 		if c.fired(f) {
-			total += c.weight
+			e.Score += c.weight
+			e.Signals = append(e.Signals, c.name)
 		}
 	}
-	return total
+	return e
+}
+
+// Score combines a request's known signals into one risk score. Prefer
+// Evaluate when the caller also needs the fired signal names.
+func Score(f RequestFacts) int {
+	return Evaluate(f).Score
 }
 
 // Analyze names the checks that fired for a request, so the evidence
-// trail can answer "why was this stopped?" and not just "how much."
+// trail can answer "why was this stopped?" and not just "how much." Prefer
+// Evaluate when the caller also needs the score.
 func Analyze(f RequestFacts) []string {
-	var fired []string
-	for _, c := range checks {
-		if c.fired(f) {
-			fired = append(fired, c.name)
-		}
-	}
-	return fired
+	return Evaluate(f).Signals
 }
 
 // Decide turns a score into an outcome using the balanced policy by default.

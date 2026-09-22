@@ -10,6 +10,56 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Built-in `.env` loader instead of a dependency; found a plaintext-password-in-logs bug while wiring it — 2026-09-21
+
+**Decision:** `backend/main.go` gained a ~20-line `loadDotEnv(".env")`
+that sets process env vars from a local `.env` file without
+overwriting ones the shell already set, called at the top of `main()`
+before flags are defined. `-db-url`/`-supabase-url` now default to
+`$DATABASE_URL`/`$SUPABASE_URL`.
+
+**Why hand-rolled instead of `github.com/joho/godotenv` or similar:**
+the actual behavior needed — split each line on the first `=`, skip
+blank lines and `#` comments, strip surrounding quotes, never clobber
+a real env var — is small enough that a dependency buys nothing but
+another line in `go.sum` (`CLAUDE.md` Section 20, standard-library-first).
+
+**Bug found while verifying this, unrelated to the loader itself:**
+`main.go` logged the full `-db-url` value — including the database
+password — on every successful Postgres connection. Real Supabase
+password would have gone into plaintext logs (and, on most hosted
+platforms, into a third-party log aggregator) the first time this ran
+in anything but a bare terminal. Fixed with `redactCredentials()`,
+which parses the URL and replaces only the password component,
+leaving everything else (including the username, which is useful for
+debugging which role connected) intact. Verified the fix actually
+prevents the leak — not just that a function named `redactCredentials`
+exists — via a test that asserts the literal password string is
+absent from the output, mutation-checked by disabling the redaction
+branch and confirming the test fails with the real password visible
+in its own failure message.
+
+**Verified how:** real end-to-end run against the live Supabase
+project (see `docs/PROGRESS.md`) — `.env` (gitignored, contains the
+password the owner pulled from the Supabase dashboard) loaded
+automatically, backend connected to the real Postgres, the startup
+log showed the connection string with `REDACTED` in place of the
+password, and `/domains`/`/rules`/`/settings/protection` correctly
+rejected requests with no token, a garbage token, and a
+well-formed-but-wrong-signature token — the last two proving the
+backend actually validated against the real Supabase JWKS endpoint
+rather than merely checking a token's presence.
+
+**Known gap:** a real signed-in session hitting these endpoints is
+still unverified — needs one real verified email, which this session
+correctly declined to fake past its own safety classifier. See
+`docs/PROGRESS.md`'s matching entry.
+
+**Revisit when:** the owner verifies a real signup email and the full
+signed-in loop can be confirmed end-to-end.
+
+---
+
 ## Migrated dashboard auth from custom bcrypt+JWT to Supabase Auth — 2026-09-21
 
 **Decision:** deleted `backend/pkg/account` (bcrypt signup/signin, a
@@ -1314,3 +1364,50 @@ from. See `docs/AGENT.md` and `CLAUDE.md` Section 18 (Ethical/Legal
 Boundary).
 **Revisit when:** never as a market direction; pricing/tiering itself
 is still TBD (`ROADMAP.md` item 17).
+
+---
+
+## Redis rate evidence fails open with a shared circuit — 2026-09-21
+**Decision:** Redis-backed velocity and crawl signals share a one-second
+circuit. The first Redis error opens it; while open, these optional signals
+return no evidence without contacting Redis. After the cooldown, exactly one
+request probes Redis. A successful probe closes the circuit, while a failed
+probe starts a new cooldown. The Redis client also has command retries disabled
+and permits one dial attempt for this request-path workload.
+**Why:** this proxy is inline. A Redis network partition previously allowed up
+to three separate timeout-bound calls during one score evaluation (IP velocity,
+JA4 velocity, and crawl pattern), and automatic client retries could compound
+the cost. Redis evidence is useful but must never turn a dependency outage into
+a customer-site latency or availability outage. Fail-open can miss rate
+evidence briefly; it cannot falsely block a legitimate visitor.
+**Alternatives considered:** fail closed (rejected: it would take healthy
+customer traffic down for a detector dependency); independent per-signal
+breakers (rejected: a single request would still probe the same failed Redis
+service multiple times); unbounded/background retry (rejected: amplification
+and recovery thundering-herd risk).
+**Revisit when:** production telemetry shows the one-second recovery cadence is
+too aggressive or too slow, or Redis becomes a policy-enforcement dependency
+whose failure posture needs an explicit customer-facing product decision.
+
+---
+
+## Client IP comes from X-Forwarded-For only behind configured proxy CIDRs — 2026-09-22
+**Decision:** the default request identity remains the direct TCP peer. An
+operator may set `-trusted-proxy-cidrs` to enable `X-Forwarded-For` only when
+that peer belongs to one of those CIDRs. The resolver scans a valid forwarding
+chain from the closest hop backwards, skipping trusted proxy hops and selecting
+the first untrusted address. Invalid or absent forwarding data falls back to
+the direct peer.
+**Why:** forwarded headers are visitor-controlled on a direct connection, so
+trusting them by default lets an attacker forge IP-based rate limits,
+allowlists, and evidence. Hosted deployments behind a CDN/LB still need the
+real visitor identity, including IPv6. Explicit CIDRs preserve both cases.
+**Operational requirement:** listed proxies must overwrite or safely append
+`X-Forwarded-For`; a proxy that forwards an attacker-supplied header unchanged
+cannot provide a trustworthy client identity.
+**Alternatives considered:** always trust the header (rejected: trivial IP
+spoofing); never trust the header (rejected: loses visitor identity behind a
+legitimate edge); trust by proxy hostname (rejected: DNS is not an
+operator-controlled network trust boundary in the request path).
+**Revisit when:** deployments require RFC 7239 `Forwarded` support or another
+provider-specific, authenticated client-identity mechanism.

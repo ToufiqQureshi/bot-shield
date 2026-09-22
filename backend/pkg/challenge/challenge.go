@@ -9,9 +9,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,6 +25,8 @@ import (
 type Challenge struct {
 	secret []byte
 	theme  string
+	mu     sync.Mutex
+	used   map[string]time.Time
 }
 
 // challengeMaxAge bounds how long an issued puzzle stays solvable —
@@ -34,6 +38,7 @@ const challengeMaxAge = 2 * time.Minute
 // they aren't re-challenged on every request in the same session.
 const passedCookie = "X-HakaiShield-Passed" // #nosec G101 -- cookie name, not a credential
 const passedMaxAge = 30 * time.Minute
+const maxUsedChallenges = 50_000
 
 const challengePath = "/__hakaishield/challenge"
 const verifyPath = "/__hakaishield/verify"
@@ -55,7 +60,7 @@ func NewChallenge(secret []byte, theme string) (*Challenge, error) {
 	if theme == "" {
 		theme = "ghost"
 	}
-	return &Challenge{secret: secret, theme: theme}, nil
+	return &Challenge{secret: secret, theme: theme, used: make(map[string]time.Time)}, nil
 }
 
 func (c *Challenge) sign(payload string) string {
@@ -64,12 +69,13 @@ func (c *Challenge) sign(payload string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// token binds a nonce, issue time, and the page to return to into one
+// token binds a nonce, issue time, host, and the page to return to into one
 // tamper-evident string, so verification needs no server-side storage
 // per outstanding challenge.
-func (c *Challenge) token(nonce, redirectPath string, issuedAt time.Time) string {
+func (c *Challenge) token(nonce, redirectPath, host string, issuedAt time.Time) string {
 	encodedPath := base64.RawURLEncoding.EncodeToString([]byte(redirectPath))
-	payload := strings.Join([]string{nonce, strconv.FormatInt(issuedAt.Unix(), 10), encodedPath}, "|")
+	encodedHost := base64.RawURLEncoding.EncodeToString([]byte(canonicalHost(host)))
+	payload := strings.Join([]string{nonce, strconv.FormatInt(issuedAt.Unix(), 10), encodedPath, encodedHost}, "|")
 	encoded := base64.RawURLEncoding.EncodeToString([]byte(payload))
 	return encoded + "." + c.sign(encoded)
 }
@@ -77,7 +83,7 @@ func (c *Challenge) token(nonce, redirectPath string, issuedAt time.Time) string
 // parseToken verifies the signature and expiry and returns the
 // embedded fields. A tampered, malformed, or expired token is
 // rejected here, not left for the caller to notice.
-func (c *Challenge) parseToken(tok string) (nonce, redirectPath string, ok bool) {
+func (c *Challenge) parseToken(tok, host string) (nonce, redirectPath string, ok bool) {
 	parts := strings.SplitN(tok, ".", 2)
 	if len(parts) != 2 {
 		return "", "", false
@@ -90,8 +96,8 @@ func (c *Challenge) parseToken(tok string) (nonce, redirectPath string, ok bool)
 	if err != nil {
 		return "", "", false
 	}
-	fields := strings.SplitN(string(raw), "|", 3)
-	if len(fields) != 3 {
+	fields := strings.SplitN(string(raw), "|", 4)
+	if len(fields) != 4 {
 		return "", "", false
 	}
 	issuedUnix, err := strconv.ParseInt(fields[1], 10, 64)
@@ -107,7 +113,62 @@ func (c *Challenge) parseToken(tok string) (nonce, redirectPath string, ok bool)
 	if err != nil {
 		return "", "", false
 	}
+	hostBytes, err := base64.RawURLEncoding.DecodeString(fields[3])
+	if err != nil {
+		return "", "", false
+	}
+	if string(hostBytes) != canonicalHost(host) {
+		return "", "", false // token issued for a different host
+	}
 	return fields[0], safeRedirectPath(string(pathBytes)), true
+}
+
+// canonicalHost normalizes the request host before it participates in signed
+// challenge state. Hostnames are case-insensitive and an optional port is not
+// part of tenant identity.
+func canonicalHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	} else {
+		raw = strings.Trim(raw, "[]")
+	}
+	return strings.TrimSuffix(strings.ToLower(raw), ".")
+}
+
+// consume marks a valid nonce as used once. Entries are bounded and expire
+// with the challenge so an attacker cannot turn verification into unbounded
+// process memory. Multi-node deployments should use the planned Redis-backed
+// nonce store; this local guard still closes replay on a single instance.
+func (c *Challenge) consume(nonce string, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for key, usedAt := range c.used {
+		if now.Sub(usedAt) >= challengeMaxAge {
+			delete(c.used, key)
+		}
+	}
+	if _, exists := c.used[nonce]; exists {
+		return false
+	}
+	if len(c.used) >= maxUsedChallenges {
+		// Keep verification available under a burst of successful solves while
+		// preserving the hard memory ceiling. The oldest nonce has the least
+		// remaining replay value and is safe to evict.
+		var oldestKey string
+		var oldestAt time.Time
+		for key, usedAt := range c.used {
+			if oldestKey == "" || usedAt.Before(oldestAt) {
+				oldestKey, oldestAt = key, usedAt
+			}
+		}
+		if oldestKey != "" {
+			delete(c.used, oldestKey)
+		}
+	}
+	c.used[nonce] = now
+	return true
 }
 
 // safeRedirectPath keeps "return to the page you asked for" from
@@ -349,7 +410,12 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectPath := safeRedirectPath(r.URL.RequestURI())
-	tok := c.token(nonce, redirectPath, time.Now())
+	host := canonicalHost(r.Host)
+	if host == "" {
+		http.Error(w, "challenge unavailable", http.StatusBadRequest)
+		return
+	}
+	tok := c.token(nonce, redirectPath, host, time.Now())
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -373,9 +439,13 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nonce, redirectPath, ok := c.parseToken(r.FormValue("token"))
+	nonce, redirectPath, ok := c.parseToken(r.FormValue("token"), r.Host)
 	if !ok {
 		http.Error(w, "invalid token", http.StatusForbidden)
+		return
+	}
+	if !c.consume(nonce, time.Now()) {
+		http.Error(w, "challenge already used", http.StatusForbidden)
 		return
 	}
 	answer := r.FormValue("answer")
@@ -398,12 +468,13 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.setPassedCookie(w)
+	c.setPassedCookie(w, r.Host)
 	http.Redirect(w, r, redirectPath, http.StatusSeeOther)
 }
 
-func (c *Challenge) setPassedCookie(w http.ResponseWriter) {
-	payload := strconv.FormatInt(time.Now().Unix(), 10)
+func (c *Challenge) setPassedCookie(w http.ResponseWriter, host string) {
+	rawPayload := strings.Join([]string{strconv.FormatInt(time.Now().Unix(), 10), canonicalHost(host)}, "|")
+	payload := base64.RawURLEncoding.EncodeToString([]byte(rawPayload))
 	value := payload + "." + c.sign(payload)
 	http.SetCookie(w, &http.Cookie{
 		Name:     passedCookie,
@@ -431,7 +502,15 @@ func (c *Challenge) Passed(r *http.Request) bool {
 	if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(c.sign(parts[0]))) != 1 {
 		return false
 	}
-	issuedUnix, err := strconv.ParseInt(parts[0], 10, 64)
+	rawPayload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	payload := strings.SplitN(string(rawPayload), "|", 2)
+	if len(payload) != 2 || payload[1] != canonicalHost(r.Host) {
+		return false
+	}
+	issuedUnix, err := strconv.ParseInt(payload[0], 10, 64)
 	if err != nil {
 		return false
 	}

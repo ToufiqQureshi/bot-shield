@@ -18,9 +18,9 @@
     "semantic_hash": ""
   },
   "backend/main.go": {
-    "mtime": 1789987244.9975877,
-    "seen": 1789988008.3290734,
-    "ast_hash": "eb22b6d5724ce97b333919e4e2dad70e",
+    "mtime": 1789989188.0981307,
+    "seen": 1789989817.7794123,
+    "ast_hash": "69afe788d6d0b21eea0c386134a63087",
     "semantic_hash": ""
   },
   "backend/pkg/api/handlers.go": {
@@ -432,9 +432,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1789984806.0041487,
-    "seen": 1789984994.7128575,
-    "ast_hash": "8f79503f482cc9f9fea67da94dcebf4b",
+    "mtime": 1789989694.8786776,
+    "seen": 1789989817.7794123,
+    "ast_hash": "0cd4ce54ddb2ad4d532473d73e10e57b",
     "semantic_hash": ""
   },
   "backend/.golangci.yml": {
@@ -462,9 +462,9 @@
     "semantic_hash": ""
   },
   "docs/DECISIONS.md": {
-    "mtime": 1789987970.615251,
-    "seen": 1789988008.3290734,
-    "ast_hash": "358984a0cb81ace1da3fff306dd49552",
+    "mtime": 1789989733.6744256,
+    "seen": 1789989817.7794123,
+    "ast_hash": "36155fc9d4228b477805c7d8f45d7971",
     "semantic_hash": ""
   },
   "docs/FAILUROFTHISPRODUCT.MD": {
@@ -474,9 +474,9 @@
     "semantic_hash": ""
   },
   "docs/PROGRESS.md": {
-    "mtime": 1789987947.472353,
-    "seen": 1789988008.3290734,
-    "ast_hash": "7d8e030437ba20c434318fe7d5e07afe",
+    "mtime": 1789989765.9064884,
+    "seen": 1789989817.7794123,
+    "ast_hash": "3be45cfc81ec122265a2af19464af77e",
     "semantic_hash": ""
   },
   "docs/RESEARCH.md": {
@@ -486,9 +486,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1789987980.9566562,
-    "seen": 1789988008.3290734,
-    "ast_hash": "9da082b3a0cce0731d07c630765e6df3",
+    "mtime": 1789989776.475585,
+    "seen": 1789989817.7794123,
+    "ast_hash": "f75b876bb4f3d3733fd2766024bedb66",
     "semantic_hash": ""
   },
   "docs/go_expert.txt": {
@@ -516,9 +516,9 @@
     "semantic_hash": ""
   },
   "dashboard/src/components/Layout.tsx": {
-    "mtime": 1789983907.8490798,
-    "seen": 1789984994.7128575,
-    "ast_hash": "f4ea159ef5df2cf9ce1f6bb66229e2fd",
+    "mtime": 1789989464.563118,
+    "seen": 1789989817.7794123,
+    "ast_hash": "80ead40e44aa368dfb17e161735c3a58",
     "semantic_hash": ""
   },
   "dashboard/src/context/ThemeContext.tsx": {
@@ -576,9 +576,9 @@
     "semantic_hash": ""
   },
   "dashboard/src/pages/ForgotPassword.tsx": {
-    "mtime": 1789982517.2124276,
-    "seen": 1789982702.207934,
-    "ast_hash": "86b2e1891c24a97d6d7802c78f6dc7a0",
+    "mtime": 1789989482.5324278,
+    "seen": 1789989817.7794123,
+    "ast_hash": "1f81cfde5a79cb6f52c580d0fa279ef9",
     "semantic_hash": ""
   },
   "dashboard/src/pages/Landing.tsx": {
@@ -594,9 +594,9 @@
     "semantic_hash": ""
   },
   "dashboard/src/pages/Onboarding.tsx": {
-    "mtime": 1789983885.5214207,
-    "seen": 1789984994.7128575,
-    "ast_hash": "6e7a2950ad2642f6dff6ea11838cf330",
+    "mtime": 1789989443.2880068,
+    "seen": 1789989817.7794123,
+    "ast_hash": "4fa3ccd4e29a81ddca27865655fb3671",
     "semantic_hash": ""
   },
   "dashboard/src/pages/Overview.tsx": {
@@ -630,15 +630,15 @@
     "semantic_hash": ""
   },
   "dashboard/src/pages/SignIn.tsx": {
-    "mtime": 1789983855.5660963,
-    "seen": 1789984994.7128575,
-    "ast_hash": "f22ee2ef563148baa926ecad65010ac8",
+    "mtime": 1789989392.7192328,
+    "seen": 1789989817.7794123,
+    "ast_hash": "ee7e96acccbc02588c219326dd2bf48e",
     "semantic_hash": ""
   },
   "dashboard/src/pages/SignUp.tsx": {
-    "mtime": 1789983868.8872297,
-    "seen": 1789984994.7128575,
-    "ast_hash": "2c39a8c53be5d4848e0c20251d50f8b5",
+    "mtime": 1789989427.9051754,
+    "seen": 1789989817.7794123,
+    "ast_hash": "2774eaedc65ba7d7b0d714ca0b88cf24",
     "semantic_hash": ""
   },
   "dashboard/src/pages/Subscription.tsx": {
@@ -713,34 +713,16 @@
     "ast_hash": "018c64bc0812d665574b8885d490577c",
     "semantic_hash": ""
   },
-  "backend/pkg/account/account.go": {
-    "mtime": 1789983527.0533729,
-    "seen": 1789984994.7118587,
-    "ast_hash": "987936dfbb3c0757735e37ca9af25b39",
-    "semantic_hash": ""
-  },
-  "backend/pkg/account/account_test.go": {
-    "mtime": 1789983557.1163008,
-    "seen": 1789984994.7118587,
-    "ast_hash": "c81e25ae22ba26c686465cc2a92ffc8e",
-    "semantic_hash": ""
-  },
-  "backend/pkg/api/auth.go": {
-    "mtime": 1789983497.637673,
-    "seen": 1789984994.7118587,
-    "ast_hash": "3b472c532a763a2d1c53189e0bb59900",
-    "semantic_hash": ""
-  },
   "backend/pkg/api/dashboard_extra.go": {
-    "mtime": 1789983809.8743048,
-    "seen": 1789984994.7118587,
-    "ast_hash": "bad47159c61e89623a140d3d97383c2e",
+    "mtime": 1789989163.948035,
+    "seen": 1789989817.7794123,
+    "ast_hash": "b70005f5be21e247e21c20ba22ea1d59",
     "semantic_hash": ""
   },
   "backend/pkg/api/domains.go": {
-    "mtime": 1789984750.8070154,
-    "seen": 1789984994.7118587,
-    "ast_hash": "a4daedc0846cff3f085265346a937e79",
+    "mtime": 1789989163.887334,
+    "seen": 1789989817.7794123,
+    "ast_hash": "04ddcc11c4f20ff88b0988a5203257af",
     "semantic_hash": ""
   },
   "backend/pkg/api/domains_test.go": {
@@ -750,45 +732,45 @@
     "semantic_hash": ""
   },
   "backend/pkg/api/middleware.go": {
-    "mtime": 1789983328.0597897,
-    "seen": 1789984994.7118587,
-    "ast_hash": "6618d072cc7bc38a3cf19180ef1d47f9",
+    "mtime": 1789989133.4690883,
+    "seen": 1789989817.7794123,
+    "ast_hash": "16bdf848f3cfc6036d7e6e09044eb279",
     "semantic_hash": ""
   },
   "backend/pkg/api/middleware_test.go": {
-    "mtime": 1789983597.2078016,
-    "seen": 1789984994.7118587,
-    "ast_hash": "6e570d5a73d50a50cd3741543602dda6",
+    "mtime": 1789989245.130148,
+    "seen": 1789989817.7794123,
+    "ast_hash": "7395bacdc46634e3d8ab9c1da4741575",
     "semantic_hash": ""
   },
   "backend/pkg/api/response.go": {
-    "mtime": 1789983321.394787,
-    "seen": 1789984994.7118587,
-    "ast_hash": "8d126e9b1235022280ab5a7a8638d100",
+    "mtime": 1789989148.2088842,
+    "seen": 1789989817.7794123,
+    "ast_hash": "20e3ddcf551aa19a3280720a2c0d022d",
     "semantic_hash": ""
   },
   "backend/pkg/api/rules.go": {
-    "mtime": 1789983375.889557,
-    "seen": 1789984994.7118587,
-    "ast_hash": "314ea96d94085048f9acc548cdcb9f1e",
+    "mtime": 1789989163.9081538,
+    "seen": 1789989817.7794123,
+    "ast_hash": "2fa9119f5242aeacee32989a7083856b",
     "semantic_hash": ""
   },
   "backend/pkg/api/settings.go": {
-    "mtime": 1789983381.845236,
-    "seen": 1789984994.7118587,
-    "ast_hash": "2ce7d1d12ccd5dabf87647bb2c83d711",
+    "mtime": 1789989163.9306226,
+    "seen": 1789989817.7794123,
+    "ast_hash": "0453e629f64085b0847d9dda2dd432d7",
     "semantic_hash": ""
   },
   "backend/pkg/auth/jwt.go": {
-    "mtime": 1789983710.821601,
-    "seen": 1789984994.7118587,
-    "ast_hash": "11f1d2b744e64bba40f3649a5b885e02",
+    "mtime": 1789989336.4258676,
+    "seen": 1789989817.7794123,
+    "ast_hash": "d6e234e548cf003f680ee4cb89c956f4",
     "semantic_hash": ""
   },
   "backend/pkg/auth/jwt_test.go": {
-    "mtime": 1789983546.818153,
-    "seen": 1789984994.7118587,
-    "ast_hash": "d8d4a0ac1e55488546be371b3dcc748a",
+    "mtime": 1789989282.7005098,
+    "seen": 1789989817.7794123,
+    "ast_hash": "74d9a7a2c2935c1ae3e13b961dcde080",
     "semantic_hash": ""
   },
   "backend/pkg/rules/rules.go": {
@@ -816,15 +798,15 @@
     "semantic_hash": ""
   },
   "dashboard/src/components/RequireAuth.tsx": {
-    "mtime": 1789983835.5642085,
-    "seen": 1789984994.7128575,
-    "ast_hash": "39cba6d37c5d13c0e2ee6574fbe88436",
+    "mtime": 1789989449.2977273,
+    "seen": 1789989817.7794123,
+    "ast_hash": "09add7f145a35eb91e41e8013cc448a6",
     "semantic_hash": ""
   },
   "dashboard/src/lib/api.ts": {
-    "mtime": 1789983831.4905908,
-    "seen": 1789984994.7128575,
-    "ast_hash": "a142f3b7dc36600853290e14cd8ce5e5",
+    "mtime": 1789989380.1910956,
+    "seen": 1789989817.7794123,
+    "ast_hash": "dddc109df5bcd5abb8f2c63e6c3750d2",
     "semantic_hash": ""
   },
   "dashboard/src/vite-env.d.ts": {
@@ -837,6 +819,18 @@
     "mtime": 1789983055.469903,
     "seen": 1789984994.7128575,
     "ast_hash": "8edefbc2b5926a513aca42e6936a4d6f",
+    "semantic_hash": ""
+  },
+  "dashboard/src/lib/supabaseClient.ts": {
+    "mtime": 1789989360.656386,
+    "seen": 1789989817.7794123,
+    "ast_hash": "cbf0293b3ab3e4b6ae6c73fd9913772d",
+    "semantic_hash": ""
+  },
+  "Ark-Lake-Resort-SEO-Growth-Report.pdf": {
+    "mtime": 1789988863.6541016,
+    "seen": 1789989817.7794123,
+    "ast_hash": "3b27fecf8009a2fa6e2b94685dabca02",
     "semantic_hash": ""
   }
 }

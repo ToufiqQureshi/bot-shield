@@ -10,6 +10,10 @@ import (
 
 var (
 	rdb *redis.Client
+	// redisHealth is shared by every request-path Redis signal. One failed
+	// Redis call opens it briefly, so an outage cannot turn into several
+	// timeout-bound calls for every proxied request.
+	redisHealth redisCircuit
 	// rateLimitMs is the fixed-window size for the per-IP counters.
 	rateLimitMs = 1000
 )
@@ -46,7 +50,7 @@ func VelocityExceeded(ip, ja4, path string) bool {
 // have separate counters and limits, so a browser loading a page's
 // subresources is never mistaken for a crawler hitting many pages.
 func checkVelocitySpike(ip, path string) bool {
-	if ip == "" || rdb == nil {
+	if ip == "" || !redisRequestAllowed() {
 		return false
 	}
 
@@ -62,8 +66,10 @@ func checkVelocitySpike(ip, path string) bool {
 	if _, err := pipe.Exec(ctx); err != nil {
 		// Fail open on Redis errors: a Redis outage must never block
 		// legitimate traffic.
+		redisHealth.failure(time.Now())
 		return false
 	}
+	redisHealth.success()
 	return incr.Val() > limit
 }
 
@@ -79,7 +85,7 @@ func velocityBucket(ip, path string, window int64) (string, int64) {
 // across all IPs within the current rateLimitMs window. This neutralises residential proxy networks
 // where bots rotate IP on every request but keep the same underlying scraper client TLS profile.
 func checkJA4VelocitySpike(ja4 string) bool {
-	if ja4 == "" || ja4 == JA4Unreadable || rdb == nil {
+	if ja4 == "" || ja4 == JA4Unreadable || !redisRequestAllowed() {
 		return false
 	}
 	// Common desktop/mobile browsers are exempt from raw aggregate count to protect genuine traffic
@@ -99,8 +105,17 @@ func checkJA4VelocitySpike(ja4 string) bool {
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
+		redisHealth.failure(time.Now())
 		return false
 	}
+	redisHealth.success()
 
 	return incr.Val() > int64(maxJA4Requests)
+}
+
+// redisRequestAllowed returns false while Redis is unhealthy. Rate and crawl
+// signals are optional evidence, so callers deliberately fail open instead of
+// spending the request budget retrying a known-down dependency.
+func redisRequestAllowed() bool {
+	return rdb != nil && redisHealth.allow(time.Now())
 }

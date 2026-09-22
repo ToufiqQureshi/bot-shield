@@ -456,8 +456,9 @@ always the operator.
       **Started, not done:** per-IP/per-JA4 velocity is built and now
       asset-aware (navigations vs subresources have separate limits),
       and `crawl_pattern` detects a browser-claiming client walking many
-      distinct page paths in a window via Redis HyperLogLog — see
-      `docs/PROGRESS.md` 2026-09-19. Missing: referrer-chain analysis,
+      distinct page paths in a window via Redis HyperLogLog, with a bounded
+      fail-open Redis outage circuit — see `docs/PROGRESS.md` 2026-09-21.
+      Missing: referrer-chain analysis,
       per-fingerprint request *rate* (not just distinct paths), and the
       caps are reasoned guesses, not tuned against real traffic.
 - [ ] **9a. API-aware endpoint rules** — tag endpoints by category

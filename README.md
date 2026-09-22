@@ -154,7 +154,10 @@ The backend side needs `-db-url` (your Supabase project's Postgres
 connection string) and `-supabase-url` set to serve the domains/rules/
 settings API at all (see `docs/PROGRESS.md`'s Supabase-migration
 entry); without both, `hakaishield` still runs as a proxy, just
-without that API.
+without that API. Both also read from `$DATABASE_URL`/`$SUPABASE_URL`
+if the flags are left unset, including from a `backend/.env` file
+(gitignored — copy `backend/.env.example`) loaded automatically at
+startup, so you don't have to pass them on the command line every run.
 
 ## Documentation
 

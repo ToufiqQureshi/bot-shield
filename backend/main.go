@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -9,8 +10,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,7 +33,58 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// loadDotEnv reads KEY=VALUE lines from a local .env file (if present)
+// into the process environment, without overwriting a variable the
+// shell already set — so a real deployment's env vars always win over
+// a stray .env left in the working directory. There's no standard
+// library .env parser and pulling in a dependency for ~15 lines of
+// "split on the first '=', trim quotes" isn't worth it.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // no .env file; nothing to load, not an error
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.Trim(strings.TrimSpace(value), `"'`)
+		if _, alreadySet := os.LookupEnv(key); !alreadySet {
+			os.Setenv(key, value)
+		}
+	}
+}
+
+// redactCredentials returns a Postgres connection string with its
+// password removed, for logging. -db-url carries a real database
+// password (Supabase or otherwise); printing it verbatim would put a
+// production credential in plaintext logs, which on a hosted platform
+// often means a third-party log aggregator too.
+func redactCredentials(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "(unparseable connection string, not logging it)"
+	}
+	if u.User != nil {
+		if _, hasPassword := u.User.Password(); hasPassword {
+			u.User = url.UserPassword(u.User.Username(), "REDACTED")
+		}
+	}
+	return u.String()
+}
+
 func main() {
+	loadDotEnv(".env")
+
 	addr := flag.String("addr", ":8080", "address to listen on")
 	target := flag.String("target", "", "origin server to protect, e.g. https://example.com")
 	certFile := flag.String("tls-cert", "", "TLS certificate file; enables TLS + JA4 fingerprinting")
@@ -41,9 +95,10 @@ func main() {
 	themeFlag := flag.String("theme", "ghost", `challenge page theme: "ghost", "branded", or "default"`)
 	policyFlag := flag.String("policy", "balanced", `policy strategy: "balanced" (allow clean score 0, challenge suspicious) or "strict" (mandatory challenge)`)
 	deceptionFlag := flag.Bool("deception", false, "enable deception mode (forwards high-confidence bots to origin with X-HakaiShield-Decision: deceive instead of 403)")
+	trustedProxyCIDRs := flag.String("trusted-proxy-cidrs", "", "comma-separated proxy CIDRs allowed to supply X-Forwarded-For; leave empty to trust only direct peers")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
-	dbURL := flag.String("db-url", "", "PostgreSQL URL for the Supabase project's database (Project Settings > Database in the Supabase dashboard)")
-	supabaseURL := flag.String("supabase-url", "", "Supabase project URL (e.g. https://xxxx.supabase.co); used to verify dashboard session JWTs against the project's published JWKS. Required, with -db-url, to enable the domains/rules/settings API.")
+	dbURL := flag.String("db-url", os.Getenv("DATABASE_URL"), "PostgreSQL URL for the Supabase project's database (Project Settings > Database in the Supabase dashboard). Falls back to $DATABASE_URL (including from a local .env file) if unset.")
+	supabaseURL := flag.String("supabase-url", os.Getenv("SUPABASE_URL"), "Supabase project URL (e.g. https://xxxx.supabase.co); used to verify dashboard session JWTs against the project's published JWKS. Required, with -db-url, to enable the domains/rules/settings API. Falls back to $SUPABASE_URL (including from a local .env file) if unset.")
 	flag.Parse()
 
 	mode, err := config.ParseMode(*modeFlag)
@@ -91,6 +146,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("hakaishield: invalid redis url: %v", err)
 	}
+	// Request-path Redis operations have their own bounded context. Disable
+	// command retries and permit one dial attempt: during an outage, retries
+	// add latency and multiply load before the signals package can open its
+	// circuit. go-redis uses -1 to disable command retries and treats zero
+	// dial attempts as its default, so the dial count must be explicit.
+	opt.MaxRetries = -1
+	opt.DialerRetries = 1
 	rdb := redis.NewClient(opt)
 	ctxRdb, cancelRdb := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelRdb()
@@ -108,7 +170,7 @@ func main() {
 		if err := db.Init(*dbURL); err != nil {
 			log.Fatalf("hakaishield: initializing postgres db: %v", err)
 		}
-		log.Printf("hakaishield: connected to postgres at %s", *dbURL)
+		log.Printf("hakaishield: connected to postgres at %s", redactCredentials(*dbURL))
 	}
 
 	store := tenant.NewStore()
@@ -131,7 +193,11 @@ func main() {
 		log.Fatalf("hakaishield: provisioning default tenant: %v", err)
 	}
 
-	guard := core.NewGuard(store, challengeHandler)
+	clientIPResolver, err := core.NewClientIPResolver(strings.Split(*trustedProxyCIDRs, ","))
+	if err != nil {
+		log.Fatalf("hakaishield: %v", err)
+	}
+	guard := core.NewGuardWithClientIPResolver(store, challengeHandler, clientIPResolver)
 
 	mux := http.NewServeMux()
 	mux.Handle("/__hakaishield/", challengeHandler.Handler())

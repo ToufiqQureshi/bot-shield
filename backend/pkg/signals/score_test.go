@@ -1,8 +1,11 @@
 package signals
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 )
@@ -31,6 +34,44 @@ func TestScoreNoSignals(t *testing.T) {
 	got := Score(facts("t13d1516h2_8daaf6152771_e5627efa2ab1", "Mozilla/5.0 Chrome/120.0"))
 	if got != 0 {
 		t.Fatalf("Score() = %d, want 0", got)
+	}
+}
+
+func TestEvaluateRunsStatefulChecksOnce(t *testing.T) {
+	newTestRedis(t)
+
+	f := RequestFacts{
+		IP:     "203.0.113.20",
+		JA4:    "t99d000000_deadbeefdead_deadbeefdead",
+		UA:     "SomeUnknownClient/1.0",
+		Header: http.Header{},
+		Path:   "/",
+	}
+	window := time.Now().UnixMilli() / int64(rateLimitMs)
+	evaluation := Evaluate(f)
+	if evaluation.Score != 0 {
+		t.Fatalf("Evaluate() score = %d, want 0", evaluation.Score)
+	}
+	if len(evaluation.Signals) != 0 {
+		t.Fatalf("Evaluate() signals = %v, want none", evaluation.Signals)
+	}
+
+	ipKey, _ := velocityBucket(f.IP, f.Path, window)
+	ipCount, err := rdb.Get(context.Background(), ipKey).Int64()
+	if err != nil {
+		t.Fatalf("read IP velocity counter: %v", err)
+	}
+	if ipCount != 1 {
+		t.Fatalf("IP velocity counter = %d, want one increment", ipCount)
+	}
+
+	ja4Key := fmt.Sprintf("vel:ja4:%s:%d", f.JA4, window)
+	ja4Count, err := rdb.Get(context.Background(), ja4Key).Int64()
+	if err != nil {
+		t.Fatalf("read JA4 velocity counter: %v", err)
+	}
+	if ja4Count != 1 {
+		t.Fatalf("JA4 velocity counter = %d, want one increment", ja4Count)
 	}
 }
 

@@ -18,9 +18,9 @@
     "semantic_hash": ""
   },
   "backend/main.go": {
-    "mtime": 1789983813.2987578,
-    "seen": 1789984994.7118587,
-    "ast_hash": "2fd70a366a3b3247b3e3ef036beeee50",
+    "mtime": 1789987244.9975877,
+    "seen": 1789988008.3290734,
+    "ast_hash": "eb22b6d5724ce97b333919e4e2dad70e",
     "semantic_hash": ""
   },
   "backend/pkg/api/handlers.go": {
@@ -462,9 +462,9 @@
     "semantic_hash": ""
   },
   "docs/DECISIONS.md": {
-    "mtime": 1789984869.06237,
-    "seen": 1789984994.7128575,
-    "ast_hash": "6eef19cca659a7c295fddb511cd01447",
+    "mtime": 1789987970.615251,
+    "seen": 1789988008.3290734,
+    "ast_hash": "358984a0cb81ace1da3fff306dd49552",
     "semantic_hash": ""
   },
   "docs/FAILUROFTHISPRODUCT.MD": {
@@ -474,9 +474,9 @@
     "semantic_hash": ""
   },
   "docs/PROGRESS.md": {
-    "mtime": 1789986189.079355,
-    "seen": 1789986244.2576644,
-    "ast_hash": "574eb4a7417f31f094cc1763a862e068",
+    "mtime": 1789987947.472353,
+    "seen": 1789988008.3290734,
+    "ast_hash": "7d8e030437ba20c434318fe7d5e07afe",
     "semantic_hash": ""
   },
   "docs/RESEARCH.md": {
@@ -486,9 +486,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1789986174.9318256,
-    "seen": 1789986244.2576644,
-    "ast_hash": "afd232f29b8f16d1cdb26e0af4fe45f9",
+    "mtime": 1789987980.9566562,
+    "seen": 1789988008.3290734,
+    "ast_hash": "9da082b3a0cce0731d07c630765e6df3",
     "semantic_hash": ""
   },
   "docs/go_expert.txt": {
@@ -606,9 +606,9 @@
     "semantic_hash": ""
   },
   "dashboard/src/pages/Payment.tsx": {
-    "mtime": 1789982517.8440673,
-    "seen": 1789982702.207934,
-    "ast_hash": "a28fa52951e855aaae9379865b305f0b",
+    "mtime": 1789987608.9126298,
+    "seen": 1789988008.3290734,
+    "ast_hash": "7a7fc7775695f0ad0c8988800efb4f28",
     "semantic_hash": ""
   },
   "dashboard/src/pages/Pricing.tsx": {
@@ -642,9 +642,9 @@
     "semantic_hash": ""
   },
   "dashboard/src/pages/Subscription.tsx": {
-    "mtime": 1789982518.570136,
-    "seen": 1789982702.207934,
-    "ast_hash": "4eaa77ecd99b22d83680b7c07b25b606",
+    "mtime": 1789987600.3031087,
+    "seen": 1789988008.3290734,
+    "ast_hash": "3dbf018aa3a88f75e8d069618aeec826",
     "semantic_hash": ""
   },
   "dashboard/src/pages/Terms.tsx": {
@@ -708,9 +708,9 @@
     "semantic_hash": ""
   },
   "dashboard/index.html": {
-    "mtime": 1789982515.5751157,
-    "seen": 1789982702.207934,
-    "ast_hash": "21d3a10d3e3452e902527e66c470801d",
+    "mtime": 1789987488.5968294,
+    "seen": 1789988008.3290734,
+    "ast_hash": "018c64bc0812d665574b8885d490577c",
     "semantic_hash": ""
   },
   "backend/pkg/account/account.go": {

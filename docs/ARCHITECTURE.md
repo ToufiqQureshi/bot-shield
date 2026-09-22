@@ -75,7 +75,8 @@ Internet (every visitor, hostile until scored)
    │                         detection (signals/velocity.go, signals/pattern.go)
    │
    ├──► Redis        BUILT   Distributed global rate counters via INCR (velocity.go)
-   │                         and background synchronization for JA4 blocklists (ja4db.go)
+   │                         with a shared one-second, single-probe fail-open circuit;
+   │                         background synchronization for JA4 blocklists (ja4db.go)
    ├──► Postgres     BUILT   Client configurations and lazy-loaded Tenant Store via pgxpool (pkg/db)
    │
    ▼
@@ -158,7 +159,9 @@ scoring layer would trust it (`CLAUDE.md` Section 6).
 4. Per request, `JA4FromContext` reads the saved handshake off the
    connection and derives the fingerprint.
 5. The proxy's `Rewrite` strips every spoofable identity header, sets
-   the real ones, and forwards to the origin.
+   the real ones, and forwards to the origin. The guard uses the direct peer
+   by default; `-trusted-proxy-cidrs` is the explicit opt-in for reading
+   `X-Forwarded-For` from a CDN/LB whose CIDRs are trusted.
 
 ---
 

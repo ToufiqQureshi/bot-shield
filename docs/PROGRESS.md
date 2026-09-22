@@ -3324,3 +3324,238 @@ reasoning on each):
   - `dashboard/BACKEND_WIRING_DOCS.md` (the original aspirational
     Node.js backend spec) still describes auth endpoints that no
     longer exist on this backend. Not updated this session.
+
+## 2026-09-21 — Got the Supabase DB password; closed the "never run against real Supabase Postgres" gap, found and fixed a password-leak bug
+
+Changed:
+  - Owner supplied the Supabase project's database password (from the
+    Supabase dashboard, Project Settings → Database → session
+    pooler connection string, as they were instructed to get in the
+    previous entry).
+  - `backend/main.go`: added `loadDotEnv(".env")`, a small (~20 line)
+    built-in `.env` parser run at the top of `main()` — no
+    `godotenv`/third-party dependency for something this size (`Fields
+    First`, `CLAUDE.md` Section 20). Only sets a variable if the shell
+    doesn't already have it, so a real deployment's actual env vars
+    always win over a stray `.env` in the working directory.
+    `-db-url`/`-supabase-url` flag defaults now read
+    `$DATABASE_URL`/`$SUPABASE_URL` (via the flag's own default
+    value, evaluated after `loadDotEnv` runs).
+  - **Found and fixed a real credential-leak bug while wiring this
+    up**: `main.go` logged `*dbURL` — the full Postgres connection
+    string, **password included** — verbatim on every successful
+    connection (`log.Printf("hakaishield: connected to postgres at
+    %s", *dbURL)`). On any hosted platform this typically also means
+    the credential lands in a third-party log aggregator. Added
+    `redactCredentials()` (parses the URL, replaces the password with
+    `REDACTED`, leaves everything else — including the username —
+    untouched; a URL with no password, or no credentials at all,
+    passes through unchanged rather than gaining a fake password
+    field). Found by deliberately checking the log output before
+    trusting a real production-shaped password in it, not by accident.
+  - Created `backend/.env` (gitignored — confirmed via `git
+    check-ignore -v backend/.env` before writing anything to it) with
+    the real `DATABASE_URL` (session pooler, `sslmode=require`) and
+    `SUPABASE_URL`. Added `backend/.env.example` (no real values) so
+    the next person knows the shape without needing to read `main.go`.
+
+Why: closes the two concrete "not yet verified" gaps the previous
+Supabase-migration entry left open — the Go backend had never
+actually connected to the new Supabase Postgres, and there was no
+convenient way to configure it without exporting env vars by hand
+every session.
+
+Tested how:
+  - New `backend/main_test.go` (package `main`, not tested before this
+    session): `TestRedactCredentials` (password redacted, no-password
+    URL untouched, username-only URL doesn't gain a fake password),
+    `TestRedactCredentials_NeverLeaksPasswordSubstring` (asserts the
+    literal password string is absent from the output — the specific
+    regression this exists to prevent), `TestRedactCredentials_
+    UnparseableInputDoesNotPanic`, `TestLoadDotEnv` (parses
+    `KEY=value`, `KEY="quoted"`, `KEY='quoted'`, skips comments/blank
+    lines), `TestLoadDotEnv_DoesNotOverrideExistingEnv`,
+    `TestLoadDotEnv_MissingFileIsNotAnError`.
+  - Mutation check: replaced the `if _, hasPassword := ...; hasPassword`
+    guard in `redactCredentials` with `if false` (so the redaction
+    branch never runs) — `TestRedactCredentials_
+    NeverLeaksPasswordSubstring` failed exactly as expected, showing
+    the real password in its own failure output (a useful sanity
+    check that the test genuinely inspects the string rather than
+    trivially passing). Restored, reran, passed.
+  - `go build ./...`, `go vet ./...`, `gofmt -l .`,
+    `go test ./...` — all 15 packages (14 + the new root `main`
+    package) pass.
+  - **Real end-to-end connectivity, not mocked**: built the binary,
+    ran it with `.env` providing real credentials (no flags passed),
+    confirmed the startup log showed `connected to postgres at
+    postgresql://postgres.oxvwvzthqnttehqwfgux:REDACTED@aws-0-ap-
+    south-1.pooler.supabase.com:5432/postgres?sslmode=require` (the
+    real password never appeared in the log) and `domains/rules/
+    settings API enabled (Supabase-authenticated)`. Then, against
+    that live server: `GET /domains`, `GET /rules`,
+    `GET /settings/protection` with no token all correctly returned
+    401 "missing bearer token"; with a garbage token and with a
+    well-formed-but-wrong-signature JWT, both correctly returned 401
+    "invalid or expired token" (confirming the backend actually
+    contacted the real Supabase JWKS endpoint and validated against
+    it, rather than, say, crashing or trusting anything with three
+    dot-separated segments); the pre-existing public
+    `/dashboard/stats?tenant=default` endpoint still worked
+    unaffected.
+
+Known gaps / follow-up:
+  - **Still not verified: a real signed-in session calling these
+    endpoints and getting real data back.** Everything above proves
+    both halves work (Postgres connects; bad tokens are correctly
+    rejected against the real JWKS) but not a valid token succeeding
+    end-to-end, since that still needs one real verified email — see
+    the previous entry's note about the auth-bypass classifier
+    blocking a shortcut around this. The owner verifying their own
+    signup email is what closes this.
+  - Redis wasn't running during this verification (not started this
+    session) — the backend logged repeated connection-refused
+    warnings and correctly fell back to open rather than blocking
+    startup, which is documented existing behavior, not a new finding.
+  - `backend/.env` now holds a live database password on this
+    machine's disk. It's gitignored and was never printed to any log
+    or committed, but it's still a real secret at rest outside a
+    secrets manager — acceptable for local development, not a
+    production credential-storage pattern.
+
+---
+
+## 2026-09-22 — Trusted-proxy CIDR client identity
+
+Changed:
+  - Added `core.ClientIPResolver` in `pkg/core/identity.go`. Direct peers stay
+    authoritative by default; `X-Forwarded-For` is considered only when the
+    direct peer matches an explicit configured CIDR.
+  - Added `-trusted-proxy-cidrs` to `backend/main.go`. It accepts a
+    comma-separated CIDR list and fails startup on invalid configuration rather
+    than silently trusting an unintended network.
+  - Trusted forwarding chains are processed right-to-left, skipping configured
+    proxy hops. Missing or malformed headers fall back to the direct peer.
+    IPv4 and IPv6 are canonicalized with the Go standard library.
+
+Why: direct visitors can forge `X-Forwarded-For`, which would corrupt
+IP-derived rate limits, evidence, and allowlists. Hosted deployments behind a
+correctly configured CDN/LB need the real visitor IP, so the trust boundary is
+operator-configured rather than implicit.
+
+Tested how:
+  - Focused core tests cover direct forged headers, trusted IPv4 and IPv6
+    proxies, trusted proxy chains, malformed fallback, and invalid CIDRs.
+  - Mutation check: removed the direct-peer trusted-CIDR gate. The direct
+    visitor forged-header case failed by returning the attacker header; restored
+    the gate.
+  - Challenge mutation review: removing the token host check, nonce consume
+    check, and passed-cookie host check separately made their cross-host or
+    replay tests fail. All checks were restored.
+
+Known gaps / follow-up:
+  - Trusted proxies must overwrite or safely append `X-Forwarded-For`; this
+    resolver cannot repair a CDN/LB that forwards attacker-supplied identity
+    headers unchanged.
+  - RFC 7239 `Forwarded` is deliberately unsupported until a deployment needs
+    it and its interaction with provider behavior is tested.
+
+---
+
+## 2026-09-21 — Bounded Redis outage circuit for request-path signals
+
+Changed:
+  - Added `pkg/signals/redis_circuit.go`: IP velocity, JA4 velocity, and
+    crawl-pattern checks now share one fail-open circuit. The first Redis
+    error opens a one-second cooldown; skipped calls do not contact Redis;
+    only one request can issue the recovery probe; a success closes it and a
+    failure reopens it.
+  - Updated `velocity.go` and `pattern.go` to report Redis pipeline outcomes
+    to that shared circuit. An outage can therefore contribute no optional
+    rate evidence, but it cannot add repeated request-path timeout latency.
+  - Set `go-redis` request client options in `main.go` to disable command
+    retries (`MaxRetries: -1`) and use one dial attempt. This prevents client
+    retries from multiplying the first failed request before the circuit
+    opens.
+  - Updated the architecture, roadmap, and decision record with the explicit
+    fail-open behavior.
+
+Why: Redis is an optional evidence source, not an availability dependency. A
+network partition previously allowed up to three 50ms request-path Redis calls
+for a normal scoring evaluation; automatic client retries could further
+amplify that cost. This keeps the proxy available and lets Redis recover
+without a request storm.
+
+Tested how:
+  - `go test ./pkg/signals` passed with the new circuit unit tests.
+  - Mutation check: removed the in-flight probe guard. `TestRedisCircuitSkipsRequestsUntilSingleRecoveryProbe` failed with "only one recovery probe may run at a time". Restored the guard and reran the suite.
+
+Known gaps / follow-up:
+  - The circuit is intentionally in-process. Each proxy node independently
+    probes Redis after its own cooldown; this is safe for Redis availability,
+    but a large multi-node deployment should add metrics and tune the cadence
+    from production observations rather than guessing.
+
+## 2026-09-22 — Fixed a broken host-binding check found while integrating concurrent backend hardening work
+
+Changed:
+  - `backend/pkg/challenge/challenge.go`'s `parseToken` had
+    `if err != nil || string(hostBytes) != string(hostBytes) {` — a
+    self-comparison that is always false, placed *before* `hostBytes`
+    was even decoded (it shadowed a later, real `hostBytes` variable).
+    `go vet` caught this immediately (`declared and not used:
+    hostBytes`) while integrating the concurrent challenge/core/signals
+    hardening work described in the entries above and in
+    `docs/CODEX_HANDOFF.md`. Net effect: the host-binding this session's
+    own handoff notes describe as implemented and tested
+    ("Verification rejects a token on a different host") was not
+    actually enforced — any host could redeem a challenge token issued
+    for a different one. Removed the dead early check; added the real
+    comparison (`string(hostBytes) != canonicalHost(host)`) after
+    `hostBytes` is actually decoded, where the token's other fields are
+    already validated.
+  - No other files changed in this entry — this was found and fixed
+    while verifying the combined working tree (this session's
+    Supabase-migration work plus another concurrent session's backend
+    hardening, per the owner's decision to commit them together) was
+    actually correct before committing, not a planned task of its own.
+
+Why: `go vet ./...` doesn't pass silently over an unused variable, and
+running it before committing is the whole point of `CLAUDE.md`'s
+pre-push checklist — this is exactly the kind of bug that check exists
+to catch, on a security-relevant code path, before it ships.
+
+Tested how:
+  - `go build ./...`, `go vet ./...`, `gofmt -l .` clean after the fix.
+  - `go test ./pkg/challenge/...` — `TestChallengeRejectsTokenOnDifferentHost`
+    and `TestPassedRejectsCookieOnDifferentHost` (both pre-existing
+    tests, written to catch exactly this class of bug) now genuinely
+    exercise the fixed code path and pass; before the fix, the former
+    passed only because the dead check preceding it always evaluated
+    to the "reject" branch for unrelated reasons, and the latter
+    intermittently failed depending on build/cache timing — misleading
+    signals from broken code, not from the tests.
+  - Full `go test ./...` (all 15 packages) run twice in a row, clean.
+  - Also observed, while re-running the suite multiple times during
+    this verification: `TestGuardVelocityLimitsPassedSession`
+    (`pkg/core`) failed once in a full-suite run but passed 5/5 when
+    run in isolation immediately after, and passed again in a
+    subsequent full-suite run. Recorded as an observed flake — likely
+    a timing interaction between the new Redis circuit breaker's
+    one-second cooldown window and parallel package test execution
+    under load on this machine, not chased further this session since
+    it isn't reproducible in isolation. Whoever owns `pkg/signals/
+    redis_circuit.go` should keep an eye on it under `-count=10` or
+    similar if it recurs.
+
+Known gaps / follow-up:
+  - `TestGuardVelocityLimitsPassedSession` flakiness (above) — not
+    root-caused, only observed and recorded.
+  - This session and a concurrent peer session
+    (`docs/CODEX_HANDOFF.md`) were both editing this repository at the
+    same time; coordinated via a direct cross-session message
+    confirming no active file collision before committing the combined
+    state. Worth a note for whoever reads this later: this repo had
+    two agent sessions working on it concurrently on 2026-09-21/22,
+    which is why this entry and `CODEX_HANDOFF.md` both exist and
+    describe overlapping-but-distinct work in the same window.

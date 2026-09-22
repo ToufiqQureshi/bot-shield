@@ -2,7 +2,6 @@ package core
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
@@ -19,13 +18,23 @@ import (
 type Guard struct {
 	store     *tenant.Store
 	challenge *challenge.Challenge
+	clientIP  *ClientIPResolver
 }
 
 // NewGuard combines the tenant store with a challenge.Challenge instance
 // into the real allow/challenge/block decision. In config.ModeShadow it
 // scores and records exactly the same way but never acts (item 18).
 func NewGuard(store *tenant.Store, challenge *challenge.Challenge) *Guard {
-	return &Guard{store: store, challenge: challenge}
+	return NewGuardWithClientIPResolver(store, challenge, nil)
+}
+
+// NewGuardWithClientIPResolver opts into forwarding-header client identity only
+// when the caller supplies a resolver with explicit trusted proxy CIDRs.
+func NewGuardWithClientIPResolver(store *tenant.Store, challenge *challenge.Challenge, clientIP *ClientIPResolver) *Guard {
+	if clientIP == nil {
+		clientIP = &ClientIPResolver{}
+	}
+	return &Guard{store: store, challenge: challenge, clientIP: clientIP}
 }
 
 // ServeHTTP decides per request. A visitor who already solved a
@@ -43,17 +52,11 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ja4 := JA4FromContext(r.Context())
 
-	ip := r.RemoteAddr
-	if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
-		ip = ip[:idx]
-	}
+	ip := g.clientIP.ClientIP(r)
 
 	// Look up the tenant by the incoming Host header.
 	// Strip port if present, as DNS/CNAME doesn't include it.
-	host := r.Host
-	if idx := strings.IndexByte(host, ':'); idx != -1 {
-		host = host[:idx]
-	}
+	host := requestHost(r)
 
 	tenant, err := g.store.GetByHost(host)
 	if err != nil {
@@ -141,14 +144,15 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Path:   r.URL.Path,
 		Tenant: tenant.ID,
 	}
-	score := signals.Score(facts)
+	evaluation := signals.Evaluate(facts)
+	score := evaluation.Score
 	decision := signals.DecideWithPolicy(score, tenant.Config.Policy)
 	if decision == signals.DecisionBlock && tenant.Config.Deception {
 		decision = signals.DecisionDeceive
 	}
 	tenant.Trail.Record(evidence.Evidence{
 		JA4:      ja4,
-		Signals:  signals.Analyze(facts),
+		Signals:  evaluation.Signals,
 		Score:    score,
 		Decision: decision.String(),
 		Enforced: enforced,

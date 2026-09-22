@@ -164,6 +164,40 @@ func TestChallengeRejectsTamperedToken(t *testing.T) {
 	}
 }
 
+func TestChallengeRejectsTokenOnDifferentHost(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+	token, nonce := fetchPage(t, h, challengePath)
+
+	form := url.Values{}
+	form.Set("token", token)
+	form.Set("answer", solvePoW(nonce))
+	form.Set("canvas", validCanvas())
+	req := httptest.NewRequest(http.MethodPost, verifyPath, strings.NewReader(form.Encode()))
+	req.Host = "other.example"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusSeeOther {
+		t.Fatal("a challenge token must not verify on a different host")
+	}
+}
+
+func TestChallengeTokenIsSingleUse(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+	token, nonce := fetchPage(t, h, challengePath)
+	first := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
+	if first.Code != http.StatusSeeOther {
+		t.Fatalf("first verification: want 303, got %d", first.Code)
+	}
+	second := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
+	if second.Code == http.StatusSeeOther {
+		t.Fatal("a challenge token must not be reusable")
+	}
+}
+
 // TestPassedRejectsForgedCookie: a hand-crafted cookie must not be trusted.
 func TestPassedRejectsForgedCookie(t *testing.T) {
 	c := newChallenge(t)
@@ -171,6 +205,32 @@ func TestPassedRejectsForgedCookie(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "X-HakaiShield-Passed", Value: "1700000000.forged"})
 	if c.Passed(req) {
 		t.Fatal("Passed() must reject a forged cookie")
+	}
+}
+
+func TestPassedRejectsCookieOnDifferentHost(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+	token, nonce := fetchPage(t, h, challengePath)
+	passResponse := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
+	if passResponse.Code != http.StatusSeeOther {
+		t.Fatalf("verification: want 303, got %d", passResponse.Code)
+	}
+	var pass *http.Cookie
+	for _, cookie := range passResponse.Result().Cookies() {
+		if cookie.Name == "X-HakaiShield-Passed" {
+			pass = cookie
+			break
+		}
+	}
+	if pass == nil {
+		t.Fatal("verification did not set a passed cookie")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "other.example"
+	req.AddCookie(pass)
+	if c.Passed(req) {
+		t.Fatal("a passed cookie must not transfer to another host")
 	}
 }
 

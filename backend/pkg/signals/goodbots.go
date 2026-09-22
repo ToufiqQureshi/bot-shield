@@ -52,6 +52,7 @@ var (
 )
 
 const botCacheTTL = 6 * time.Hour
+const maxBotCacheEntries = 100_000
 
 // DNSLookupFuncs allow dependency injection for deterministic testing without external network dependencies.
 var (
@@ -89,7 +90,10 @@ func IsVerifiedGoodBot(ip, ua string) bool {
 		return false
 	}
 
-	cacheKey := ip + "|" + ua
+	// Cache by the claimed bot family rather than the complete User-Agent.
+	// A caller can vary arbitrary UA suffixes; including them would let an
+	// attacker turn a single source IP into unbounded cache keys.
+	cacheKey := ip + "|" + strings.Join(validDomains, ",")
 	botCacheMu.RLock()
 	entry, found := botCache[cacheKey]
 	botCacheMu.RUnlock()
@@ -100,14 +104,32 @@ func IsVerifiedGoodBot(ip, ua string) bool {
 
 	verified := verifyDNS(ip, validDomains)
 
-	botCacheMu.Lock()
-	botCache[cacheKey] = botCacheEntry{
-		verified:  verified,
-		expiresAt: time.Now().Add(botCacheTTL),
-	}
-	botCacheMu.Unlock()
+	cacheBotResult(cacheKey, verified)
 
 	return verified
+}
+
+// cacheBotResult stores a verification result without allowing visitor-
+// controlled identities to grow the process heap forever. Expired entries are
+// reclaimed when the cap is reached; if all entries are still live, a new
+// result is simply not cached and the current request still gets its answer.
+func cacheBotResult(key string, verified bool) {
+	now := time.Now()
+	botCacheMu.Lock()
+	defer botCacheMu.Unlock()
+
+	if len(botCache) >= maxBotCacheEntries {
+		for existingKey, entry := range botCache {
+			if !now.Before(entry.expiresAt) {
+				delete(botCache, existingKey)
+				break
+			}
+		}
+		if len(botCache) >= maxBotCacheEntries {
+			return
+		}
+	}
+	botCache[key] = botCacheEntry{verified: verified, expiresAt: now.Add(botCacheTTL)}
 }
 
 func verifyDNS(ipStr string, validDomains []string) bool {
@@ -130,8 +152,7 @@ func verifyDNS(ipStr string, validDomains []string) bool {
 
 		matchedDomain := false
 		for _, domain := range validDomains {
-			cleanDomain := strings.TrimPrefix(domain, ".")
-			if strings.HasSuffix(cleanName, cleanDomain) {
+			if hostnameMatchesDomain(cleanName, domain) {
 				matchedDomain = true
 				break
 			}
@@ -155,4 +176,16 @@ func verifyDNS(ipStr string, validDomains []string) bool {
 	}
 
 	return false
+}
+
+// hostnameMatchesDomain requires either an exact hostname or a dot boundary.
+// A plain suffix check would accept attacker-controlled names such as
+// "evilgooglebot.com" for the allowed domain "googlebot.com".
+func hostnameMatchesDomain(hostname, domain string) bool {
+	hostname = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(hostname)), ".")
+	domain = strings.Trim(strings.ToLower(strings.TrimSpace(domain)), ".")
+	if hostname == "" || domain == "" {
+		return false
+	}
+	return hostname == domain || strings.HasSuffix(hostname, "."+domain)
 }
