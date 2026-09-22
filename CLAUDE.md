@@ -918,10 +918,15 @@ Anything that stays true beyond this change belongs in a topic document, not in
 
 ### Committing and pushing
 
-- **Commit on a feature branch freely, without asking.** It is reversible and
-  it is how work gets recorded.
-- **Ask the owner before pushing, opening a PR, or touching the default
-  branch.** Those are outward-facing and harder to undo.
+- **Commit and push on a feature branch freely, without asking.** Both are
+  reversible, and the session runs in a container that is reclaimed after
+  inactivity — work that is only committed locally is work that can be lost.
+  The repository's stop hook checks for unpushed commits for this reason.
+- **Ask the owner before merging to the default branch, force-pushing, or
+  deleting anything.** Those are the operations that are genuinely hard to
+  undo.
+- Opening a **draft** PR needs no permission; marking one ready for review
+  does, since that asks people for their time.
 
 ---
 
