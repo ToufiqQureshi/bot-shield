@@ -14,6 +14,11 @@ Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or A
 - **Evidence-Based Decisions:** Transparent live stats and an evidence endpoint (`/api/v1/dashboard/evidence`) tell you exactly which signals triggered a block.
 - **Enterprise Ready:** Available as a hosted CNAME solution (zero installation) or deployed within your own infrastructure to meet strict data-residency regulations.
 
+> **Deploying it?** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — hakaishield
+> terminates TLS itself to read the ClientHello, so any platform that
+> terminates TLS first silently degrades detection. That document says which
+> ones those are, and what bandwidth costs as traffic grows.
+>
 > **New here, or need to explain this to someone?**
 > [`docs/WHAT_IS_BUILT.md`](docs/WHAT_IS_BUILT.md) is a plain-language inventory of
 > what actually works today, what does not, and the numbers you can quote.

@@ -645,3 +645,86 @@ over existing signals".
 Sources: typesafe.ai/blog/introducing-system-one-models-and-jev;
 thenewstack.io/typesafe-jev-system-one; tomshardware.com (2026-09);
 datacamp.com/blog/system-one-models-jev; en.wikipedia.org/wiki/Jev_(AI_model).
+
+## 2026-09-22 — How the large vendors deploy, and what bandwidth actually costs
+
+Researched while deciding where to host. Full write-up and the deployment
+reasoning are in `docs/DEPLOYMENT.md`; this entry records the findings that
+affect detection design rather than hosting.
+
+### The architectural difference that matters most
+
+**DataDome and Akamai do not carry the response bytes.** DataDome deploys as a
+module — an Akamai EdgeWorker, a CloudFront Lambda@Edge function, a Fastly or
+nginx module — which makes a *sideband* call to the nearest DataDome endpoint
+with request metadata over a keep-alive connection, gets a verdict in about
+2ms, and then the CDN serves the content. DataDome's own infrastructure never
+sees the page body. Akamai's Bot Manager reaches the same outcome from the
+other side: detection runs on the hop that was already delivering the traffic.
+
+hakaishield is a full reverse proxy, so every byte of every response crosses
+our network interface and is billed as egress. At AWS's $0.09/GB that is about
+$81/month at 10M requests (100KB average response) and roughly $6,900/month at
+1B. Compute is a rounding error beside it.
+
+Two consequences worth holding onto:
+
+- **The proxy model is why our evidence is better.** We see the entire request
+  rather than the summary someone else chose to forward. That is not a cost to
+  eliminate; it is what the product sells.
+- **A sideband decision API is a real future option for high-volume
+  customers**, not a replacement for the proxy. Recorded as a roadmap item
+  rather than left to be discovered on a bill.
+
+### Cloudflare and Akamai scoring architecture
+
+Cloudflare assigns every request a bot score of 1–99 from layered engines:
+Heuristics (1 for high-confidence, 29 while confidence is still being assessed),
+Machine Learning (2–99, the majority of detections), JavaScript Detections for
+headless and automation fingerprints, and a deprecated Anomaly Detection engine.
+Alongside the score they expose Bot Score Source, Detection IDs and Bot Tags.
+Akamai scores 0–100 and groups responses into Cautious / Strict / Aggressive
+bands the customer tunes.
+
+This is the same shape as `pkg/signals` plus `pkg/decide`, which is
+reassuring — and the gap is still where we thought it was. They expose a
+*tag* ("detection ID 1234, `automated_browser`"). `decide.Explain` exposes each
+signal's contribution in log-odds with arithmetic a customer can check. That
+difference survives contact with what the category leaders actually ship.
+
+What is not worth copying: their scale of data. 40 billion bot requests a day
+(Akamai) and 5 trillion signals (DataDome) are not a target we can reach or
+should chase.
+
+### Bloom and cuckoo filters — if a large blocklist is ever built
+
+Relevant because a maintained fingerprint/IP intelligence set is the roadmap's
+stated moat (item 19), and membership checks are how it would be queried.
+
+**Cloudflare's "When Bloom filters don't bloom"**: a Bloom-filter deduplicator
+over ~1 billion IP records ran in 12 seconds where hashing alone took 2. The
+filter operations cost 10 seconds, and the cause was random memory access — a
+bit array larger than cache turns every probe into a cache miss. A Bloom filter
+sized past L2/L3 is far slower than its arithmetic predicts.
+
+**Cuckoo filters** (Fan et al., CoNEXT 2014) are the better modern default:
+deletion is supported, they are more space-efficient than Bloom below a 3%
+false-positive rate, and any lookup touches at most two cache lines, so cost is
+predictable for both hits and misses. A space-optimised Bloom filter at 1% FPR
+needs 7 probes, each a potential miss.
+
+**The rule that matters most here** is stated directly in the Perfect Cuckoo
+Filter paper (CoNEXT 2021): if a filter decides whether to *block* an IP, a
+false positive disables communication from a legitimate address, and the
+authors name this as a case where a plain Bloom filter cannot be used.
+
+That is `CLAUDE.md` §14 derived independently by network researchers. So if a
+large blocklist is built here:
+
+  - the filter is a fast **negative** — "definitely not in the list, stop"
+  - a positive is a **hint**, never a verdict; confirm against the real list
+  - size it to fit in cache, or measure and be disappointed
+
+It is the no-lone-signal rule in a different domain.
+
+Sources are listed at the end of `docs/DEPLOYMENT.md`.

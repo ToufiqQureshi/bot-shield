@@ -180,6 +180,7 @@ contains the answer.
 | Document | Purpose |
 |---|---|
 | `WHAT_IS_BUILT.md` | Plain-language inventory of what actually works today and what does not — for explaining the product to someone |
+| `DEPLOYMENT.md` | Where hakaishield is hosted and why, which platforms are ruled out by the TLS-termination constraint, what bandwidth costs as traffic grows, and what the large vendors do architecturally |
 | `AGENT.md` | Product purpose and engineering standard |
 | `ARCHITECTURE.md` | Current architecture and system behavior |
 | `ROADMAP.md` | What should be built and current status |
@@ -865,6 +866,16 @@ Update `RESEARCH.md` when:
 - a detection technique is researched
 - an important library/vendor/tool is evaluated
 - new security knowledge affects implementation
+
+Update `DEPLOYMENT.md` when:
+
+- a hosting, platform or region decision is made or reconsidered
+- anything changes what a request costs in bandwidth, compute or external calls
+- a platform is evaluated and rejected (record the reason, not just the choice)
+
+Before proposing any managed platform, CDN or load balancer, read its §1: the
+product terminates TLS itself to read the ClientHello, and anything that
+terminates TLS first silently degrades detection rather than failing.
 
 Update `ARCHITECTURE.md` or `README.md` when:
 

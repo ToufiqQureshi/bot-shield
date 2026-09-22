@@ -435,6 +435,26 @@ always the operator.
       current rule score would only teach the model to repeat the guesses it
       exists to improve on. The next step is item 26, not more model code.
 
+- [ ] **27. Sideband decision API for high-volume customers** — a mode where
+      the customer's own CDN or nginx calls hakaishield for a verdict instead of
+      routing their traffic through us.
+
+      **Why it will be needed, with the number.** As a full reverse proxy we
+      pay egress on every byte of every response. At AWS's $0.09/GB that is
+      about $81/month at 10M requests (100KB average response) and roughly
+      $6,900/month at 1B. This is exactly how DataDome and Akamai avoid the
+      problem: their modules make a sideband call with request metadata and the
+      CDN serves the content, so their infrastructure never touches the page
+      body.
+
+      **Not a replacement for the proxy.** The proxy model is why our evidence
+      is better — we see the whole request, not a summary someone else chose to
+      send. This is an option for customers whose volume makes proxying
+      uneconomic, and a deployment mode for customers who will not reroute DNS.
+
+      The threshold should be measured against a real traffic profile, not
+      guessed. See `docs/DEPLOYMENT.md` §4 and `docs/RESEARCH.md` (2026-09-22).
+
 - [~] **26. Label pipeline for learned scoring** — capture labelled traffic
       that item 25 can actually train on. Persisting fired checks plus a
       label, tenant-scoped and bounded, is the prerequisite for ever

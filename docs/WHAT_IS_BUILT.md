@@ -257,6 +257,7 @@ It is also why this document exists.
 | | |
 |---|---|
 | `README.md` | Running it, every flag |
+| `docs/DEPLOYMENT.md` | Where to host it and why, and what bandwidth costs |
 | `docs/ARCHITECTURE.md` | How the request path fits together |
 | `docs/SCORING_EXPLAINED.md` | How scoring and the model work, from zero |
 | `docs/LEARNED_SCORING.md` | The model's data pipeline and open questions |

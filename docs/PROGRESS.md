@@ -4149,3 +4149,68 @@ against ~6,600 lines of test code, lint clean). All were measured in earlier
 entries of this file; none are estimates.
 
 No code changed in this entry.
+
+### 2026-09-22 - docs/DEPLOYMENT.md, and the bandwidth finding behind it
+
+Added `docs/DEPLOYMENT.md`: where hakaishield is hosted and why, which
+platforms the TLS-termination constraint rules out, what bandwidth costs as
+traffic grows, and what the large vendors do architecturally. Registered in the
+`CLAUDE.md` document table with a rule that future sessions update it whenever
+a hosting decision is made or anything changes what a request costs - and read
+its §1 before proposing any managed platform, CDN or load balancer.
+
+Researched from primary sources rather than memory; every figure is cited at
+the end of the document.
+
+**The finding worth the whole exercise.** DataDome and Akamai do not carry the
+response bytes. DataDome deploys as a module (Akamai EdgeWorker, CloudFront
+Lambda@Edge, Fastly, nginx) that makes a *sideband* call with request metadata
+over a keep-alive connection, gets a verdict in ~2ms, and the CDN then serves
+the content. Their infrastructure never sees the page body.
+
+hakaishield is a full reverse proxy, so we pay egress on every byte. At AWS's
+$0.09/GB (after 100GB/month free) that is ~$81/month at 10M requests with a
+100KB average response, and ~$6,900/month at 1B. Compute is a rounding error
+beside it. This is now **ROADMAP item 27** - a sideband decision API - recorded
+as a known future need rather than left to be discovered on a bill. It is
+deliberately framed as an option for high-volume customers, not a replacement:
+the proxy model is *why* our evidence is better, since we see the whole request
+rather than a summary someone else chose to forward.
+
+Other decisions recorded with their reasoning, so they do not get re-litigated:
+
+  - **Why not Railway/Vercel/Netlify/Cloudflare-proxied/ALB/CloudFront.** All
+    terminate TLS before our process sees the connection, which hands us their
+    handshake instead of the visitor's. JA4 becomes a constant, `ua_mismatch`
+    and `ja4_blocklist` stop meaning anything, and nothing fails loudly enough
+    to notice. Fly.io works with TCP passthrough and was not rejected on
+    technical grounds. An AWS NLB in TCP mode is acceptable; in HTTPS mode it
+    is not.
+  - **Why AWS**: a year of free tier, honestly stated as the deciding reason.
+    The document says plainly that "I used AWS" is worth much less in an
+    interview than being able to explain the TLS constraint.
+  - **NAT Gateway is a trap**: ~$0.045/hour per AZ *plus* $0.045/GB, and
+    Compute Savings Plans do not cover it. Public subnet with an Internet
+    Gateway instead.
+  - **Blocking early is the one cost optimisation that is also the feature** -
+    a blocked request sends ~100 bytes instead of a 100KB page.
+  - **Hetzner is ~90x cheaper on egress** (~$0.001/GB overage vs AWS $0.09/GB),
+    which is what should pick the host once bandwidth dominates.
+
+Also recorded in `docs/RESEARCH.md`: Cloudflare's and Akamai's layered scoring
+architecture (bot score 1-99 / 0-100, engine attribution via Bot Score Source,
+Detection IDs and Bot Tags) - the same shape as ours, with the gap still where
+we believed it was, since they expose a tag and `decide.Explain` exposes each
+signal's contribution with checkable arithmetic.
+
+And the bloom/cuckoo filter research, which matters for roadmap item 19's
+blocklist: Cloudflare's "When Bloom filters don't bloom" (a filter larger than
+cache makes every probe a cache miss - 10 of 12 seconds went there), cuckoo
+filters' at-most-two-cache-line lookups and deletion support, and the Perfect
+Cuckoo Filter paper stating directly that a false positive on an IP blocklist
+disables a legitimate address, which is `CLAUDE.md` §14 arrived at
+independently by network researchers. If a large blocklist is built here: the
+filter is a fast negative, a positive is a hint that must be confirmed, and it
+must fit in cache.
+
+No code changed in this entry.
