@@ -186,7 +186,8 @@ contains the answer.
 | `ROADMAP.md` | What should be built and current status |
 | `DECISIONS.md` | Why important choices were made |
 | `RESEARCH.md` | Threats, techniques, vendors, libraries, research |
-| `PROGRESS.md` | What actually happened in previous work |
+| `PROGRESS.md` | An **index** of past work: commit id + one or two lines + a gotcha when there is one. Not a journal — the detail lives in the commit message |
+| `PROGRESS_ARCHIVE.md` | Long-form session records from before that split. Read only when a commit message and the topic docs do not answer the question |
 | `SCORING_EXPLAINED.md` | How scoring and the learned model work, from zero — the onboarding read for anyone touching either |
 | `LEARNED_SCORING.md` | How the learned scoring model gets its data, and what must be true before it may decide anything |
 | `CLAUDE.md` | How engineering work must be performed |
@@ -203,8 +204,8 @@ For meaningful work:
 - update `DECISIONS.md` for meaningful technical/product decisions
 - update `RESEARCH.md` for new threat/technique/tool research
 - update `ARCHITECTURE.md` or `README.md` when behavior/API/architecture changes
-- append to `PROGRESS.md` with what changed, why, files affected, tests,
-  meaningful mutation checks, security/performance verification, and remaining gaps
+- commit the work, then append **one entry** to `PROGRESS.md`: the commit id,
+  one or two lines, and a gotcha line only when there is one (see §22)
 - check that documentation does not contradict the implementation
 
 A future session starts from these files with zero memory of this conversation.
@@ -885,23 +886,42 @@ Update `ARCHITECTURE.md` or `README.md` when:
 - deployment behavior changes
 - customer-visible configuration changes
 
-Update `PROGRESS.md` for every meaningful work session with:
+## Commit, then index it
 
-- what changed
-- why
-- affected files/components
-- tests executed
-- meaningful mutation checks
-- security/performance verification
-- known remaining gaps
+Every meaningful task ends in a commit. The commit message carries the full
+record — what changed, why, what was tried and rejected, what was verified,
+which mutation checks were run, what is still incomplete. Write it long. It is
+the permanent artefact and it costs a future session nothing until they ask
+for it.
 
-Never write only:
+`PROGRESS.md` then gets **one short entry**:
 
 ```text
-Tests pass.
+### 2026-09-22 — label collection
+`14cc08c` — pkg/labels collects human labels from solved challenges and
+automated ones from honeypot trips, behind -collect-labels.
+Gotcha: honeypot_trap must be cleared from the vector of any sample it
+labelled, or the model just learns the label back.
 ```
 
-Write what was actually verified.
+The gotcha line is the only part that is not already in git, so it is the part
+that matters. Include it only when there is one — something that would bite the
+next person and that reading the diff would not reveal. Most entries have none.
+
+**Do not** restate the diff, list every file, or copy verification output into
+`PROGRESS.md`. That is what made the archive 3,700 lines, which every session
+then read instead of the code.
+
+Anything that stays true beyond this change belongs in a topic document, not in
+`PROGRESS.md`: a decision in `DECISIONS.md`, a threat or vendor finding in
+`RESEARCH.md`, how something works in its own doc.
+
+### Committing and pushing
+
+- **Commit on a feature branch freely, without asking.** It is reversible and
+  it is how work gets recorded.
+- **Ask the owner before pushing, opening a PR, or touching the default
+  branch.** Those are outward-facing and harder to undo.
 
 ---
 

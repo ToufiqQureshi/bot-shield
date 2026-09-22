@@ -275,6 +275,17 @@ where a 450-PoP CDN is the wrong shape.
 
 ## 7. The actual deployment
 
+> **The files are in [`deploy/`](../deploy/).** `setup.sh` provisions a fresh
+> box (Docker, certbot, firewall, renewal hook, and a renewal dry-run so it is
+> proven now rather than in 90 days), `docker-compose.yml` runs hakaishield and
+> Redis, and `hakaishield.service` is the non-Docker path. Step-by-step
+> commands are in [`deploy/README.md`](../deploy/README.md).
+>
+> The strength ladder is `bot-testing/ladder/ladder.py` — seven rungs, each
+> adding one capability, run from your own machine against your own site.
+
+
+
 Production, on a domain you own.
 
 ```bash
