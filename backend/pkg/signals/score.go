@@ -147,7 +147,7 @@ func Evaluate(f RequestFacts) Evaluation {
 		if c.fired(f) {
 			e.Score += c.weight
 			e.Signals = append(e.Signals, c.name)
-			e.Fired |= 1 << uint(i)
+			e.Fired |= 1 << i
 		}
 	}
 	return e

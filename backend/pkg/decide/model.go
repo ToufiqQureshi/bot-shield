@@ -182,7 +182,7 @@ func (m *Model) Save(w io.Writer) error {
 func (m *Model) Predict(fired uint32) Prediction {
 	z := m.bias
 	for i, w := range m.weights {
-		if fired&(1<<uint(i)) != 0 {
+		if fired&(1<<i) != 0 {
 			z += w
 		}
 	}
@@ -217,7 +217,7 @@ func (m *Model) Predict(fired uint32) Prediction {
 func (m *Model) Explain(fired uint32) []Contribution {
 	out := make([]Contribution, 0, bits.OnesCount32(fired&m.mask()))
 	for i, w := range m.weights {
-		if fired&(1<<uint(i)) != 0 {
+		if fired&(1<<i) != 0 {
 			out = append(out, Contribution{Feature: m.features[i], Weight: w})
 		}
 	}
@@ -246,7 +246,7 @@ func (m *Model) mask() uint32 {
 	if len(m.weights) >= 32 {
 		return math.MaxUint32
 	}
-	return 1<<uint(len(m.weights)) - 1
+	return 1<<len(m.weights) - 1
 }
 
 // sigmoid maps a log-odds score to a probability. math.Exp saturates to

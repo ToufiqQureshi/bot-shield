@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,5 +139,63 @@ func TestReadSamplesSkipsBlankLines(t *testing.T) {
 	}
 	if got[0].Automated || !got[1].Automated {
 		t.Errorf("labels came back wrong: %+v", got)
+	}
+}
+
+// A model that trained fine but could not be written is a failure, not a
+// success with nothing on disk.
+func TestRunReportsAnUnwritableOutput(t *testing.T) {
+	in := labelledTraffic(t, 200, 200)
+
+	// A directory cannot be opened for writing, so os.Create fails here.
+	dir := t.TempDir()
+	if err := run(in, dir, 0.2, 0.5, 0.9); err == nil {
+		t.Fatal("run() reported success writing the model to a directory")
+	}
+}
+
+// The success path must leave a complete model, not a partial one.
+func TestRunWritesACompleteModel(t *testing.T) {
+	in := labelledTraffic(t, 300, 300)
+	out := filepath.Join(t.TempDir(), "model.json")
+
+	if err := run(in, out, 0.2, 0.5, 0.9); err != nil {
+		t.Fatalf("run() error: %v", err)
+	}
+
+	written, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("ReadFile() error: %v", err)
+	}
+	if _, err := decide.Load(bytes.NewReader(written), signals.FeatureNames()); err != nil {
+		t.Fatalf("the file left on disk is not a loadable model: %v\n%s", err, written)
+	}
+}
+
+// failOnClose accepts every write and fails only when closed - the shape
+// of a buffered write that turns out to be short once it is flushed.
+type failOnClose struct{ err error }
+
+func (f failOnClose) Write(p []byte) (int, error) { return len(p), nil }
+func (f failOnClose) Close() error                { return f.err }
+
+// A model whose bytes never reached the disk is not saved, however well
+// it trained. Deferring the close would report success here.
+func TestSaveModelReportsACloseFailure(t *testing.T) {
+	m, err := decide.Train(signals.FeatureNames(), []decide.Sample{
+		{Fired: 0, Automated: false},
+		{Fired: 1, Automated: true},
+	}, decide.DefaultOptions())
+	if err != nil {
+		t.Fatalf("Train() error: %v", err)
+	}
+
+	want := errors.New("disk full on flush")
+	if got := saveModel(m, failOnClose{err: want}); !errors.Is(got, want) {
+		t.Fatalf("saveModel() = %v, want the close error %v", got, want)
+	}
+
+	if got := saveModel(m, failOnClose{}); got != nil {
+		t.Errorf("saveModel() = %v on a clean close, want nil", got)
 	}
 }

@@ -325,10 +325,13 @@ func main() {
 // loadShadowModel reads a trained model and checks it against the checks
 // this binary actually runs.
 func loadShadowModel(path string) (*decide.Model, error) {
-	f, err := os.Open(path)
+	// The path is an operator-supplied flag; pointing the process at a
+	// file is the whole feature, and nothing a visitor sends reaches it.
+	f, err := os.Open(path) // #nosec G304 -- operator-supplied -model flag
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	// Nothing was written, so a close error says nothing useful.
+	defer func() { _ = f.Close() }()
 	return decide.Load(f, signals.FeatureNames())
 }

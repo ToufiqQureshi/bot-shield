@@ -131,7 +131,7 @@ func Train(features []string, samples []Sample, opts Options) (*Model, error) {
 		for _, s := range samples {
 			z := bias
 			for i := range weights {
-				if s.Fired&(1<<uint(i)) != 0 {
+				if s.Fired&(1<<i) != 0 {
 					z += weights[i]
 				}
 			}
@@ -140,7 +140,7 @@ func Train(features []string, samples []Sample, opts Options) (*Model, error) {
 			err := sigmoid(z) - label(s.Automated)
 			gradB += err
 			for i := range gradW {
-				if s.Fired&(1<<uint(i)) != 0 {
+				if s.Fired&(1<<i) != 0 {
 					gradW[i] += err
 				}
 			}
@@ -242,7 +242,7 @@ func featureMask(n int) uint32 {
 	if n >= 32 {
 		return math.MaxUint32
 	}
-	return 1<<uint(n) - 1
+	return 1<<n - 1
 }
 
 // Vector turns the check names recorded for a request into the bitmask
@@ -267,7 +267,7 @@ func Vector(features []string, fired []string) (uint32, error) {
 		if !ok {
 			return 0, fmt.Errorf("decide: %q is not a check this build runs", name)
 		}
-		mask |= 1 << uint(i)
+		mask |= 1 << i
 	}
 	return mask, nil
 }

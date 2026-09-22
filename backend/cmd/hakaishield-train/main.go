@@ -58,11 +58,14 @@ func run(inPath, outPath string, holdout, challengeAt, blockAt float64) error {
 
 	src := io.Reader(os.Stdin)
 	if inPath != "" {
-		f, err := os.Open(inPath)
+		// Operator-supplied flag; reading the file named on the command
+		// line is what this command is for.
+		f, err := os.Open(inPath) // #nosec G304 -- operator-supplied -in flag
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		// Nothing is written to it, so a close error says nothing useful.
+		defer func() { _ = f.Close() }()
 		src = f
 	}
 
@@ -98,16 +101,30 @@ func run(inPath, outPath string, holdout, challengeAt, blockAt float64) error {
 		fmt.Fprintln(os.Stderr, "no held-out data: the training score below is not evidence the model generalises")
 	}
 
-	dst := io.Writer(os.Stdout)
-	if outPath != "" {
-		f, err := os.Create(outPath)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		dst = f
+	if outPath == "" {
+		return model.Save(os.Stdout)
 	}
-	return model.Save(dst)
+
+	// Operator-supplied flag; writing where the command line says is the
+	// point of the command.
+	f, err := os.Create(outPath) // #nosec G304 -- operator-supplied -out flag
+	if err != nil {
+		return err
+	}
+	return saveModel(model, f)
+}
+
+// saveModel writes the model and reports the close error rather than
+// deferring it away. A write that only fails when the file is flushed
+// would otherwise leave a truncated model on disk while this command
+// exited successfully, and the next thing to read it would be the proxy
+// at startup.
+func saveModel(model *decide.Model, f io.WriteCloser) error {
+	if err := model.Save(f); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // readSamples parses the labelled file. A bad line fails the run rather
@@ -152,6 +169,8 @@ func readSamples(r io.Reader, features []string) ([]decide.Sample, error) {
 }
 
 func report(w io.Writer, label string, q decide.Quality) {
-	fmt.Fprintf(w, "%-12s  samples=%-7d logloss=%.4f  accuracy=%.3f  false-positives=%d  false-negatives=%d\n",
+	// Writing the report to stderr is best-effort: a failure here must
+	// not stop a model that trained correctly from being saved.
+	_, _ = fmt.Fprintf(w, "%-12s  samples=%-7d logloss=%.4f  accuracy=%.3f  false-positives=%d  false-negatives=%d\n",
 		label, q.Samples, q.LogLoss, q.Accuracy, q.FalsePositives, q.FalseNegatives)
 }
