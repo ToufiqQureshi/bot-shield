@@ -20,13 +20,17 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
+	"time"
 
+	"github.com/ToufiqQureshi/hakaishield/pkg/db"
 	"github.com/ToufiqQureshi/hakaishield/pkg/decide"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 )
@@ -38,55 +42,76 @@ type labelled struct {
 }
 
 func main() {
-	in := flag.String("in", "", "labelled traffic, one JSON object per line (default: stdin)")
+	in := flag.String("in", "", "labelled traffic, one JSON object per line (default: stdin, unless -db-url is set)")
+	dbURL := flag.String("db-url", os.Getenv("DATABASE_URL"), "read labelled traffic collected by the proxy's -collect-labels instead of a file. Falls back to $DATABASE_URL.")
+	tenant := flag.String("tenant", "", "train on one tenant's traffic only; empty trains a model shared across tenants")
+	maxSamples := flag.Int("max-samples", 200_000, "most recent samples to read when training from the database")
 	out := flag.String("out", "", "where to write the trained model (default: stdout)")
 	holdout := flag.Float64("holdout", 0.2, "share of the data held back to score the model on traffic it was not trained on")
 	blockAt := flag.Float64("block-at", decide.DefaultOptions().BlockAt, "probability at or above which the model would block")
 	challengeAt := flag.Float64("challenge-at", decide.DefaultOptions().ChallengeAt, "probability at or above which the model would challenge")
 	flag.Parse()
 
-	if err := run(*in, *out, *holdout, *challengeAt, *blockAt); err != nil {
+	if err := run(runOptions{
+		in:          *in,
+		out:         *out,
+		dbURL:       *dbURL,
+		tenant:      *tenant,
+		maxSamples:  *maxSamples,
+		holdout:     *holdout,
+		challengeAt: *challengeAt,
+		blockAt:     *blockAt,
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "hakaishield-train: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(inPath, outPath string, holdout, challengeAt, blockAt float64) error {
-	if holdout < 0 || holdout >= 1 {
-		return fmt.Errorf("holdout %v must be in [0,1)", holdout)
-	}
+// runOptions is what the command was asked to do. It is a struct rather
+// than eight positional arguments because most of them are numbers and
+// swapping two would be silent.
+type runOptions struct {
+	in          string
+	out         string
+	dbURL       string
+	tenant      string
+	maxSamples  int
+	holdout     float64
+	challengeAt float64
+	blockAt     float64
+}
 
-	src := io.Reader(os.Stdin)
-	if inPath != "" {
-		// Operator-supplied flag; reading the file named on the command
-		// line is what this command is for.
-		f, err := os.Open(inPath) // #nosec G304 -- operator-supplied -in flag
-		if err != nil {
-			return err
-		}
-		// Nothing is written to it, so a close error says nothing useful.
-		defer func() { _ = f.Close() }()
-		src = f
+func run(opts runOptions) error {
+	if opts.holdout < 0 || opts.holdout >= 1 {
+		return fmt.Errorf("holdout %v must be in [0,1)", opts.holdout)
 	}
 
 	features := signals.FeatureNames()
-	samples, err := readSamples(src, features)
+
+	var samples []decide.Sample
+	var err error
+	if opts.in == "" && opts.dbURL != "" {
+		samples, err = readFromDatabase(opts)
+	} else {
+		samples, err = readFromFile(opts.in, features)
+	}
 	if err != nil {
 		return err
 	}
 
-	// The holdout is the tail of the file rather than a random slice, so
+	// The holdout is the tail of the input rather than a random slice, so
 	// two runs on the same data split it the same way and their scores
-	// can be compared. Whoever produces the file is responsible for it
-	// not being ordered by label.
-	split := len(samples) - int(float64(len(samples))*holdout)
+	// can be compared. Whoever produces the input is responsible for it
+	// not being ordered by label - readFromDatabase shuffles for exactly
+	// that reason, since rows come back ordered by time.
+	split := len(samples) - int(float64(len(samples))*opts.holdout)
 	train, test := samples[:split], samples[split:]
 
-	opts := decide.DefaultOptions()
-	opts.ChallengeAt = challengeAt
-	opts.BlockAt = blockAt
+	trainOpts := decide.DefaultOptions()
+	trainOpts.ChallengeAt = opts.challengeAt
+	trainOpts.BlockAt = opts.blockAt
 
-	model, err := decide.Train(features, train, opts)
+	model, err := decide.Train(features, train, trainOpts)
 	if err != nil {
 		return err
 	}
@@ -101,13 +126,13 @@ func run(inPath, outPath string, holdout, challengeAt, blockAt float64) error {
 		fmt.Fprintln(os.Stderr, "no held-out data: the training score below is not evidence the model generalises")
 	}
 
-	if outPath == "" {
+	if opts.out == "" {
 		return model.Save(os.Stdout)
 	}
 
 	// Operator-supplied flag; writing where the command line says is the
 	// point of the command.
-	f, err := os.Create(outPath) // #nosec G304 -- operator-supplied -out flag
+	f, err := os.Create(opts.out) // #nosec G304 -- operator-supplied -out flag
 	if err != nil {
 		return err
 	}
@@ -125,6 +150,75 @@ func saveModel(model *decide.Model, f io.WriteCloser) error {
 		return err
 	}
 	return f.Close()
+}
+
+// readFromFile reads labelled traffic from a JSONL file, or stdin when
+// no path is given.
+func readFromFile(inPath string, features []string) ([]decide.Sample, error) {
+	src := io.Reader(os.Stdin)
+	if inPath != "" {
+		// Operator-supplied flag; reading the file named on the command
+		// line is what this command is for.
+		f, err := os.Open(inPath) // #nosec G304 -- operator-supplied -in flag
+		if err != nil {
+			return nil, err
+		}
+		// Nothing is written to it, so a close error says nothing useful.
+		defer func() { _ = f.Close() }()
+		src = f
+	}
+	return readSamples(src, features)
+}
+
+// readFromDatabase reads labelled traffic the proxy collected.
+//
+// It filters on this build's feature version, because the fired mask is
+// positional: rows captured before a check was added or reordered
+// describe different signals, and training across the boundary would be
+// training on noise.
+func readFromDatabase(opts runOptions) ([]decide.Sample, error) {
+	if err := db.Init(opts.dbURL); err != nil {
+		return nil, err
+	}
+
+	version := signals.FeatureVersion()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	stored, err := db.ReadSamples(ctx, opts.tenant, version, opts.maxSamples)
+	if err != nil {
+		return nil, err
+	}
+	if len(stored) == 0 {
+		return nil, fmt.Errorf("no labelled traffic stored for check list %s%s - is the proxy running with -collect-labels?",
+			version, tenantSuffix(opts.tenant))
+	}
+
+	out := make([]decide.Sample, len(stored))
+	for i, s := range stored {
+		out[i] = decide.Sample{Fired: s.Fired, Automated: s.Automated}
+	}
+
+	// Rows come back newest first, so the holdout would otherwise be the
+	// oldest traffic rather than a sample of it. The shuffle is
+	// deliberately deterministic - seeded only by the row count - so two
+	// runs on the same rows produce the same split and the same model,
+	// which is what makes a drop in detection quality distinguishable
+	// from training noise. It is ordering, not secrecy, so a
+	// cryptographic source would buy nothing here.
+	rng := rand.New(rand.NewSource(int64(len(out)))) // #nosec G404 -- reproducible shuffle, not a secret
+	rng.Shuffle(len(out), func(a, b int) { out[a], out[b] = out[b], out[a] })
+
+	fmt.Fprintf(os.Stderr, "read %d labelled requests from the database (check list %s%s)\n",
+		len(out), version, tenantSuffix(opts.tenant))
+	return out, nil
+}
+
+func tenantSuffix(tenant string) string {
+	if tenant == "" {
+		return ", all tenants"
+	}
+	return ", tenant " + tenant
 }
 
 // readSamples parses the labelled file. A bad line fails the run rather

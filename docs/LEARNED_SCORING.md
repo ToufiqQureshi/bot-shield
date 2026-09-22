@@ -20,8 +20,11 @@
 | `-model` flag — load a model, shadow only | **built** |
 | `signals.Evaluation.Fired` — the feature bitmask | **built** |
 | `Evidence.Model` — the recorded opinion | **built**, nothing reads it yet |
-| **Label collection** | **not built — this is the gap** |
-| **Label storage** | **not built** |
+| `pkg/labels` — collection, caps, parked samples | **built**, tested |
+| `training_samples` table + `-collect-labels` | **built** |
+| `cmd/hakaishield-train -db-url` — train off it | **built** |
+| **Selection-bias correction (§3)** | **not built — an unmade decision** |
+| Retention on a schedule | `db.DeleteSamplesBefore` exists, nothing calls it |
 | Dashboard surface for any of it | not built, deliberately |
 
 The trainer eats one JSON object per line:
@@ -253,15 +256,38 @@ Two of those steps are a person on purpose. See §4.
 
 ---
 
-## 7. Running it today
+## 7. Running it
 
-The trainer works now; only the input is missing. To see the pipeline
-end to end, hand it a file by hand:
+Turn collection on (it needs a database; there is nowhere else to put
+samples, and the evidence trail is a small in-memory ring buffer):
 
 ```bash
-cd backend
+./hakaishield -target https://example.com -db-url "$DATABASE_URL" -collect-labels
+```
+
+It records and decides nothing. Watch it work:
+
+```text
+label_sample_queued_total    samples accepted
+label_sample_capped_total    refused by the per-identity cap
+label_sample_dropped_total   queue full - the writer cannot keep up
+label_written_total          actually stored
+```
+
+Once there is traffic, train straight off it:
+
+```bash
+go run ./cmd/hakaishield-train -db-url "$DATABASE_URL" -out model.json
+./hakaishield -target https://example.com -model model.json   # shadow
+```
+
+`-tenant <id>` trains one customer's model instead of a shared one. The
+trainer filters on this build's feature version, so rows captured before
+a check was added or reordered are left out rather than silently
+misread. A file still works too, for a set produced by hand:
+
+```bash
 go run ./cmd/hakaishield-train -in labelled.jsonl -out model.json
-./hakaishield -target https://example.com -model model.json
 ```
 
 The trainer holds back a fifth of the data and prints both scores:
@@ -282,11 +308,13 @@ visitor a customer would have lost.
 
 All of these, not some:
 
-- [ ] Labels come from independent sources only (§2), with `honeypot_trap`
-      excluded from the samples it labelled.
+- [x] Labels come from independent sources only (§2), with `honeypot_trap`
+      excluded from the samples it labelled. (Built; `pkg/core/guard.go`
+      clears the bit, and a mutation check fails if it stops.)
 - [ ] The selection-bias question (§3) has an answer written in
       `DECISIONS.md`.
-- [ ] Per-identity sample caps exist, so one client cannot flood the set.
+- [x] Per-identity sample caps exist, so one client cannot flood the set.
+      (`pkg/labels/cap.go`: 5 per (tenant, IP, JA4) per hour.)
 - [ ] Held-out false positives are **better than the rule scorer's** on
       the same held-out data. Not "good" — better. The rules are the
       thing being replaced; beating them is the bar.

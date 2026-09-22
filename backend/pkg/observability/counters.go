@@ -17,7 +17,13 @@ var (
 // Inc records one occurrence of a bounded internal event. Counter names are
 // code-owned constants; callers must not include visitor-controlled values.
 func Inc(name string) {
-	if name == "" {
+	Add(name, 1)
+}
+
+// Add records n occurrences at once, for callers that handle events in
+// batches and would otherwise loop over Inc.
+func Add(name string, n int) {
+	if name == "" || n == 0 {
 		return
 	}
 	countersMu.RLock()
@@ -32,7 +38,7 @@ func Inc(name string) {
 		}
 		countersMu.Unlock()
 	}
-	counter.Add(1)
+	counter.Add(int64(n))
 }
 
 // Snapshot returns a stable copy of the current aggregate counters.

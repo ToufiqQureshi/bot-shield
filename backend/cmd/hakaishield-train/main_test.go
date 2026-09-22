@@ -43,7 +43,7 @@ func TestTrainedModelLoadsBackIntoTheProxy(t *testing.T) {
 	in := labelledTraffic(t, 300, 300)
 	out := filepath.Join(t.TempDir(), "model.json")
 
-	if err := run(in, out, 0.2, 0.5, 0.9); err != nil {
+	if err := run(runOptions{in: in, out: out, holdout: 0.2, challengeAt: 0.5, blockAt: 0.9}); err != nil {
 		t.Fatalf("run() error: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestRunRefusesUnusableInput(t *testing.T) {
 			}
 
 			out := filepath.Join(t.TempDir(), "model.json")
-			err := run(in, out, 0.2, 0.5, 0.9)
+			err := run(runOptions{in: in, out: out, holdout: 0.2, challengeAt: 0.5, blockAt: 0.9})
 			if err == nil {
 				t.Fatalf("run(%s) returned no error, want one mentioning %q", tc.name, tc.want)
 			}
@@ -110,7 +110,7 @@ func TestRunRefusesUnusableInput(t *testing.T) {
 // useless model. It has to stop here, not in production.
 func TestRunRefusesOneClassTraffic(t *testing.T) {
 	in := labelledTraffic(t, 0, 200)
-	if err := run(in, filepath.Join(t.TempDir(), "model.json"), 0.2, 0.5, 0.9); err == nil {
+	if err := run(runOptions{in: in, out: filepath.Join(t.TempDir(), "model.json"), holdout: 0.2, challengeAt: 0.5, blockAt: 0.9}); err == nil {
 		t.Fatal("run() accepted traffic labelled entirely automated")
 	}
 }
@@ -118,7 +118,7 @@ func TestRunRefusesOneClassTraffic(t *testing.T) {
 func TestRunRefusesAnImpossibleHoldout(t *testing.T) {
 	in := labelledTraffic(t, 100, 100)
 	for _, holdout := range []float64{-0.1, 1, 1.5} {
-		if err := run(in, filepath.Join(t.TempDir(), "model.json"), holdout, 0.5, 0.9); err == nil {
+		if err := run(runOptions{in: in, out: filepath.Join(t.TempDir(), "model.json"), holdout: holdout, challengeAt: 0.5, blockAt: 0.9}); err == nil {
 			t.Errorf("run(holdout=%v) returned no error", holdout)
 		}
 	}
@@ -149,7 +149,7 @@ func TestRunReportsAnUnwritableOutput(t *testing.T) {
 
 	// A directory cannot be opened for writing, so os.Create fails here.
 	dir := t.TempDir()
-	if err := run(in, dir, 0.2, 0.5, 0.9); err == nil {
+	if err := run(runOptions{in: in, out: dir, holdout: 0.2, challengeAt: 0.5, blockAt: 0.9}); err == nil {
 		t.Fatal("run() reported success writing the model to a directory")
 	}
 }
@@ -159,7 +159,7 @@ func TestRunWritesACompleteModel(t *testing.T) {
 	in := labelledTraffic(t, 300, 300)
 	out := filepath.Join(t.TempDir(), "model.json")
 
-	if err := run(in, out, 0.2, 0.5, 0.9); err != nil {
+	if err := run(runOptions{in: in, out: out, holdout: 0.2, challengeAt: 0.5, blockAt: 0.9}); err != nil {
 		t.Fatalf("run() error: %v", err)
 	}
 

@@ -3956,3 +3956,123 @@ No code changed in this entry.
 
 Remaining gaps: unchanged. Item 26 is still not built; this makes it buildable
 by someone starting cold.
+
+## 2026-09-22 - ROADMAP item 26: label collection (pkg/labels)
+
+Changed:
+  - `pkg/labels` (new): `Recorder`/`Collector` take labelled requests from the
+    request path onto a bounded queue and write them in batches on a background
+    goroutine. `Record` never blocks and never errors - it runs where a
+    customer's visitor is waiting - and drops with a counter when the queue is
+    full. `identityCap` bounds how many samples one (tenant, IP, JA4) can
+    contribute (5/hour). `pendingStore` parks a challenged request's fired mask
+    against the challenge nonce so a later solve can label it.
+  - `pkg/signals`: `FeatureVersion()` (short stable hash of the check names)
+    and `FeatureBit(name)`. Samples carry the version because the fired mask is
+    positional and uninterpretable without the list that produced it.
+  - `pkg/challenge`: `SetLabelRecorder`. `Serve` parks the sample carried in
+    the request context against the nonce it generates; `handleVerify` labels
+    it human only after every check passes.
+  - `pkg/core/guard.go`: `WithLabelRecorder`. Honeypot-sourced samples are
+    recorded with the `honeypot_trap` bit cleared, and the sample is carried
+    into `challenge.Serve` through the request context.
+  - `pkg/db`: `training_samples` table (tenant-scoped, no IP/UA/path/body),
+    `SampleStore.WriteSamples` (batched), `ReadSamples` (filtered on feature
+    version), `DeleteSamplesBefore` for retention.
+  - `pkg/observability`: `Add(name, n)` so batch writes do not loop over `Inc`.
+  - `main.go`: `-collect-labels`, fatal without `-db-url`.
+  - `cmd/hakaishield-train`: `-db-url`, `-tenant`, `-max-samples` read straight
+    from the collected samples. Positional args became `runOptions` - most were
+    floats, and swapping two would have been silent.
+
+Why:
+  - `pkg/decide` could train and score but had nothing trustworthy to train on.
+    This is the collection half, designed in `docs/LEARNED_SCORING.md`.
+  - Only the two independent sources are used. A solved challenge proves real
+    JavaScript, a real canvas and no automation globals, none of which is our
+    own scoring; a honeypot trip proves something followed an invisible link.
+    Verified good bots are deliberately not a source - `guard.go` forwards them
+    before `Evaluate` runs, so no mask exists, and training on them would teach
+    the model to stop crawler-shaped traffic.
+
+Tests and verification:
+  - New: `pkg/labels/labels_test.go`, `recorder_test.go`, `labels_bench_test.go`,
+    `pkg/core/labels_test.go` (end to end through a real challenge solve).
+  - Coverage includes: a solved challenge producing exactly one human-labelled
+    sample carrying the mask of the request that was challenged; an unsolved
+    challenge producing nothing; a replayed solve producing one sample not
+    three; an unknown nonce; an expired parked sample; honeypot trips labelled
+    automated with their own bit cleared; unattributable samples refused; the
+    per-identity cap and its expiry; distinct identities not capped together; a
+    failing writer not stopping collection; nil recorder/collector; and `Record`
+    not blocking on a full queue with nothing draining it.
+  - `go vet`, `gofmt -l`, `go build`, `go test -race ./...`, `golangci-lint run`
+    (0 issues) all pass.
+
+Mutation checks (each break applied, tests re-run, then restored):
+  - Stopped clearing the honeypot bit -> the honeypot label test failed.
+  - Labelled on challenge issue instead of solve -> the unsolved-challenge test
+    failed.
+  - Parked an empty mask instead of the real one -> the solved-challenge test
+    failed.
+  - Removed the per-identity cap -> the flood test failed.
+  - Stopped consuming the nonce on claim -> the replay test failed.
+  - Accepted unattributable samples -> that test failed.
+  - Made `Record` block instead of dropping -> the non-blocking test failed.
+  - Re-ran the honeypot-bit mutation after refactoring the lookup; still fails.
+
+Bugs found and fixed during this work:
+  - `FeatureBit` was being called per request inside `collectLabels`, walking
+    the check list comparing strings on every request whether or not labels
+    were being collected. Resolved once into a package-level `honeypotBit`.
+  - `ReadSamples` truncated `fired` from BIGINT into uint32 without a range
+    check (found by gosec G115, and a real defect rather than lint noise): a
+    row outside the range would have become a mask describing signals the
+    request never fired. It is now refused with an error.
+  - The trainer's deterministic shuffle tripped G404. It is ordering, not
+    secrecy, and determinism is the point - two runs on the same rows must
+    produce the same model - so it is annotated with that reasoning rather
+    than switched to crypto/rand.
+
+Security review:
+  - Collection cannot affect a decision: `Recorder` has no path to one, and the
+    guard's existing `TestShadowModelNeverChangesTheDecision` still holds.
+  - Poisoning is the real threat here and is addressed rather than noted. A bot
+    that deliberately solves challenges is injecting human labels for its own
+    fingerprint; the per-identity cap makes contributing more labels require
+    more distinct (IP, JA4) identities, which costs the same as evading the
+    rest of detection. `label_sample_capped_total` makes attempts visible.
+  - A solved challenge cannot be replayed into two samples: the nonce is
+    consumed on claim.
+  - The fired mask is never given to the client. It is parked server-side
+    against the nonce, deliberately not put in the challenge token, because the
+    token goes to the visitor and a list of which checks a bot tripped tells it
+    what to fix - the same reasoning that keeps the evidence endpoint
+    token-gated.
+  - Tenant scoping is required, not optional: a sample without a tenant, a
+    feature version or a source is refused at `Record`.
+  - Stored rows hold no IP, user agent, path or body. The identity used for
+    capping is never persisted.
+  - All three stores (queue, cap, parked samples) are bounded with expiry
+    sweeps and refuse new entries when full rather than growing.
+
+Performance and cost:
+  - `BenchmarkRecord`: 102.3 ns/op, 0 B/op, 0 allocs/op.
+  - `BenchmarkGuardServeHTTP` unchanged at ~36us/op with the same allocation
+    count, so collection costs nothing when it is off.
+  - Database writes are batched (64, or every 5s) on one background goroutine
+    with a 5s timeout, never on the request path. A failed batch is dropped and
+    counted rather than retried in front of a struggling database.
+
+Remaining gaps:
+  - **The selection-bias correction is an unmade product decision.** Under
+    PolicyBalanced only score>0 traffic is challenged, so every human label
+    comes from a human who already looked suspicious. `LEARNED_SCORING.md` §3
+    lays out three options; the leaning is "let the model refine the suspicious
+    band only". Nothing should enforce a learned model until this is decided.
+  - Parked challenge samples are per-process. Behind several nodes, a visitor
+    challenged on one and verified on another produces no label. That costs a
+    sample and nothing else, so sharing it through Redis is deferred until
+    there is evidence the loss matters.
+  - `DeleteSamplesBefore` exists but nothing calls it on a schedule.
+  - No dashboard surface for any of this, and still none for `Evidence.Model`.

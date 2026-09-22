@@ -277,7 +277,16 @@ object per line in the shape the evidence trail already records:
 {"signals":[],"automated":false}
 ```
 
-**What is missing is labels, not code.** `automated` has to come from something
+**Labels are collected, not typed in.** `-collect-labels` (with `-db-url`)
+turns on `pkg/labels`, which takes a human label from every solved
+challenge and an automated one from every honeypot trip, and stores only
+the fired mask plus the label — tenant-scoped, no IP, user agent, path or
+body. Recording is 102ns and zero-allocation, onto a bounded queue that
+drops rather than blocking a visitor on a database, and one (tenant, IP,
+JA4) identity is capped so it cannot fill the set with labels about
+itself. `cmd/hakaishield-train -db-url` trains straight off it.
+
+**What is still missing is the bias correction, not the plumbing.** `automated` has to come from something
 that actually knows, and which sources qualify is less obvious than it looks —
 a solved challenge does, a verified good-bot lookup does not. The whole
 pipeline, the traps in it, and the gate a model has to pass before it may

@@ -435,7 +435,7 @@ always the operator.
       current rule score would only teach the model to repeat the guesses it
       exists to improve on. The next step is item 26, not more model code.
 
-- [ ] **26. Label pipeline for learned scoring** — capture labelled traffic
+- [~] **26. Label pipeline for learned scoring** — capture labelled traffic
       that item 25 can actually train on. Persisting fired checks plus a
       label, tenant-scoped and bounded, is the prerequisite for ever
       enforcing a learned model.
@@ -462,6 +462,22 @@ always the operator.
         score>0 traffic is challenged, so every human label comes from a
         human who already looked suspicious. Pick a correction before
         collecting, not after.
+
+      **Status: collection built, bias correction not.** `pkg/labels`
+      collects both usable sources behind `-collect-labels` (needs
+      `-db-url`), stores them in `training_samples` tenant-scoped with no
+      IP/UA/path kept, and `cmd/hakaishield-train -db-url` trains straight
+      off them. Recording is 102ns and zero-allocation on the request
+      path, off a bounded queue that drops rather than blocking a
+      visitor. Per-identity caps are in, so one client cannot own the
+      training set.
+
+      **Still open:** the selection-bias correction (§3 of
+      `LEARNED_SCORING.md`) is an unmade product decision, and the parked
+      challenge samples are per-process, so behind several nodes a
+      visitor challenged on one and verified on another produces no
+      label. Retention (`db.DeleteSamplesBefore`) exists but nothing
+      calls it on a schedule yet.
 
       Also see `docs/DECISIONS.md`, "Learned decision weights are a linear
       model over existing signals".

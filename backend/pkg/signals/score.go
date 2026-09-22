@@ -1,7 +1,10 @@
 package signals
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 )
@@ -198,4 +201,36 @@ func DecideWithPolicy(score int, policy config.PolicyMode) Decision {
 		return DecisionAllow
 	}
 	return DecisionChallenge
+}
+
+// FeatureVersion identifies the check list this build runs, as a short
+// stable hash of the names in FeatureNames order.
+//
+// A stored training sample is a positional bitmask, so it is meaningless
+// without knowing which list produced it: reorder or rename a check and
+// every older row silently starts describing different signals. Samples
+// carry this string so a trainer can refuse the ones captured against a
+// different build, the same way decide.Load refuses a mismatched model.
+func FeatureVersion() string {
+	sum := sha256.Sum256([]byte(strings.Join(FeatureNames(), "\n")))
+	return hex.EncodeToString(sum[:6])
+}
+
+// Feature names that other packages need to refer to by name rather than
+// by position. Using the constant keeps a rename from silently turning a
+// lookup into a miss.
+const FeatureHoneypotTrap = "honeypot_trap"
+
+// FeatureBit returns the Evaluation.Fired bit for a named check.
+//
+// It reports false for a name this build does not run, so a caller that
+// looks up a renamed check fails visibly instead of masking with zero
+// and silently doing nothing.
+func FeatureBit(name string) (uint32, bool) {
+	for i, c := range checks {
+		if c.name == name {
+			return 1 << i, true
+		}
+	}
+	return 0, false
 }
