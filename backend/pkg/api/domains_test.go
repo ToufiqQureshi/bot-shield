@@ -8,9 +8,10 @@ func TestNormalizeOrigin(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{in: "10.0.1.50:8080", want: "http://10.0.1.50:8080"},
-		{in: "http://10.0.1.50:8080", want: "http://10.0.1.50:8080"},
-		{in: "https://origin.internal:8443", want: "https://origin.internal:8443"},
+		{in: "10.0.1.50:8080", wantErr: true},
+		{in: "http://10.0.1.50:8080", wantErr: true},
+		{in: "http://169.254.169.254", wantErr: true},
+		{in: "https://origin.example.com:8443", want: "https://origin.example.com:8443"},
 		{in: "example.com", want: "http://example.com"},
 		{in: "", wantErr: true},
 		{in: "http://", wantErr: true},

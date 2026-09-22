@@ -96,6 +96,18 @@ Internet (every visitor, hostile until scored)
              per-request record of why each decision was made, in a
              fixed 1000-entry ring buffer with a 24h retention window.
              Token-gated and off unless -evidence-token is set.
+
+[Challenge state] BUILT  challenge tokens and passed cookies are host-bound.
+             Solved challenge nonces are consumed through Redis when available,
+             which rejects replay across nodes, and fall back to a bounded
+             in-process store if Redis is unavailable.
+
+[Observability] BUILT  aggregate operational counters for JWKS refresh/failure,
+             unknown-kid rejection, Goodbot DNS budget rejection, Redis circuit
+             opens/probes/skips, origin proxy errors, malformed forwarded IP
+             headers, malformed Host, unknown Host, and SNI/Host mismatch.
+             `/__hakaishield/observability` is mounted only when an
+             observability bearer token is configured.
 ```
 
 As of the latest stable release, HakaiShield evaluates traffic continuously. `Guard` (`proxy/guard.go`) scores every request and allows, JS-challenges, or blocks it instantaneously. Our constantly updated heuristics feed the scoring engine.
@@ -191,8 +203,8 @@ JS-challenge path, which only suspicious traffic sees).
 | Step | Budget | Measured |
 |---|---|---|
 | JA4 fingerprint | ~2ms | **14.3µs** — 0.7% of budget |
-| Redis rate-limit check | ~2ms | not built |
-| Scoring (rule-based) | ~1ms | not built |
+| Redis rate-limit check | ~2ms | built with 50ms cap and fail-open circuit; production p95/p99 not measured |
+| Scoring (rule-based) | ~1ms | built; production p95/p99 not measured |
 | Proxy overhead | ~5ms | not measured |
 | Headroom | ~5ms | — |
 

@@ -21,7 +21,21 @@ func newTestRedis(t *testing.T) {
 
 	prev := rdb
 	rdb = redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	redisHealth.reset()
 	t.Cleanup(func() { rdb = prev })
+}
+
+func resetCommonBrowserPrefixes(t *testing.T) {
+	t.Helper()
+	ja4Mu.Lock()
+	prev := append([]string(nil), browserPrefixes...)
+	browserPrefixes = nil
+	ja4Mu.Unlock()
+	t.Cleanup(func() {
+		ja4Mu.Lock()
+		browserPrefixes = prev
+		ja4Mu.Unlock()
+	})
 }
 
 func TestCheckVelocitySpikeNoRedisFailsOpen(t *testing.T) {
@@ -87,6 +101,7 @@ func TestVelocityBucketClassifies(t *testing.T) {
 
 func TestCheckJA4VelocitySpikeExemptsCommonBrowsers(t *testing.T) {
 	newTestRedis(t)
+	resetCommonBrowserPrefixes(t)
 	AddCommonBrowserPrefix("t13d1516h2")
 	for i := 0; i < maxJA4Requests+1; i++ {
 		if checkJA4VelocitySpike("t13d1516h2_8daaf6152771_e5627efa2ab1") {
@@ -95,8 +110,20 @@ func TestCheckJA4VelocitySpikeExemptsCommonBrowsers(t *testing.T) {
 	}
 }
 
+func TestCheckJA4VelocitySpikeFailsOpenWithoutBrowserPrefixes(t *testing.T) {
+	newTestRedis(t)
+	resetCommonBrowserPrefixes(t)
+	for i := 0; i < maxJA4Requests+1; i++ {
+		if checkJA4VelocitySpike("t99d000000_deadbeefdead_deadbeefdead") {
+			t.Fatal("empty browser-prefix database must fail open to avoid challenging real browser builds")
+		}
+	}
+}
+
 func TestCheckJA4VelocitySpikeOverLimit(t *testing.T) {
 	newTestRedis(t)
+	resetCommonBrowserPrefixes(t)
+	AddCommonBrowserPrefix("t13d1516h2")
 	var lastSpiked bool
 	for i := 0; i < maxJA4Requests+1; i++ {
 		lastSpiked = checkJA4VelocitySpike("t99d000000_deadbeefdead_deadbeefdead")

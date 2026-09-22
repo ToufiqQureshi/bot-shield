@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,10 +19,11 @@ import (
 // generated ES256 key pair, so tests can sign real tokens against it
 // without touching the network or a real Supabase project.
 type testJWKS struct {
-	server  *httptest.Server
-	priv    *ecdsa.PrivateKey
-	kid     string
-	handler func(w http.ResponseWriter, r *http.Request)
+	server   *httptest.Server
+	priv     *ecdsa.PrivateKey
+	kid      string
+	requests atomic.Int32
+	handler  func(w http.ResponseWriter, r *http.Request)
 }
 
 func newTestJWKS(t *testing.T) *testJWKS {
@@ -33,6 +35,7 @@ func newTestJWKS(t *testing.T) *testJWKS {
 
 	tj := &testJWKS{priv: priv, kid: "test-key-1"}
 	tj.handler = func(w http.ResponseWriter, r *http.Request) {
+		tj.requests.Add(1)
 		body := map[string]any{
 			"keys": []map[string]any{
 				{
@@ -143,6 +146,31 @@ func TestVerify_RejectsUnknownKeyID(t *testing.T) {
 
 	if _, err := v.Verify(s); err != ErrInvalidToken {
 		t.Fatalf("Verify(unknown kid) = %v, want ErrInvalidToken", err)
+	}
+}
+
+func TestVerify_UnknownKeyIDRefreshIsBounded(t *testing.T) {
+	tj := newTestJWKS(t)
+	v := tj.verifier(t)
+
+	for i := 0; i < 3; i++ {
+		tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims{
+			RegisteredClaims: jwt.RegisteredClaims{
+				Subject:   "usr",
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			},
+		})
+		tok.Header["kid"] = "attacker-chosen-kid"
+		signed, err := tok.SignedString(tj.priv)
+		if err != nil {
+			t.Fatalf("signing: %v", err)
+		}
+		if _, err := v.Verify(signed); err != ErrInvalidToken {
+			t.Fatalf("Verify(unknown kid) = %v, want ErrInvalidToken", err)
+		}
+	}
+	if got := tj.requests.Load(); got != 1 {
+		t.Fatalf("JWKS fetched %d times for repeated unknown kid, want 1", got)
 	}
 }
 

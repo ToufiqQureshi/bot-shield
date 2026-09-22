@@ -1,21 +1,16 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Globe, Webhook, Plus, AlertCircle, X } from 'lucide-react';
-import { addDomain, ApiError, type Domain } from '../lib/api';
+import { addDomain, ApiError } from '../lib/api';
 import type { LayoutContext } from '../components/Layout';
 
 export default function DomainsSiem() {
-  const { domains, domainsLoading } = useOutletContext<LayoutContext>();
-  const [domainList, setDomainList] = useState<Domain[] | null>(null);
+  const { domains, domainsLoading, onDomainAdded } = useOutletContext<LayoutContext>();
   const [showAdd, setShowAdd] = useState(false);
   const [newDomain, setNewDomain] = useState('');
   const [newOrigin, setNewOrigin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // domains from Layout's initial fetch, plus anything added in this
-  // session without waiting for a full page reload.
-  const list = domainList ?? domains;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +18,7 @@ export default function DomainsSiem() {
     setSubmitting(true);
     try {
       const created = await addDomain(newDomain.trim(), newOrigin.trim());
-      setDomainList([created, ...list]);
+      onDomainAdded(created);
       setShowAdd(false);
       setNewDomain('');
       setNewOrigin('');
@@ -89,9 +84,9 @@ export default function DomainsSiem() {
         )}
 
         <div className="overflow-x-auto">
-          {domainsLoading && domainList === null ? (
+          {domainsLoading ? (
             <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>Loading domains…</p>
-          ) : list.length === 0 ? (
+          ) : domains.length === 0 ? (
             <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>No domains yet — add one to start routing traffic through hakaishield.</p>
           ) : (
             <table className="data-table">
@@ -103,7 +98,7 @@ export default function DomainsSiem() {
                 </tr>
               </thead>
               <tbody>
-                {list.map(domain => (
+                {domains.map(domain => (
                   <tr key={domain.id}>
                     <td>
                       <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{domain.domain}</span>

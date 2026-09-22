@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 )
 
 // GoodBotFamily defines an allowed search engine crawler family and its valid PTR domains.
@@ -53,6 +55,14 @@ var (
 
 const botCacheTTL = 6 * time.Hour
 const maxBotCacheEntries = 100_000
+
+// DNS verification is optional allowlist evidence and runs on the request
+// path. A non-blocking semaphore puts a hard ceiling on simultaneous resolver
+// work; under a spoofed-bot burst, excess claims are treated as unverified
+// instead of queueing request handlers behind DNS.
+const maxConcurrentBotLookups = 64
+
+var botLookupSlots = make(chan struct{}, maxConcurrentBotLookups)
 
 // DNSLookupFuncs allow dependency injection for deterministic testing without external network dependencies.
 var (
@@ -135,6 +145,13 @@ func cacheBotResult(key string, verified bool) {
 func verifyDNS(ipStr string, validDomains []string) bool {
 	parsedIP := net.ParseIP(ipStr)
 	if parsedIP == nil {
+		return false
+	}
+	select {
+	case botLookupSlots <- struct{}{}:
+		defer func() { <-botLookupSlots }()
+	default:
+		observability.Inc("goodbot_lookup_budget_reject_total")
 		return false
 	}
 

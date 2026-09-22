@@ -6,6 +6,8 @@ package core
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -15,11 +17,26 @@ import (
 	"time"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/deception"
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 )
 
 type ctxKeyDecision struct{}
 type ctxKeyScore struct{}
+type ctxKeyClientIP struct{}
+
+// WithClientIP carries the already-validated visitor identity from Guard to
+// the origin proxy. The proxy must not re-parse an untrusted forwarding header
+// after the scoring layer has established the trusted-proxy boundary.
+func WithClientIP(ctx context.Context, ip string) context.Context {
+	return context.WithValue(ctx, ctxKeyClientIP{}, ip)
+}
+
+// ClientIPFromContext returns the identity Guard resolved for this request.
+func ClientIPFromContext(ctx context.Context) string {
+	ip, _ := ctx.Value(ctxKeyClientIP{}).(string)
+	return ip
+}
 
 // WithDecision attaches the hakaishield policy decision and score to the request context.
 func WithDecision(ctx context.Context, decision string, score int) context.Context {
@@ -88,6 +105,64 @@ var DefaultOriginTransport = &http.Transport{
 	TLSHandshakeTimeout:   10 * time.Second,
 	ResponseHeaderTimeout: 15 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,
+}
+
+func publicOriginTransport() *http.Transport {
+	t := DefaultOriginTransport.Clone()
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	t.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, err := dialer.DialContext(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok && blockedOriginIP(tcp.IP) {
+			_ = conn.Close()
+			return nil, fmt.Errorf("origin resolved to non-public address %s", tcp.IP.String())
+		}
+		return conn, nil
+	}
+	return t
+}
+
+// ValidatePublicOrigin rejects origins that would let a dashboard user make
+// hakaishield fetch local/cloud-internal services. Hostnames are rechecked at
+// dial time by NewPublicOriginProxy to cover DNS rebinding.
+func ValidatePublicOrigin(target string) error {
+	u, err := url.Parse(target)
+	if err != nil {
+		return err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("origin scheme must be http or https")
+	}
+	if u.Host == "" {
+		return errInvalidTarget
+	}
+	host := u.Hostname()
+	if host == "" {
+		return errInvalidTarget
+	}
+	if ip := net.ParseIP(host); ip != nil && blockedOriginIP(ip) {
+		return fmt.Errorf("origin host %s is not public", ip.String())
+	}
+	return nil
+}
+
+func blockedOriginIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	ip = ip.To16()
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+		return true
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		return ip4[0] == 0 || ip4[0] == 127 || ip4[0] >= 224 || (ip4[0] == 255 && ip4[1] == 255 && ip4[2] == 255 && ip4[3] == 255)
+	}
+	return false
 }
 
 // maxDeceptionBodyBytes caps how much of an origin response we will hold
@@ -218,9 +293,11 @@ func deceiveResponse(resp *http.Response) error {
 func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 	u, err := url.Parse(target)
 	if err != nil {
+		observability.Inc("origin_proxy_invalid_target_total")
 		return nil, err
 	}
 	if u.Scheme == "" || u.Host == "" {
+		observability.Inc("origin_proxy_invalid_target_total")
 		return nil, &url.Error{Op: "parse", URL: target, Err: errInvalidTarget}
 	}
 
@@ -231,6 +308,7 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 	p := &httputil.ReverseProxy{
 		Transport: DefaultOriginTransport,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			observability.Inc("origin_proxy_error_total")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><title>502 Bad Gateway</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}h1{font-size:2rem;color:#f85149;}p{color:#8b949e;}</style></head><body><div style="text-align:center;"><h1>502 Bad Gateway</h1><p>Origin server connection failed or timed out.</p><small style="color:#484f58;">Protected by HakaiShield</small></div></body></html>`))
@@ -246,8 +324,13 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 			for _, h := range clientIPHeaders {
 				r.Out.Header.Del(h)
 			}
-			if ip, _, err := net.SplitHostPort(r.In.RemoteAddr); err == nil {
+			ip := ClientIPFromContext(r.In.Context())
+			if ip == "" {
+				ip = canonicalIP(r.In.RemoteAddr)
+			}
+			if ip != "" {
 				r.Out.Header.Set(realIPHeader, ip)
+				r.Out.Header.Set("X-Forwarded-For", ip)
 			}
 
 			// Only we get to say what the fingerprint is. A request
@@ -281,5 +364,21 @@ func NewOriginProxy(target string) (*httputil.ReverseProxy, error) {
 			}
 		},
 	}
+	return p, nil
+}
+
+// NewPublicOriginProxy is used for customer-configured SaaS origins. It keeps
+// local development flexible through NewOriginProxy while preventing dashboard
+// tenants from turning the proxy into an internal-network fetcher.
+func NewPublicOriginProxy(target string) (*httputil.ReverseProxy, error) {
+	if err := ValidatePublicOrigin(target); err != nil {
+		observability.Inc("origin_proxy_invalid_target_total")
+		return nil, err
+	}
+	p, err := NewOriginProxy(target)
+	if err != nil {
+		return nil, err
+	}
+	p.Transport = publicOriginTransport()
 	return p, nil
 }

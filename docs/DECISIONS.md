@@ -10,6 +10,68 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Audit P0 routing, JA4, host-cache, and public-origin posture - 2026-09-22
+
+**Decision:** Internal challenge routes are mounted exactly (/__hakaishield/challenge and /__hakaishield/verify) instead of claiming the whole /__hakaishield/ subtree; aggregate JA4 velocity fails open until a common-browser prefix database is loaded; unknown Host database misses are negatively cached for a short bounded TTL; and customer/dashboard-created origins use a public-origin proxy that rejects internal IP targets and rechecks the connected address at dial time.
+
+**Why:** The hosted service cannot let an internal route registration silently disable health checks and honeypot evidence, cannot mass-challenge real browser JA4s before the browser database exists, cannot let random Host headers become attacker-controlled Postgres work, and cannot let an authenticated tenant turn hakaishield into an internal-network fetcher.
+
+**Alternatives considered / rejected:** Reject unknown hosts before any database lookup (rejected for now because existing lazy loading needs one exact lookup before falling back to the single-tenant wildcard); applying strict public-origin validation to all NewOriginProxy calls (rejected because the default CLI -target path and tests intentionally support local/self-hosted loopback origins); seeding fake common-browser prefixes in code (rejected because a stale placeholder list would create a different false-positive risk).
+
+**Revisit when:** Domain verification and ACME onboarding are built, because the origin validation and pending/active lifecycle should become one coherent onboarding policy; revisit the JA4 fail-open once a maintained browser fingerprint feed exists.
+
+## Phase 0 closeout: SNI/Host lifecycle, shared challenge nonces, and aggregate observability - 2026-09-22
+
+**Decisions:**
+
+- Tenant host mapping is canonicalized before storage and lookup. A canonical
+  host cannot be mapped to two tenants in one process, malformed hosts are
+  rejected before tenant lookup, and TLS requests with a non-empty SNI that
+  differs from the HTTP Host return 421.
+- Dashboard-created domains stay in `pending_verification` and are readable by
+  owner-scoped admin APIs, but they do not route visitor traffic until their
+  status is `active`.
+- Challenge replay protection now has a Redis nonce store. Healthy Redis gives
+  node-wide single-use semantics; Redis failure degrades to the bounded local
+  store rather than locking out real visitors.
+- Operational counters are aggregate-only and bearer-token protected at
+  `/__hakaishield/observability` when `-observability-token` or
+  `HAKAISHIELD_OBSERVABILITY_TOKEN` is configured. Counter names are code-owned
+  and contain no raw IPs, hosts, tokens, credentials, or visitor payloads.
+- Real Postgres tenant-isolation coverage is opt-in through
+  `HAKAISHIELD_TEST_DATABASE_URL`. The test creates a random schema and refuses
+  URLs that do not look local/test-oriented, so it does not mutate production
+  Supabase by accident.
+
+Why: Phase 0 is the safety foundation. Cross-tenant SNI/Host mismatches,
+pending-domain routing, replay across nodes, and invisible JWKS/DNS/Redis/origin
+failure rates are all production hazards in a hosted request-path product.
+
+## Request-path hardening and admin isolation — 2026-09-22
+
+**Decisions:**
+
+- Unknown JWT `kid` values use a short-lived bounded negative cache and
+  serialized JWKS refreshes. This prevents attacker-controlled tokens from
+  turning every failed dashboard request into an outbound Supabase JWKS call,
+  while preserving quick key-rotation recovery.
+- Goodbot reverse/forward DNS verification uses a non-blocking concurrency
+  budget. A claimed crawler that cannot be verified is treated as unverified;
+  request handlers are never queued behind unbounded DNS work.
+- The resolved client IP is carried from `Guard` into the origin proxy. The
+  proxy must not re-parse visitor forwarding headers or substitute the direct
+  load-balancer peer after the trusted-proxy boundary has been established.
+- Dashboard stats require Supabase authentication and, with Postgres enabled,
+  ownership of the requested tenant. The legacy query parameter is not an
+  authorization boundary.
+- Exact database tenant lookup runs before the single-tenant wildcard fallback;
+  otherwise the wildcard makes multi-tenant lazy loading unreachable.
+
+Why: these choices satisfy the implementation plan's Phase 0 requirements for
+bounded request-path work, tenant isolation, and separation of data-plane and
+admin APIs without adding a new external dependency. Full verification and
+known follow-up gaps are recorded in `docs/PROGRESS.md`.
+
 ## Built-in `.env` loader instead of a dependency; found a plaintext-password-in-logs bug while wiring it — 2026-09-21
 
 **Decision:** `backend/main.go` gained a ~20-line `loadDotEnv(".env")`

@@ -6,6 +6,7 @@
 /playwright-test/
 /scripts/
 .gocache/
+/.tmp/
 *.exe
 /scratch/
 /Scrapling/

@@ -107,6 +107,12 @@ func AddCommonBrowserPrefix(prefix string) {
 	browserPrefixes = append(browserPrefixes, prefix)
 }
 
+func hasCommonBrowserPrefixes() bool {
+	ja4Mu.RLock()
+	defer ja4Mu.RUnlock()
+	return len(browserPrefixes) > 0
+}
+
 // isCommonBrowserJA4 checks if a JA4 signature matches genuine modern browser profiles.
 // Used to exempt legitimate browser traffic from aggressive cross-IP aggregate rate limits.
 func isCommonBrowserJA4(ja4 string) bool {

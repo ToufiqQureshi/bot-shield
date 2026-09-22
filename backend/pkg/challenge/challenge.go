@@ -1,6 +1,7 @@
 package challenge
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -15,6 +16,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
+	"github.com/redis/go-redis/v9"
 )
 
 // Challenge issues a JS-only puzzle to every visitor Guard does not
@@ -23,10 +27,20 @@ import (
 // cached/replayed response; the
 // canvas proof raises the bar toward needing a real browser engine.
 type Challenge struct {
-	secret []byte
-	theme  string
-	mu     sync.Mutex
-	used   map[string]time.Time
+	secret     []byte
+	theme      string
+	nonceStore NonceStore
+}
+
+// NonceStore consumes solved challenge nonces exactly once. Implementations
+// must be bounded and fast because verification is visitor-controlled.
+type NonceStore interface {
+	Consume(ctx context.Context, nonce string, now time.Time, ttl time.Duration) bool
+}
+
+type localNonceStore struct {
+	mu   sync.Mutex
+	used map[string]time.Time
 }
 
 // challengeMaxAge bounds how long an issued puzzle stays solvable —
@@ -60,7 +74,20 @@ func NewChallenge(secret []byte, theme string) (*Challenge, error) {
 	if theme == "" {
 		theme = "ghost"
 	}
-	return &Challenge{secret: secret, theme: theme, used: make(map[string]time.Time)}, nil
+	return &Challenge{secret: secret, theme: theme, nonceStore: newLocalNonceStore()}, nil
+}
+
+func newLocalNonceStore() *localNonceStore {
+	return &localNonceStore{used: make(map[string]time.Time)}
+}
+
+// SetNonceStore replaces the default single-process replay guard. Passing nil
+// restores the local fallback used for development and single-node deployments.
+func (c *Challenge) SetNonceStore(store NonceStore) {
+	if store == nil {
+		store = newLocalNonceStore()
+	}
+	c.nonceStore = store
 }
 
 func (c *Challenge) sign(payload string) string {
@@ -140,35 +167,66 @@ func canonicalHost(raw string) string {
 // with the challenge so an attacker cannot turn verification into unbounded
 // process memory. Multi-node deployments should use the planned Redis-backed
 // nonce store; this local guard still closes replay on a single instance.
-func (c *Challenge) consume(nonce string, now time.Time) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (s *localNonceStore) Consume(_ context.Context, nonce string, now time.Time, ttl time.Duration) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	for key, usedAt := range c.used {
-		if now.Sub(usedAt) >= challengeMaxAge {
-			delete(c.used, key)
+	for key, usedAt := range s.used {
+		if now.Sub(usedAt) >= ttl {
+			delete(s.used, key)
 		}
 	}
-	if _, exists := c.used[nonce]; exists {
+	if _, exists := s.used[nonce]; exists {
 		return false
 	}
-	if len(c.used) >= maxUsedChallenges {
+	if len(s.used) >= maxUsedChallenges {
 		// Keep verification available under a burst of successful solves while
 		// preserving the hard memory ceiling. The oldest nonce has the least
 		// remaining replay value and is safe to evict.
 		var oldestKey string
 		var oldestAt time.Time
-		for key, usedAt := range c.used {
+		for key, usedAt := range s.used {
 			if oldestKey == "" || usedAt.Before(oldestAt) {
 				oldestKey, oldestAt = key, usedAt
 			}
 		}
 		if oldestKey != "" {
-			delete(c.used, oldestKey)
+			delete(s.used, oldestKey)
 		}
 	}
-	c.used[nonce] = now
+	s.used[nonce] = now
 	return true
+}
+
+// RedisNonceStore shares replay protection across nodes. On Redis failure it
+// falls back to a local bounded store so a dependency outage degrades to
+// single-node replay protection instead of locking out real visitors.
+type RedisNonceStore struct {
+	client   *redis.Client
+	prefix   string
+	fallback *localNonceStore
+}
+
+func NewRedisNonceStore(client *redis.Client, prefix string) *RedisNonceStore {
+	if prefix == "" {
+		prefix = "hakaishield:challenge:nonce:"
+	}
+	return &RedisNonceStore{client: client, prefix: prefix, fallback: newLocalNonceStore()}
+}
+
+func (s *RedisNonceStore) Consume(ctx context.Context, nonce string, now time.Time, ttl time.Duration) bool {
+	if s == nil || s.client == nil {
+		return false
+	}
+	ok, err := s.client.SetNX(ctx, s.prefix+nonce, "1", ttl).Result()
+	if err != nil {
+		observability.Inc("challenge_nonce_redis_error_total")
+		return s.fallback.Consume(ctx, nonce, now, ttl)
+	}
+	if !ok {
+		observability.Inc("challenge_nonce_replay_reject_total")
+	}
+	return ok
 }
 
 // safeRedirectPath keeps "return to the page you asked for" from
@@ -444,7 +502,10 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", http.StatusForbidden)
 		return
 	}
-	if !c.consume(nonce, time.Now()) {
+	now := time.Now()
+	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Millisecond)
+	defer cancel()
+	if !c.nonceStore.Consume(ctx, nonce, now, challengeMaxAge) {
 		http.Error(w, "challenge already used", http.StatusForbidden)
 		return
 	}

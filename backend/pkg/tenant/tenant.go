@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http/httputil"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +26,7 @@ type TenantConfig struct {
 	Policy        config.PolicyMode // Balanced or Strict
 	EvidenceToken string            // Bearer token for the per-request evidence endpoint
 	Deception     bool              // If true, high-confidence bot traffic is deceived instead of 403 blocked (ROADMAP 11a)
+	Status        string            // Domain lifecycle status; only active domains route visitor traffic.
 }
 
 // Tenant represents a single customer's isolated environment.
@@ -39,24 +42,50 @@ type Tenant struct {
 // ProxyFactory is a callback to create origin proxies without creating import cycles.
 type ProxyFactory func(target string) (*httputil.ReverseProxy, error)
 
+// TenantLoader fetches a tenant row for lazy host-based loading. The default
+// implementation reads Postgres; the hook also keeps the store testable
+// without requiring a live database.
+type TenantLoader func(ctx context.Context, host string) (id, target, mode, evidenceToken, status string, err error)
+
+const StatusActive = "active"
+
+const (
+	negativeHostTTL        = 30 * time.Second
+	maxNegativeHostEntries = 4096
+)
+
 // Store is a thread-safe implementation that maps hostnames and IDs to tenant environments.
 type Store struct {
 	mu           sync.RWMutex
 	byHost       map[string]*Tenant
 	byID         map[string]*Tenant
+	negativeHost map[string]time.Time
 	ProxyFactory ProxyFactory
+	TenantLoader TenantLoader
 }
 
 // NewStore creates a store for testing or single-node deployments.
 func NewStore() *Store {
 	return &Store{
-		byHost: make(map[string]*Tenant),
-		byID:   make(map[string]*Tenant),
+		byHost:       make(map[string]*Tenant),
+		byID:         make(map[string]*Tenant),
+		negativeHost: make(map[string]time.Time),
 	}
 }
 
 // Add provisions a new tenant environment and maps it to the given hosts.
 func (s *Store) Add(id string, config TenantConfig, hosts []string, origin *httputil.ReverseProxy) error {
+	if config.Status == "" {
+		config.Status = StatusActive
+	}
+	canonicalHosts := make([]string, 0, len(hosts))
+	for _, host := range hosts {
+		host = canonicalHost(host)
+		if host == "" {
+			return errors.New("tenant: invalid host")
+		}
+		canonicalHosts = append(canonicalHosts, host)
+	}
 	t := &Tenant{
 		ID:     id,
 		Config: config,
@@ -68,28 +97,89 @@ func (s *Store) Add(id string, config TenantConfig, hosts []string, origin *http
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	for _, host := range canonicalHosts {
+		if existing, ok := s.byHost[host]; ok && existing.ID != id {
+			return errors.New("tenant: host already mapped to another tenant")
+		}
+	}
 	s.byID[id] = t
-	for _, host := range hosts {
-		s.byHost[host] = t
+	for _, host := range canonicalHosts {
+		if config.routesTraffic() {
+			s.byHost[host] = t
+		}
+		delete(s.negativeHost, host)
 	}
 	return nil
 }
 
 // GetByHost looks up a tenant by their incoming HTTP host header.
 func (s *Store) GetByHost(host string) (*Tenant, error) {
+	host = canonicalHost(host)
+	if host == "" {
+		return nil, ErrTenantNotFound
+	}
 	s.mu.RLock()
 	t, ok := s.byHost[host]
-	if !ok {
-		t, ok = s.byHost["*"]
-	}
 	s.mu.RUnlock()
 
 	if ok {
 		return t, nil
 	}
 
-	// Not in local cache, try fetching from the database (lazy loading)
-	return s.fetchFromDB(host)
+	// Load an exact database-backed tenant before consulting the single-tenant
+	// wildcard. Checking the wildcard first makes lazy loading unreachable.
+	if s.ProxyFactory != nil && !s.negativeHostFresh(host, time.Now()) {
+		if t, err := s.fetchFromDB(host); err == nil {
+			if !t.Config.routesTraffic() {
+				return nil, ErrTenantNotFound
+			}
+			return t, nil
+		} else {
+			s.rememberNegativeHost(host, time.Now())
+		}
+	}
+
+	s.mu.RLock()
+	t, ok = s.byHost["*"]
+	s.mu.RUnlock()
+	if ok {
+		return t, nil
+	}
+	return nil, ErrTenantNotFound
+}
+
+func (s *Store) negativeHostFresh(host string, now time.Time) bool {
+	s.mu.RLock()
+	expires, ok := s.negativeHost[host]
+	s.mu.RUnlock()
+	return ok && now.Before(expires)
+}
+
+func (s *Store) rememberNegativeHost(host string, now time.Time) {
+	if host == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for h, expires := range s.negativeHost {
+		if !now.Before(expires) {
+			delete(s.negativeHost, h)
+		}
+	}
+	if len(s.negativeHost) >= maxNegativeHostEntries {
+		var oldestHost string
+		var oldestExpiry time.Time
+		for h, expires := range s.negativeHost {
+			if oldestHost == "" || expires.Before(oldestExpiry) {
+				oldestHost, oldestExpiry = h, expires
+			}
+		}
+		if oldestHost != "" {
+			delete(s.negativeHost, oldestHost)
+		}
+	}
+	s.negativeHost[host] = now.Add(negativeHostTTL)
 }
 
 func (s *Store) fetchFromDB(host string) (*Tenant, error) {
@@ -100,12 +190,16 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	id, target, modeStr, evidenceToken, err := db.GetTenant(ctx, host)
+	loader := s.TenantLoader
+	if loader == nil {
+		loader = db.GetTenant
+	}
+	id, target, modeStr, evidenceToken, status, err := loader(ctx, host)
 	if err != nil {
 		return nil, ErrTenantNotFound
 	}
 
-	return s.addFromDBRow(id, host, target, modeStr, evidenceToken)
+	return s.addFromDBRow(id, host, target, modeStr, evidenceToken, status)
 }
 
 // addFromDBRow turns one tenants-table row into a live Tenant and
@@ -113,7 +207,7 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 // found the row by ID and a proxy request that finds it later by host
 // share the same in-memory Stats/Trail rather than each starting a
 // fresh one.
-func (s *Store) addFromDBRow(id, host, target, modeStr, evidenceToken string) (*Tenant, error) {
+func (s *Store) addFromDBRow(id, host, target, modeStr, evidenceToken, status string) (*Tenant, error) {
 	// A stored mode we can't parse must never silently decide behaviour.
 	// Treat an unknown value as enforce (fail closed) and say so, rather
 	// than letting Go's zero value quietly pick a mode for a live tenant.
@@ -131,6 +225,7 @@ func (s *Store) addFromDBRow(id, host, target, modeStr, evidenceToken string) (*
 		Target:        target,
 		Mode:          mode,
 		EvidenceToken: evidenceToken,
+		Status:        status,
 	}
 
 	if err := s.Add(id, tenantConfig, []string{host}, proxy); err != nil {
@@ -160,10 +255,48 @@ func (s *Store) GetByID(id string) (*Tenant, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	host, target, modeStr, evidenceToken, err := db.GetTenantByID(ctx, id)
+	host, target, modeStr, evidenceToken, status, err := db.GetTenantByID(ctx, id)
 	if err != nil {
 		return nil, ErrTenantNotFound
 	}
 
-	return s.addFromDBRow(id, host, target, modeStr, evidenceToken)
+	return s.addFromDBRow(id, host, target, modeStr, evidenceToken, status)
+}
+
+func (c TenantConfig) routesTraffic() bool {
+	return c.Status == "" || c.Status == StatusActive
+}
+
+func canonicalHost(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "*" {
+		return raw
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	} else {
+		raw = strings.Trim(raw, "[]")
+	}
+	raw = strings.TrimSuffix(raw, ".")
+	if raw == "" || strings.ContainsAny(raw, " \t\r\n/\\") {
+		return ""
+	}
+	if ip := net.ParseIP(raw); ip != nil {
+		return ip.String()
+	}
+	for _, label := range strings.Split(raw, ".") {
+		if label == "" || len(label) > 63 {
+			return ""
+		}
+		if strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return ""
+		}
+		for _, r := range label {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+				continue
+			}
+			return ""
+		}
+	}
+	return raw
 }

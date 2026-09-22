@@ -3559,3 +3559,143 @@ Known gaps / follow-up:
     two agent sessions working on it concurrently on 2026-09-21/22,
     which is why this entry and `CODEX_HANDOFF.md` both exist and
     describe overlapping-but-distinct work in the same window.
+
+## 2026-09-22 — Tenant routing, stats authorization, and request-path hardening
+
+Changed:
+  - `backend/pkg/tenant/tenant.go`: exact host lookup now tries the database
+    before the single-tenant `*` fallback. Previously the always-present
+    wildcard default made database-backed lazy loading unreachable.
+  - Dashboard stats now require a Supabase-verified bearer token and, when
+    Postgres is configured, the requested tenant must belong to that user.
+    The dashboard client attaches the current access token.
+  - Unknown JWT key IDs now use a bounded short-lived negative cache and
+    serialized JWKS refreshes. JWK EC points are rejected unless they lie on
+    P-256.
+  - Goodbot DNS verification has a non-blocking 64-request concurrency
+    budget, so spoofed bot claims cannot queue request handlers behind DNS.
+  - Guard carries the validated client identity into the origin proxy;
+    `X-Real-IP` and `X-Forwarded-For` now contain the resolved visitor IP,
+    including trusted-proxy and IPv6 paths.
+  - Redis test setup resets health state when replacing clients, removing an
+    observed cross-test timing flake without changing fail-open behavior.
+
+Tests and verification:
+  - Added routing, stats-auth, unknown-kid, DNS-budget, and resolved-IP
+    forwarding regression tests.
+  - `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check`
+    passed from `backend`.
+  - `npm.cmd run build` passed from `dashboard`.
+
+Known gaps / follow-up:
+  - Add production metrics before tuning JWKS, DNS, and Redis limits from real
+    traffic; add a real Postgres integration test for stats ownership.
+
+## 2026-09-22 - Phase 0 closeout: Host/SNI lifecycle, shared challenge nonces, API isolation coverage, and counters
+
+Changed:
+  - `backend/pkg/core/identity.go` and `backend/pkg/core/guard.go`: request Host
+    is now validated before tenant lookup, malformed hosts return 400, and TLS
+    requests with a non-empty SNI that does not match the HTTP Host return 421.
+  - `backend/pkg/tenant/tenant.go` and `backend/pkg/db/db.go`: tenant host
+    mappings are canonicalized, one canonical host cannot map to two tenants,
+    DB-loaded tenant rows carry `status`, and `pending_verification` domains are
+    available by ID for dashboard state but do not route visitor traffic by Host.
+  - `backend/pkg/challenge/challenge.go` and `backend/main.go`: challenge nonce
+    consumption can use Redis so a token solved on one node cannot be replayed
+    on another. Redis failure falls back to the bounded local nonce store rather
+    than locking out real visitors.
+  - `backend/pkg/observability/counters.go`: added aggregate atomic counters and
+    a bearer-token-protected `/__hakaishield/observability` endpoint, mounted
+    only when `-observability-token` or `HAKAISHIELD_OBSERVABILITY_TOKEN` is set.
+  - `backend/pkg/auth/jwt.go`, `backend/pkg/signals/goodbots.go`,
+    `backend/pkg/signals/redis_circuit.go`, `backend/pkg/core/proxy.go`: wired
+    counters for JWKS refresh/failure and unknown-kid rejects, Goodbot lookup
+    budget rejects, Redis circuit opens/probes/skips, origin proxy errors and
+    invalid targets, malformed forwarded client IP, malformed Host, unknown Host,
+    and SNI/Host mismatch. Counters never include raw visitor values, tokens, or
+    credentials.
+  - `backend/pkg/api`: added deterministic owner-isolation coverage for stats,
+    evidence logs, and top offenders, plus an opt-in real Postgres integration
+    test (`HAKAISHIELD_TEST_DATABASE_URL`) covering stats ownership, cross-owner
+    rule toggle rejection, and settings owner scoping in a random schema. Remote
+    dev databases require `HAKAISHIELD_ALLOW_REMOTE_TEST_DATABASE=1` so this
+    cannot run against a non-local database by accident.
+
+Why:
+  - Phase 0 was still open for SNI/Host lifecycle validation, pending-domain
+    routing behavior, production observability, multi-node challenge state, and
+    stronger ownership tests. These are request-path and tenant-boundary safety
+    issues, so they needed to close before Phase 1 policy/rule enforcement.
+
+Tests and verification:
+  - Added/updated tests:
+    - `TestValidatedRequestHostRejectsMalformedHosts`
+    - `TestHostMatchesTLS`
+    - `TestGuardRejectsMalformedHostBeforeTenantLookup`
+    - `TestGuardRejectsSNIHostMismatch`
+    - `TestGetByHostRejectsPendingDatabaseTenantBeforeWildcard`
+    - `TestAddRejectsCrossTenantHostMapping`
+    - `TestChallengeRedisNonceStoreRejectsReplayAcrossInstances`
+    - `TestDashboardAPIsRespectDomainOwnership`
+    - `TestCountersSnapshotAndHandler`
+    - `TestPostgresTenantIsolationIntegration` (skips unless a safe test DB URL is provided)
+  - Targeted package run passed:
+    `go test ./pkg/tenant ./pkg/core ./pkg/challenge ./pkg/api ./pkg/observability ./pkg/auth ./pkg/signals`.
+  - Real Supabase dev Postgres integration test passed after explicitly setting
+    `HAKAISHIELD_TEST_DATABASE_URL` from `backend/.env` and
+    `HAKAISHIELD_ALLOW_REMOTE_TEST_DATABASE=1`:
+    `go test ./pkg/api -run TestPostgresTenantIsolationIntegration -v`.
+    The first sandboxed network attempt was blocked by Windows/socket
+    permissions; the approved remote-network retry passed.
+  - Full backend suite passed again after the integration-test run:
+    `go test ./...`.
+
+Mutation/security/performance notes:
+  - The new tests protect the exact branch points: removing SNI comparison,
+    allowing pending hosts into `byHost`, allowing duplicate host mapping, or
+    removing Redis `SET NX` nonce consumption makes the relevant regression test
+    fail.
+  - Request-path additions are bounded: Host/SNI checks are local string/IP
+    parsing, Redis nonce consumption has a 50ms context, Redis rate evidence
+    keeps the existing fail-open circuit, and counters are atomic aggregates.
+  - The observability endpoint is off by default and bearer-token protected when
+    enabled; it exposes event names and counts only.
+
+Remaining gaps:
+  - The real Postgres integration test is still opt-in for normal test runs:
+    set `HAKAISHIELD_TEST_DATABASE_URL`; for remote dev DBs also set
+    `HAKAISHIELD_ALLOW_REMOTE_TEST_DATABASE=1`.
+  - Phase 1 is still not started: dashboard custom rules/settings persist data
+    but do not alter live scoring or enforcement.
+
+## 2026-09-22 - Audit P0 fixes: internal route shadowing, JA4 fail-open, unknown-host cache, and origin SSRF guard
+
+Changed:
+  - backend/main.go: mounted the challenge and verify handlers on exact paths instead of the whole /__hakaishield/ subtree. /__hakaishield/healthz and /__hakaishield/trap now fall through to Guard, so the health endpoint responds and honeypot trips are recorded in the production mux shape.
+  - backend/pkg/signals: disabled aggregate JA4 velocity when the common-browser prefix database is empty. This keeps a fresh deployment from treating every shared real-browser JA4 as a non-browser fingerprint and mass-challenging legitimate traffic.
+  - backend/pkg/tenant: added a bounded 30-second negative cache for database misses by Host. Repeated random Host headers no longer trigger one Postgres lookup per request while the miss is cached.
+  - backend/pkg/api and backend/pkg/core: dashboard-created origins must be public http or https targets. Private, loopback, link-local, multicast, and cloud-metadata IP literals are rejected at domain creation; lazy-loaded SaaS origins use NewPublicOriginProxy, which also rechecks the connected remote IP at dial time to reduce DNS-rebinding risk. The default CLI -target path still uses NewOriginProxy so local development and self-hosted/local tests can point at loopback origins deliberately.
+
+Why:
+  - The 2026-09-22 audits identified route shadowing, unsafe JA4 default behavior, unknown-host database amplification, and dashboard-origin SSRF as public-hosted production blockers. These sit directly in the request path or tenant-control plane, so they needed narrow backend fixes before broader product work.
+
+Tests and verification:
+  - Added regression coverage for production mux routing of healthz/honeypot, JA4 empty-browser-prefix fail-open behavior, negative unknown-host caching, and public-origin validation.
+  - Verification from backend with workspace-local GOCACHE:
+    - go test . ./pkg/signals ./pkg/tenant ./pkg/core ./pkg/api
+    - go test ./...
+    - go vet ./...
+    - go build ./...
+  - All passed.
+
+Mutation/security/performance notes:
+  - If the challenge handler is remounted on /__hakaishield/, the new mux test fails because healthz/trap stop reaching Guard.
+  - If the empty-prefix JA4 guard is removed, TestCheckJA4VelocitySpikeFailsOpenWithoutBrowserPrefixes fails after crossing the aggregate cap.
+  - If the negative cache is removed, TestGetByHostNegativeCachesUnknownDatabaseHost observes 100 loader calls instead of one.
+  - The negative cache is bounded to 4096 hosts and expires after 30 seconds, so it limits attacker-controlled DB work without permanently hiding a newly-created tenant.
+
+Remaining gaps:
+  - Domain ownership verification and ACME onboarding are still not built. Pending domains still do not route by Host, but there is no verified transition to active yet.
+  - Redis keys for velocity/crawl are still not tenant-scoped.
+  - Custom mitigation rules and protection settings are still CRUD-only and do not alter live scoring/enforcement.

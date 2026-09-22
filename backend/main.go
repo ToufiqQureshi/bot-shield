@@ -91,6 +91,7 @@ func main() {
 	keyFile := flag.String("tls-key", "", "TLS private key file, required with -tls-cert")
 	challengeSecret := flag.String("challenge-secret", "", "Shared secret for stateless JS challenges. If empty, a random one is generated.")
 	evidenceToken := flag.String("evidence-token", "", "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
+	observabilityToken := flag.String("observability-token", os.Getenv("HAKAISHIELD_OBSERVABILITY_TOKEN"), "bearer token for aggregate operational counters; unset leaves the endpoint off")
 	modeFlag := flag.String("mode", "enforce", `"enforce" acts on scores; "shadow" only records what it would have done`)
 	themeFlag := flag.String("theme", "ghost", `challenge page theme: "ghost", "branded", or "default"`)
 	policyFlag := flag.String("policy", "balanced", `policy strategy: "balanced" (allow clean score 0, challenge suspicious) or "strict" (mandatory challenge)`)
@@ -162,6 +163,7 @@ func main() {
 		log.Printf("hakaishield: connected to redis at %s", *redisURL)
 	}
 	signals.InitRedis(rdb)
+	challengeHandler.SetNonceStore(challenge.NewRedisNonceStore(rdb, ""))
 
 	// Start dynamic JA4 synchronization from Redis
 	signals.StartJA4Sync(context.Background(), rdb)
@@ -174,7 +176,10 @@ func main() {
 	}
 
 	store := tenant.NewStore()
-	store.ProxyFactory = core.NewOriginProxy // Wire up proxy creation for lazy-loading tenants
+	// Dashboard/database-created tenant origins are customer-controlled input.
+	// Keep the default -target dev path flexible, but require lazy-loaded SaaS
+	// origins to be public and rechecked on dial to close the SSRF path.
+	store.ProxyFactory = core.NewPublicOriginProxy
 
 	originProxy, err := core.NewOriginProxy(*target)
 	if err != nil {
@@ -200,14 +205,19 @@ func main() {
 	guard := core.NewGuardWithClientIPResolver(store, challengeHandler, clientIPResolver)
 
 	mux := http.NewServeMux()
-	mux.Handle("/__hakaishield/", challengeHandler.Handler())
-	mux.Handle("/api/v1/dashboard/stats", api.DashboardStatsHandler(store))
+	mux.Handle("/__hakaishield/challenge", challengeHandler.Handler())
+	mux.Handle("/__hakaishield/verify", challengeHandler.Handler())
 	mux.Handle("/", guard)
 
 	if *evidenceToken != "" {
 		mux.Handle("/api/v1/dashboard/evidence", api.DashboardEvidenceHandler(store))
 	} else {
 		log.Print("hakaishield: -evidence-token not set, evidence endpoint disabled")
+	}
+	if *observabilityToken != "" {
+		mux.Handle("/__hakaishield/observability", observability.CountersHandler(*observabilityToken))
+	} else {
+		log.Print("hakaishield: -observability-token not set, aggregate counters endpoint disabled")
 	}
 
 	// The domains/rules/settings dashboard API needs both a database
@@ -238,6 +248,7 @@ func main() {
 		// directly (see dashboard/src/lib/supabaseClient.ts). This
 		// backend only verifies the JWT Supabase already issued.
 		mux.HandleFunc("/api/v1/domains", api.DomainsHandler(verifier))
+		mux.Handle("/api/v1/dashboard/stats", api.DashboardStatsHandler(store, verifier))
 		mux.HandleFunc("/api/v1/rules", api.RulesListHandler(rulesStore, verifier))
 		mux.HandleFunc("/api/v1/rules/custom", api.CreateRuleHandler(rulesStore, verifier))
 		mux.HandleFunc("/api/v1/rules/{id}/toggle", api.ToggleRuleHandler(rulesStore, verifier))

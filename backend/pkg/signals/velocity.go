@@ -34,6 +34,9 @@ const (
 // InitRedis sets the package-level Redis client used for distributed rate limiting.
 func InitRedis(client *redis.Client) {
 	rdb = client
+	// A new client is a new health boundary. Do not carry an outage state from
+	// a previous client into startup or a controlled client replacement.
+	redisHealth.reset()
 }
 
 // VelocityExceeded reports whether ip or ja4 has tripped its rate
@@ -86,6 +89,9 @@ func velocityBucket(ip, path string, window int64) (string, int64) {
 // where bots rotate IP on every request but keep the same underlying scraper client TLS profile.
 func checkJA4VelocitySpike(ja4 string) bool {
 	if ja4 == "" || ja4 == JA4Unreadable || !redisRequestAllowed() {
+		return false
+	}
+	if !hasCommonBrowserPrefixes() {
 		return false
 	}
 	// Common desktop/mobile browsers are exempt from raw aggregate count to protect genuine traffic

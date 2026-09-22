@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/auth"
+	"github.com/ToufiqQureshi/hakaishield/pkg/core"
 	"github.com/ToufiqQureshi/hakaishield/pkg/db"
 )
 
@@ -16,6 +17,9 @@ type addDomainRequest struct {
 	Domain string `json:"domain"`
 	Origin string `json:"origin"`
 }
+
+var listDomains = db.ListDomains
+var dashboardOwnershipConfigured = func() bool { return db.DB != nil }
 
 func domainJSON(d db.Domain) map[string]any {
 	return map[string]any{
@@ -48,12 +52,18 @@ func normalizeOrigin(origin string) (string, error) {
 		if err != nil || u.Scheme == "" || u.Host == "" {
 			return "", fmt.Errorf("not a valid URL")
 		}
+		if err := core.ValidatePublicOrigin(origin); err != nil {
+			return "", err
+		}
 		return origin, nil
 	}
 	withScheme := "http://" + origin
 	u, err := url.Parse(withScheme)
 	if err != nil || u.Host == "" {
 		return "", fmt.Errorf("not a valid host:port")
+	}
+	if err := core.ValidatePublicOrigin(withScheme); err != nil {
+		return "", err
 	}
 	return withScheme, nil
 }
@@ -68,7 +78,7 @@ func DomainsHandler(verifier *auth.Verifier) http.HandlerFunc {
 
 		switch r.Method {
 		case http.MethodGet:
-			domains, err := db.ListDomains(r.Context(), userID)
+			domains, err := listDomains(r.Context(), userID)
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, "could not list domains")
 				return
@@ -93,7 +103,7 @@ func DomainsHandler(verifier *auth.Verifier) http.HandlerFunc {
 			}
 			origin, err := normalizeOrigin(rawOrigin)
 			if err != nil {
-				writeError(w, http.StatusBadRequest, "origin must be a host:port (e.g. 10.0.1.50:8080) or a full URL")
+				writeError(w, http.StatusBadRequest, "origin must be a public http(s) host:port or full URL")
 				return
 			}
 

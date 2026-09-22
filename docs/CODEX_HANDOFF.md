@@ -214,16 +214,18 @@ the configured CI race job remains the authoritative environment. Local
 
 ## Immediate Next Steps
 
-1. Add observability for circuit opens/recovery probes and tune its one-second
-   cooldown from real Redis and traffic data before a large multi-node rollout.
+1. Add observability for JWKS refreshes, Goodbot DNS budget rejections, and
+   Redis circuit opens/recovery probes; tune limits from real traffic before a
+   large multi-node rollout.
 2. Wire the authenticated custom rules/settings model into live tenant policy
    only after validating fields, actions, tenant ownership, cache invalidation,
    and shadow rollout. Persistence alone must not be advertised as enforcement.
 3. Add tenant/host binding to the runtime challenge context where needed and
    design the distributed Redis nonce store before claiming multi-node replay
    protection.
-4. Add tests for API tenant isolation, rule ownership, invalid settings,
-   CORS/auth exposure, and origin validation.
+4. Add a real Postgres integration test for stats tenant ownership, plus tests
+   for rule ownership, invalid settings, CORS/auth exposure, and origin
+   validation.
 5. Update `docs/PROGRESS.md`, `docs/DECISIONS.md`, and `docs/ROADMAP.md` only
    after verification reflects the actual implementation.
 
@@ -234,3 +236,20 @@ the configured CI race job remains the authoritative environment. Local
 - `graphify-out/` has watcher-generated modifications; do not revert them.
 - `inspired/` is the user's untracked reference-repository directory.
 - Do not reset branches, delete untracked files, or overwrite the frontend.
+
+
+## 2026-09-22 Audit Fix Handoff
+
+Implemented after the audit docs requested fixes:
+- Exact-mounted challenge routes in backend/main.go; healthz and honeypot trap now reach Guard through the production mux shape.
+- JA4 aggregate velocity now fails open when no common-browser prefixes are loaded.
+- tenant.Store has a bounded 30s negative cache for unknown Host DB misses.
+- Dashboard/DB tenant origins use public-origin validation plus dial-time IP recheck through core.NewPublicOriginProxy; local/default -target remains flexible via NewOriginProxy.
+
+Verified from backend with GOCACHE=D:\bot-shield\.tmp\gocache:
+- go test . ./pkg/signals ./pkg/tenant ./pkg/core ./pkg/api
+- go test ./...
+- go vet ./...
+- go build ./...
+
+Remaining audit items not fixed in this pass: domain ownership verification/active transition, tenant-scoped Redis keys, live enforcement of rules/settings, dashboard selected-domain scoping, and frontend cosmetic/trust issues.

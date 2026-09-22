@@ -35,6 +35,7 @@ func newTestStore(t *testing.T, token string) *tenant.Store {
 // TestDashboardStatsHandler_Success verifies the stats endpoint returns correct counters.
 func TestDashboardStatsHandler_Success(t *testing.T) {
 	store := newTestStore(t, "")
+	ta := newTestAuth(t)
 
 	ten, _ := store.GetByID("default")
 	ten.Stats.Record(signals.DecisionAllow)
@@ -42,8 +43,9 @@ func TestDashboardStatsHandler_Success(t *testing.T) {
 	ten.Stats.Record(signals.DecisionBlock)
 
 	req := httptest.NewRequest("GET", "/api/v1/dashboard/stats?tenant=default", nil)
+	req.Header.Set("Authorization", "Bearer "+ta.sign(t, "test-user"))
 	rec := httptest.NewRecorder()
-	api.DashboardStatsHandler(store).ServeHTTP(rec, req)
+	api.DashboardStatsHandler(store, ta.verifier(t)).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: want 200, got %d", rec.Code)
@@ -76,9 +78,11 @@ func TestDashboardStatsHandler_Success(t *testing.T) {
 // TestDashboardStatsHandler_UnknownTenant verifies 404 for a missing tenant.
 func TestDashboardStatsHandler_UnknownTenant(t *testing.T) {
 	store := newTestStore(t, "")
+	ta := newTestAuth(t)
 	req := httptest.NewRequest("GET", "/api/v1/dashboard/stats?tenant=ghost", nil)
+	req.Header.Set("Authorization", "Bearer "+ta.sign(t, "test-user"))
 	rec := httptest.NewRecorder()
-	api.DashboardStatsHandler(store).ServeHTTP(rec, req)
+	api.DashboardStatsHandler(store, ta.verifier(t)).ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("want 404, got %d", rec.Code)
 	}
@@ -87,9 +91,11 @@ func TestDashboardStatsHandler_UnknownTenant(t *testing.T) {
 // TestDashboardStatsHandler_MethodNotAllowed verifies POST is rejected.
 func TestDashboardStatsHandler_MethodNotAllowed(t *testing.T) {
 	store := newTestStore(t, "")
+	ta := newTestAuth(t)
 	req := httptest.NewRequest("POST", "/api/v1/dashboard/stats?tenant=default", nil)
+	req.Header.Set("Authorization", "Bearer "+ta.sign(t, "test-user"))
 	rec := httptest.NewRecorder()
-	api.DashboardStatsHandler(store).ServeHTTP(rec, req)
+	api.DashboardStatsHandler(store, ta.verifier(t)).ServeHTTP(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("want 405, got %d", rec.Code)
 	}

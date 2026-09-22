@@ -1013,6 +1013,86 @@ The customer judges the product by what the dashboard tells them.
 
 A blank or false-looking dashboard is a product correctness failure.
 
+## Every frontend file must be brutally tested
+
+hakaishield is a security product. A dashboard bug is not merely a UI
+annoyance here — it can leak one tenant's data to another, let a visitor
+forge a privileged action, or make the product itself the thing that gets
+hacked.
+
+For every meaningful frontend file (component, page, API client function,
+auth flow, hook):
+
+- Write tests the same way `CLAUDE.md` §11–§13 require for the backend:
+  normal behavior, invalid/malformed input, empty/loading/error states, and
+  anything auth- or tenant-boundary-related.
+- Mutation-check the important ones the same way as backend code: break the
+  behavior on purpose (remove a check, flip a condition, drop an
+  `Authorization` header), confirm the test fails, then restore it. A test
+  that still passes after the protected behavior is removed is not a real
+  test — fix or delete it.
+- Treat anything that touches auth tokens, tenant/owner identity, or data
+  coming back from the backend as adversarial input, not trusted input.
+- Do not ship a component/page/API function without a test unless it is
+  trivial (pure presentation with no logic, no conditionals, no data
+  fetching).
+
+If the dashboard has no test runner installed yet, installing one (e.g.
+Vitest, since the project already uses Vite) is part of doing this work, not
+a separate task to defer.
+
+## No dead code, no unnecessary code, beginner-readable
+
+Every frontend file must stay something a junior developer can open and
+understand in one pass.
+
+- No unused imports, unused variables, unused props, unused components, or
+  unused exported functions. If it is not called from anywhere, delete it —
+  do not comment it out and do not leave it "just in case."
+- No unnecessary abstraction: no wrapper component, custom hook, or utility
+  function that exists for only one caller and adds no real reuse or
+  clarity. Three similar lines beat a premature abstraction (same rule as
+  §7 for the backend).
+- No custom-built version of something a library already installed in
+  `package.json` already provides. Before writing a custom date formatter,
+  fetch wrapper, form validator, animation helper, drag-and-drop
+  implementation, chart, or similar, check whether an existing dependency
+  (or the standard browser/React APIs) already does it correctly. Do not
+  add a new dependency for something trivial either — check the standard
+  library/browser APIs first.
+- Comments follow the same rule as backend code (§9): explain the non-obvious
+  why, not the obvious what. No comment blocks restating what the JSX
+  already shows.
+- If a file, component, or code path is found to be dead (nothing renders
+  it, nothing imports it, no route reaches it), remove it the same way §21
+  requires for backend dead code: confirm it is genuinely unused, then
+  delete it in the same pass rather than leaving it to rot.
+
+## Full frontend–backend wiring is mandatory
+
+A feature is not done if only one side of it exists. This is checked every
+time frontend or backend code changes, not just when someone asks.
+
+- If the frontend has a button, form, toggle, or section that implies an
+  action or data ("Add domain", "Toggle rule", "Protection settings"), the
+  corresponding backend endpoint must exist, be authenticated/tenant-scoped
+  per §16–§17, and must actually be called by that UI element — not a
+  handler that only updates local state or shows a fake success toast.
+- If the backend has an endpoint, data model, or feature with no frontend
+  surface for it, either wire it into the dashboard or explicitly record in
+  `docs/PROGRESS.md`/`docs/ROADMAP.md` why it is intentionally backend-only
+  or not yet exposed. Do not let backend capability silently sit unused
+  while the dashboard shows something unrelated or fake in its place.
+- When adding or changing a frontend API call, verify the request
+  path/method, request body shape, and response shape against the actual
+  backend handler and its response envelope (see `dashboard/src/lib/api.ts`
+  header comment) — not against what seems reasonable. A mismatch here is a
+  production bug even though both sides "look done" individually.
+- This wiring check applies in both directions on every relevant change:
+  after touching a backend handler, check what in the dashboard calls it;
+  after touching a dashboard page/component, check what backend endpoint it
+  expects to exist and whether it is real.
+
 ---
 
 # 28. Fix It, Don't Just Report It

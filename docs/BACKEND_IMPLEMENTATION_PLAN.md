@@ -30,6 +30,28 @@ Already present in `backend/`:
 - In-memory per-tenant stats/evidence and an initial lazy tenant store
   (`pkg/tenant`, `pkg/evidence`, `pkg/stats`, `pkg/db`).
 
+## Current Status Snapshot — 2026-09-22
+
+Phase 0 items completed in the current backend include single-pass dynamic
+signal evaluation, bounded and boundary-safe Goodbot DNS verification,
+trusted-proxy client-IP parsing, host-bound/single-use challenge state,
+bounded Redis fail-open circuit behaviour, database-before-wildcard tenant
+loading, authenticated/owner-scoped dashboard stats, bounded unknown-kid JWKS
+refreshes, and resolved client-IP propagation to origins. These are covered by
+focused regression tests and the full Go test/vet/build checks recorded in
+`docs/PROGRESS.md`.
+
+Phase 0 closeout has now been implemented in code: SNI/Host validation rejects
+cross-tenant TLS requests, pending/unverified domains do not route visitor
+traffic, challenge nonces can be consumed through Redis across nodes with a
+single-node fallback, ownership coverage includes deterministic API tests plus
+an opt-in real Postgres integration test, and aggregate operational counters
+cover JWKS, Goodbot DNS budget, Redis circuit, origin, and client-IP errors.
+
+Phase 1 policy/rule enforcement has not started: the current rules and
+protection-settings APIs persist dashboard data but do not yet alter live
+scoring. The implementation order below remains authoritative.
+
 ## Non-Negotiable Product Rules
 
 Every implementation phase must preserve these rules.
@@ -56,10 +78,10 @@ the product harder to maintain and could create bypasses or false positives.
 | Evaluate dynamic signals once per request | Current score and evidence analysis can run Redis-backed checks twice, which can double counters and make the evidence disagree with the decision. | `pkg/signals`, `pkg/core/guard.go` | One immutable evaluation result contains score, fired signals, and decision; a test proves one request changes each counter once. |
 | Harden verified-good-bot DNS | DNS suffix matching must require a true domain boundary; cache state must be bounded and DNS work cannot become an attacker-controlled latency amplifier. | `pkg/signals/goodbots.go` | Spoofed lookalike PTR names fail, genuine forward-confirmed bots pass, cache/timeout limits are tested. |
 | Trusted client-IP resolver | **Done 2026-09-22:** explicit trusted-proxy CIDRs and correct IPv4/IPv6 parsing. Raw forwarded headers remain untrusted unless the direct peer is trusted. | `pkg/core/identity.go`, `main.go` | CDN/LB, direct-client, forged-header, malformed-header, and IPv6 tests pass. |
-| Host and tenant canonicalization | Normalize hostnames, safely remove ports, validate SNI/Host when TLS is used, and prevent stale/cross-tenant host mappings. | `pkg/tenant`, `pkg/core` | Case, port, IPv6, unknown-host, and cross-tenant tests pass. |
-| Bind challenge state | A solve must be tied to the protected host/tenant and a short-lived visitor context; a captured token/cookie must not become a portable bypass. | `pkg/challenge`, `pkg/core/guard.go` | Cross-host, replay, expiry, tamper, and normal-browser flow tests pass. |
+| Host and tenant canonicalization | **Done 2026-09-22:** Normalize hostnames, safely remove ports, validate SNI/Host when TLS is used, reject malformed hosts, prevent cross-tenant host mappings, and keep pending domains out of visitor routing. | `pkg/tenant`, `pkg/core` | Case, port, IPv6, unknown-host, wildcard, pending-domain, malformed-host, and cross-tenant tests pass. |
+| Bind challenge state | **Done 2026-09-22:** A solve is tied to the protected host/tenant and short-lived visitor context; Redis-backed nonce consumption blocks replay across nodes, with bounded local fallback for single-node/degraded mode. | `pkg/challenge`, `pkg/core/guard.go` | Cross-host, replay, expiry, tamper, normal-browser flow, and cross-instance Redis nonce tests pass. |
 | Redis health/circuit behaviour | A disconnected Redis client must not add multiple request timeouts per visitor. | `pkg/signals` | Outage tests prove bounded latency, visible health state, and documented fail-open behaviour. |
-| Separate data-plane from admin APIs | Customer traffic endpoints, health checks, and dashboard/control APIs need distinct authentication and exposure rules. | `main.go`, `pkg/api` | Tenant A cannot read Tenant B; stats/evidence are not anonymously enumerable. |
+| Separate data-plane from admin APIs | **Done 2026-09-22:** Customer traffic endpoints, health checks, and dashboard/control APIs have distinct authentication/exposure rules; stats and dashboard evidence/top-offenders are owner-scoped. | `main.go`, `pkg/api` | Tenant A cannot read Tenant B; stats/evidence are not anonymously enumerable. |
 
 ## Phase 1 — Policy and Explainable Decisions
 
@@ -89,7 +111,7 @@ real users, mobile devices, or accessibility tools.
 
 | Feature | What will be implemented | Why it matters |
 |---|---|---|
-| Replay-safe challenge nonce store | Redis-backed, TTL-bound, single-use challenge state with a degraded single-node mode. | Stops token reuse across requests and nodes. |
+| Replay-safe challenge nonce store | Built in Phase 0 as Redis-backed, TTL-bound, single-use challenge state with degraded single-node mode. Phase 2 can tune it with policy/adaptive difficulty. | Stops token reuse across requests and nodes. |
 | Adaptive proof-of-work | Difficulty is based on policy/risk/repeat behaviour with a strictly capped mobile-safe range. | A fixed trivial puzzle is cheap for a scraper farm; clean visitors should see no work in balanced mode. |
 | Progressive challenges | Start with light challenge; escalate only on independent evidence or repeated failed/abusive behaviour. | Raises bot cost without making one noisy signal a denial of service. |
 | Periodic trust decay | Re-evaluate high-risk sessions and re-challenge only when policy and behaviour justify it. | One solve should not grant permanent trust. |

@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/auth"
-	"github.com/ToufiqQureshi/hakaishield/pkg/db"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
@@ -114,7 +113,7 @@ func EvidenceLogsHandler(store *tenant.Store, verifier *auth.Verifier) http.Hand
 // need db.ListDomains directly until these endpoints grow a
 // ?domain= parameter — see docs/PROGRESS.md.
 func callerDomain(r *http.Request) (string, bool) {
-	domains, err := db.ListDomains(r.Context(), UserIDFromContext(r.Context()))
+	domains, err := listDomains(r.Context(), UserIDFromContext(r.Context()))
 	if err != nil || len(domains) == 0 {
 		return "", false
 	}

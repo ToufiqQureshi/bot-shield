@@ -90,26 +90,26 @@ func initSchema(ctx context.Context) error {
 	return err
 }
 
-func GetTenant(ctx context.Context, host string) (id, target, mode, evidenceToken string, err error) {
+func GetTenant(ctx context.Context, host string) (id, target, mode, evidenceToken, status string, err error) {
 	if DB == nil {
-		return "", "", "", "", fmt.Errorf("database not initialized")
+		return "", "", "", "", "", fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, target, mode, COALESCE(evidence_token, '') FROM tenants WHERE host = $1 LIMIT 1`
-	err = DB.QueryRow(ctx, query, host).Scan(&id, &target, &mode, &evidenceToken)
+	query := `SELECT id, target, mode, COALESCE(evidence_token, ''), status FROM tenants WHERE host = $1 LIMIT 1`
+	err = DB.QueryRow(ctx, query, host).Scan(&id, &target, &mode, &evidenceToken, &status)
 	return
 }
 
 // GetTenantByID is GetTenant's counterpart for lookups by internal ID
 // rather than incoming Host header — the dashboard API knows a
 // domain's ID, not the host a live request would carry.
-func GetTenantByID(ctx context.Context, id string) (host, target, mode, evidenceToken string, err error) {
+func GetTenantByID(ctx context.Context, id string) (host, target, mode, evidenceToken, status string, err error) {
 	if DB == nil {
-		return "", "", "", "", fmt.Errorf("database not initialized")
+		return "", "", "", "", "", fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT host, target, mode, COALESCE(evidence_token, '') FROM tenants WHERE id = $1 LIMIT 1`
-	err = DB.QueryRow(ctx, query, id).Scan(&host, &target, &mode, &evidenceToken)
+	query := `SELECT host, target, mode, COALESCE(evidence_token, ''), status FROM tenants WHERE id = $1 LIMIT 1`
+	err = DB.QueryRow(ctx, query, id).Scan(&host, &target, &mode, &evidenceToken, &status)
 	return
 }
 

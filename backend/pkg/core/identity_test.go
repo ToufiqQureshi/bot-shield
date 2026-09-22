@@ -1,6 +1,7 @@
 package core
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -42,6 +43,41 @@ func TestRequestHostIPv6Literal(t *testing.T) {
 	r.Host = "[2001:db8::1]"
 	if got := requestHost(r); got != "2001:db8::1" {
 		t.Fatalf("requestHost() = %q, want IPv6 literal", got)
+	}
+}
+
+func TestValidatedRequestHostRejectsMalformedHosts(t *testing.T) {
+	cases := []string{
+		"",
+		"bad host.example",
+		"example.com/path",
+		"-example.com",
+		"example..com",
+	}
+	for _, raw := range cases {
+		r := httptest.NewRequest("GET", "http://example.com/", nil)
+		r.Host = raw
+		if host, ok := validatedRequestHost(r); ok {
+			t.Fatalf("validatedRequestHost(%q) = (%q, true), want invalid", raw, host)
+		}
+	}
+}
+
+func TestHostMatchesTLS(t *testing.T) {
+	r := httptest.NewRequest("GET", "https://example.com/", nil)
+	r.TLS = &tls.ConnectionState{ServerName: "EXAMPLE.com"}
+	if !hostMatchesTLS(r, "example.com") {
+		t.Fatal("matching SNI and Host should be accepted")
+	}
+
+	r.TLS = &tls.ConnectionState{ServerName: "other.example.com"}
+	if hostMatchesTLS(r, "example.com") {
+		t.Fatal("cross-tenant SNI/Host mismatch must be rejected")
+	}
+
+	r.TLS = &tls.ConnectionState{}
+	if !hostMatchesTLS(r, "example.com") {
+		t.Fatal("empty SNI is allowed for clients that do not send SNI")
 	}
 }
 

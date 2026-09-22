@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -55,6 +56,14 @@ type jwksResponse struct {
 // this process restarts.
 const jwksTTL = 1 * time.Hour
 
+// Unknown key IDs are untrusted input. Remembering them briefly prevents a
+// caller from forcing a JWKS request for every forged token while still
+// allowing a real signing-key rotation to recover quickly.
+const (
+	unknownKidTTL  = 10 * time.Second
+	maxUnknownKids = 1024
+)
+
 // Verifier validates dashboard session JWTs against a Supabase
 // project's published JWKS. A zero-value Verifier is unusable;
 // construct with NewVerifier.
@@ -65,6 +74,8 @@ type Verifier struct {
 	mu        sync.RWMutex
 	keys      map[string]*ecdsa.PublicKey
 	fetchedAt time.Time
+	unknown   map[string]time.Time
+	refreshMu sync.Mutex
 }
 
 // NewVerifier refuses an empty Supabase project URL rather than
@@ -79,6 +90,7 @@ func NewVerifier(supabaseURL string) (*Verifier, error) {
 	return &Verifier{
 		jwksURL: supabaseURL + "/auth/v1/.well-known/jwks.json",
 		client:  &http.Client{Timeout: 5 * time.Second},
+		unknown: make(map[string]time.Time),
 	}, nil
 }
 
@@ -111,28 +123,82 @@ func (v *Verifier) Verify(tokenString string) (userID string, err error) {
 // cache is stale or the id is unknown — covers a key rotation between
 // fetches) the JWKS as needed.
 func (v *Verifier) key(kid string) (*ecdsa.PublicKey, error) {
+	now := time.Now()
 	v.mu.RLock()
 	key, ok := v.keys[kid]
 	fresh := time.Since(v.fetchedAt) < jwksTTL
+	unknownUntil, isUnknown := v.unknown[kid]
 	v.mu.RUnlock()
 	if ok && fresh {
 		return key, nil
 	}
+	if isUnknown && now.Before(unknownUntil) {
+		observability.Inc("auth_unknown_kid_cached_reject_total")
+		return nil, fmt.Errorf("auth: unknown key id %q", kid)
+	}
+
+	// Serialize refreshes so a burst of tokens with attacker-chosen kids
+	// cannot turn one cache miss into one outbound JWKS request per request.
+	v.refreshMu.Lock()
+	defer v.refreshMu.Unlock()
+
+	// Another waiter may have refreshed or negatively cached this kid while
+	// this call was blocked. Re-check before making another network request.
+	now = time.Now()
+	v.mu.RLock()
+	key, ok = v.keys[kid]
+	fresh = time.Since(v.fetchedAt) < jwksTTL
+	unknownUntil, isUnknown = v.unknown[kid]
+	v.mu.RUnlock()
+	if ok && fresh {
+		return key, nil
+	}
+	if isUnknown && now.Before(unknownUntil) {
+		observability.Inc("auth_unknown_kid_cached_reject_total")
+		return nil, fmt.Errorf("auth: unknown key id %q", kid)
+	}
 
 	if err := v.refresh(); err != nil {
+		observability.Inc("auth_jwks_refresh_failure_total")
 		return nil, err
 	}
 
 	v.mu.RLock()
-	defer v.mu.RUnlock()
 	key, ok = v.keys[kid]
+	v.mu.RUnlock()
 	if !ok {
+		v.rememberUnknownKid(kid, time.Now())
+		observability.Inc("auth_unknown_kid_reject_total")
 		return nil, fmt.Errorf("auth: unknown key id %q", kid)
 	}
 	return key, nil
 }
 
+func (v *Verifier) rememberUnknownKid(kid string, now time.Time) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	for existing, expiresAt := range v.unknown {
+		if !now.Before(expiresAt) {
+			delete(v.unknown, existing)
+		}
+	}
+	if len(v.unknown) >= maxUnknownKids {
+		var oldest string
+		var oldestExpiry time.Time
+		for existing, expiresAt := range v.unknown {
+			if oldest == "" || expiresAt.Before(oldestExpiry) {
+				oldest, oldestExpiry = existing, expiresAt
+			}
+		}
+		if oldest != "" {
+			delete(v.unknown, oldest)
+		}
+	}
+	v.unknown[kid] = now.Add(unknownKidTTL)
+}
+
 func (v *Verifier) refresh() error {
+	observability.Inc("auth_jwks_refresh_total")
 	req, err := http.NewRequest(http.MethodGet, v.jwksURL, nil)
 	if err != nil {
 		return fmt.Errorf("auth: building jwks request: %w", err)
@@ -175,6 +241,7 @@ func (v *Verifier) refresh() error {
 	v.keys = keys
 	v.fetchedAt = time.Now()
 	v.mu.Unlock()
+	observability.Inc("auth_jwks_refresh_success_total")
 	return nil
 }
 
@@ -187,9 +254,13 @@ func decodeECPublicKey(k jwk) (*ecdsa.PublicKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decoding y: %w", err)
 	}
-	return &ecdsa.PublicKey{
+	pub := &ecdsa.PublicKey{
 		Curve: elliptic.P256(),
 		X:     new(big.Int).SetBytes(xBytes),
 		Y:     new(big.Int).SetBytes(yBytes),
-	}, nil
+	}
+	if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+		return nil, errors.New("public key point is not on P-256")
+	}
+	return pub, nil
 }

@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -116,6 +118,36 @@ func TestChallengeRealFlowPasses(t *testing.T) {
 	passReq.AddCookie(cookies[0])
 	if !c.Passed(passReq) {
 		t.Fatal("Passed() returned false for a freshly issued cookie")
+	}
+}
+
+func TestChallengeRedisNonceStoreRejectsReplayAcrossInstances(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run: %v", err)
+	}
+	defer mr.Close()
+
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	secret := []byte("test-secret-1234567890123456789012")
+	nodeA, err := challenge.NewChallenge(secret, "")
+	if err != nil {
+		t.Fatalf("nodeA NewChallenge: %v", err)
+	}
+	nodeB, err := challenge.NewChallenge(secret, "")
+	if err != nil {
+		t.Fatalf("nodeB NewChallenge: %v", err)
+	}
+	nodeA.SetNonceStore(challenge.NewRedisNonceStore(rdb, "test:nonce:"))
+	nodeB.SetNonceStore(challenge.NewRedisNonceStore(rdb, "test:nonce:"))
+
+	token, nonce := fetchPage(t, nodeA.Handler(), challengePath+"?next=1")
+	answer := solvePoW(nonce)
+	if rec := postVerify(nodeA.Handler(), token, answer, validCanvas(), "false"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("first verify status = %d, want 303", rec.Code)
+	}
+	if rec := postVerify(nodeB.Handler(), token, answer, validCanvas(), "false"); rec.Code != http.StatusForbidden {
+		t.Fatalf("replay on second node status = %d, want 403", rec.Code)
 	}
 }
 

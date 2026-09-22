@@ -200,11 +200,15 @@ always the operator.
           render — spoofable by a bot that specifically studies
           hakaishield. Documented, accepted limitation, same class as
           item 3's JA4-database gap.
+        - Redis now shares nonce consumption across nodes, but the signing
+          secret still must be shared through
+          `-challenge-secret`/`HAKAISHIELD_CHALLENGE_SECRET` so issued tokens
+          and passed cookies verify everywhere.
         - Signing secret is generated fresh per process, in memory
           only — a restart or a second instance invalidates
           outstanding challenges/cookies. Fine for the current
-          single-process v1; needs the planned Redis store to share
-          across instances.
+          single-process v1. Redis nonce sharing is now built; this remaining
+          warning is specifically about sharing the signing secret across nodes.
 - [x] **5. Scoring engine v1** (`proxy/score.go`, `proxy/guard.go`) —
       this is the first thing in the codebase that actually acts on a
       signal instead of just labeling it. `Score(ja4, ua)` combines
@@ -612,6 +616,12 @@ always the operator.
       competitive edge over enterprise tools' weeks-long onboarding).
 - [ ] **15. Metrics/observability** — latency added per layer, decision
       breakdown, exportable to Prometheus.
+      **Started, not done:** aggregate bearer-protected counters now cover
+      JWKS refresh/failures, unknown-kid rejects, Goodbot DNS budget rejects,
+      Redis circuit opens/probes/skips, origin proxy errors, malformed client
+      IP forwarding, malformed Host, unknown Host, and SNI/Host mismatch.
+      Missing: latency histograms, per-tenant usage metrics, Prometheus
+      export, readiness semantics, and production p95/p99 measurements.
 - [ ] **16. Long-running soak test** — sustained adversarial traffic
       simulation proving memory/latency stay stable over hours.
 - [ ] **17. Pricing/tiering model** — finalised once real traffic and

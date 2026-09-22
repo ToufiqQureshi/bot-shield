@@ -21,6 +21,7 @@ export interface LayoutContext {
   domains: Domain[];
   selectedDomain: Domain | null;
   domainsLoading: boolean;
+  onDomainAdded: (domain: Domain) => void;
 }
 
 export default function Layout() {
@@ -53,6 +54,13 @@ export default function Layout() {
       cancelled = true;
     };
   }, []);
+
+  // DomainsSiem calls this after a successful add so the header's domain
+  // switcher reflects it immediately, instead of only after a reload.
+  const handleDomainAdded = (domain: Domain) => {
+    setDomains((prev) => [domain, ...prev]);
+    setSelectedDomain((prev) => prev ?? domain);
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -177,7 +185,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-4 py-6">
-        <Outlet context={{ domains, selectedDomain, domainsLoading } satisfies LayoutContext} />
+        <Outlet context={{ domains, selectedDomain, domainsLoading, onDomainAdded: handleDomainAdded } satisfies LayoutContext} />
       </main>
     </div>
   );

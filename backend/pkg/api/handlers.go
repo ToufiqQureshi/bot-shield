@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ToufiqQureshi/hakaishield/pkg/auth"
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
@@ -22,13 +23,8 @@ type statsResponse struct {
 	Enforcing     bool   `json:"enforcing"`
 }
 
-func DashboardStatsHandler(store *tenant.Store) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			return
-		}
+func DashboardStatsHandler(store *tenant.Store, verifier *auth.Verifier) http.Handler {
+	return RequireAuth(verifier, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -37,6 +33,24 @@ func DashboardStatsHandler(store *tenant.Store) http.Handler {
 		tenantID := r.URL.Query().Get("tenant")
 		if tenantID == "" {
 			tenantID = "default"
+		}
+		if dashboardOwnershipConfigured() {
+			domains, err := listDomains(r.Context(), UserIDFromContext(r.Context()))
+			if err != nil {
+				http.Error(w, "could not verify tenant", http.StatusInternalServerError)
+				return
+			}
+			owned := false
+			for _, domain := range domains {
+				if domain.ID == tenantID {
+					owned = true
+					break
+				}
+			}
+			if !owned {
+				http.Error(w, "tenant not found", http.StatusNotFound)
+				return
+			}
 		}
 
 		ten, err := store.GetByID(tenantID)

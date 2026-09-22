@@ -7,6 +7,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
@@ -53,16 +54,28 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ja4 := JA4FromContext(r.Context())
 
 	ip := g.clientIP.ClientIP(r)
+	r = r.WithContext(WithClientIP(r.Context(), ip))
 
 	// Look up the tenant by the incoming Host header.
 	// Strip port if present, as DNS/CNAME doesn't include it.
-	host := requestHost(r)
+	host, ok := validatedRequestHost(r)
+	if !ok {
+		observability.Inc("request_host_malformed_total")
+		http.Error(w, "bad host", http.StatusBadRequest)
+		return
+	}
+	if !hostMatchesTLS(r, host) {
+		observability.Inc("request_host_sni_mismatch_total")
+		http.Error(w, "misdirected request", http.StatusMisdirectedRequest)
+		return
+	}
 
 	tenant, err := g.store.GetByHost(host)
 	if err != nil {
 		// If we don't recognize the customer domain, drop the request.
 		// A 421 Misdirected Request is the most accurate HTTP status here.
-		http.Error(w, "misdirected request", 421)
+		observability.Inc("request_unknown_host_total")
+		http.Error(w, "misdirected request", http.StatusMisdirectedRequest)
 		return
 	}
 

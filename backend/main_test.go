@@ -1,10 +1,18 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
+	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/core"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 func TestRedactCredentials(t *testing.T) {
@@ -111,4 +119,49 @@ func TestLoadDotEnv_MissingFileIsNotAnError(t *testing.T) {
 	// Must not panic or os.Exit; a missing .env is the normal case in
 	// production where config comes from real env vars.
 	loadDotEnv(filepath.Join(t.TempDir(), "does-not-exist.env"))
+}
+
+func TestInternalRoutesReachGuardWhenChallengeRoutesAreMountedExactly(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer origin.Close()
+
+	proxy, err := core.NewOriginProxy(origin.URL)
+	if err != nil {
+		t.Fatalf("origin proxy: %v", err)
+	}
+	store := tenant.NewStore()
+	if err := store.Add("default", tenant.TenantConfig{Target: origin.URL, Mode: config.ModeEnforce, Policy: config.PolicyBalanced}, []string{"example.com"}, proxy); err != nil {
+		t.Fatalf("add tenant: %v", err)
+	}
+	c, err := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+	if err != nil {
+		t.Fatalf("challenge: %v", err)
+	}
+	guard := core.NewGuard(store, c)
+
+	mux := http.NewServeMux()
+	mux.Handle("/__hakaishield/challenge", c.Handler())
+	mux.Handle("/__hakaishield/verify", c.Handler())
+	mux.Handle("/", guard)
+
+	healthReq := httptest.NewRequest(http.MethodGet, "http://example.com/__hakaishield/healthz", nil)
+	healthRec := httptest.NewRecorder()
+	mux.ServeHTTP(healthRec, healthReq)
+	if healthRec.Code != http.StatusOK {
+		t.Fatalf("healthz should reach Guard through production mux shape, got %d", healthRec.Code)
+	}
+
+	trapReq := httptest.NewRequest(http.MethodGet, "http://example.com"+signals.HoneypotPath, nil)
+	trapReq.RemoteAddr = "203.0.113.9:443"
+	trapReq = trapReq.WithContext(core.WithJA4(trapReq.Context(), "t12d190800_4464c1bd5eb7_b3394627b738"))
+	trapRec := httptest.NewRecorder()
+	mux.ServeHTTP(trapRec, trapReq)
+	if trapRec.Code != http.StatusNotFound {
+		t.Fatalf("honeypot trap should reach Guard and return 404, got %d", trapRec.Code)
+	}
+	if !signals.HoneypotTripped("default", "203.0.113.9", "t12d190800_4464c1bd5eb7_b3394627b738") {
+		t.Fatal("honeypot trip was not recorded through production mux shape")
+	}
 }

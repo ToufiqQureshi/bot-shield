@@ -169,12 +169,15 @@ export interface DashboardStats {
   enforcing: boolean;
 }
 
-// getStats talks to the pre-existing, unauthenticated
-// /api/v1/dashboard/stats?tenant=<id> endpoint (backend/pkg/api/handlers.go)
-// rather than going through request()'s JWT envelope — that endpoint
-// predates this dashboard and has its own response shape.
+// getStats talks to the authenticated stats endpoint. Its response is raw
+// JSON (rather than the CRUD API envelope), so it keeps a small dedicated
+// fetch while still attaching the current Supabase session token.
 export async function getStats(tenantId: string): Promise<DashboardStats> {
-  const res = await fetch(`${BASE_URL.replace(/\/api\/v1$/, '')}/api/v1/dashboard/stats?tenant=${encodeURIComponent(tenantId)}`);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  const res = await fetch(`${BASE_URL}/dashboard/stats?tenant=${encodeURIComponent(tenantId)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
   if (!res.ok) {
     throw new ApiError(res.status, `Could not load stats (${res.status})`);
   }

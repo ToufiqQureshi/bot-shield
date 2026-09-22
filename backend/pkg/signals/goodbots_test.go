@@ -115,6 +115,32 @@ func TestVerifyDNSRejectsLookalikeDomain(t *testing.T) {
 	}
 }
 
+func TestVerifyDNSDoesNotQueueWhenLookupBudgetIsFull(t *testing.T) {
+	for i := 0; i < cap(botLookupSlots); i++ {
+		botLookupSlots <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < cap(botLookupSlots); i++ {
+			<-botLookupSlots
+		}
+	}()
+
+	called := false
+	origLookupAddr := lookupAddrFunc
+	lookupAddrFunc = func(context.Context, string) ([]string, error) {
+		called = true
+		return nil, errors.New("lookup must not run")
+	}
+	defer func() { lookupAddrFunc = origLookupAddr }()
+
+	if verifyDNS("198.51.100.44", []string{".googlebot.com"}) {
+		t.Fatal("a lookup rejected by the concurrency budget must not verify")
+	}
+	if called {
+		t.Fatal("DNS lookup ran while the bounded lookup budget was full")
+	}
+}
+
 func TestHostnameMatchesDomainRequiresBoundary(t *testing.T) {
 	cases := []struct {
 		host, domain string

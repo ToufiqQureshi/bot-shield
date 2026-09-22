@@ -3,6 +3,8 @@ package signals
 import (
 	"sync"
 	"time"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 )
 
 // redisCircuitOpenFor is deliberately short: Redis rate signals are helpful,
@@ -20,6 +22,13 @@ type redisCircuit struct {
 	probeInFlight bool
 }
 
+func (c *redisCircuit) reset() {
+	c.mu.Lock()
+	c.openUntil = time.Time{}
+	c.probeInFlight = false
+	c.mu.Unlock()
+}
+
 func (c *redisCircuit) allow(now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -28,9 +37,11 @@ func (c *redisCircuit) allow(now time.Time) bool {
 		return true
 	}
 	if now.Before(c.openUntil) || c.probeInFlight {
+		observability.Inc("redis_circuit_skip_total")
 		return false
 	}
 	c.probeInFlight = true
+	observability.Inc("redis_circuit_probe_total")
 	return true
 }
 
@@ -46,4 +57,5 @@ func (c *redisCircuit) failure(now time.Time) {
 	defer c.mu.Unlock()
 	c.openUntil = now.Add(redisCircuitOpenFor)
 	c.probeInFlight = false
+	observability.Inc("redis_circuit_open_total")
 }

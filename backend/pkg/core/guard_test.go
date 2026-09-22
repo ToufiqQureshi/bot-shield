@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
@@ -104,6 +105,43 @@ func TestGuardHealthzEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
 		t.Fatalf("healthz: expected ok status, got %s", rec.Body.String())
+	}
+}
+
+func TestGuardRejectsMalformedHostBeforeTenantLookup(t *testing.T) {
+	store := tenant.NewStore()
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+	guard := core.NewGuard(store, c)
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.Host = "bad host.example"
+	rec := httptest.NewRecorder()
+	guard.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("malformed Host: want 400, got %d", rec.Code)
+	}
+}
+
+func TestGuardRejectsSNIHostMismatch(t *testing.T) {
+	store := tenant.NewStore()
+	c, _ := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("origin must not receive cross-tenant SNI/Host request")
+	}))
+	defer target.Close()
+	proxy, _ := core.NewOriginProxy(target.URL)
+	store.Add("a", tenant.TenantConfig{Target: target.URL, Mode: config.ModeEnforce}, []string{"a.example.com"}, proxy)
+	store.Add("b", tenant.TenantConfig{Target: target.URL, Mode: config.ModeEnforce}, []string{"b.example.com"}, proxy)
+
+	guard := core.NewGuard(store, c)
+	req := httptest.NewRequest("GET", "https://a.example.com/", nil)
+	req.TLS = &tls.ConnectionState{ServerName: "b.example.com"}
+	rec := httptest.NewRecorder()
+	guard.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("SNI/Host mismatch: want 421, got %d", rec.Code)
 	}
 }
 

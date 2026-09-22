@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -47,6 +48,33 @@ func TestNewOriginProxy(t *testing.T) {
 	}
 }
 
+func TestNewOriginProxyUsesResolvedClientIP(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Real-IP"); got != "2001:db8::42" {
+			t.Errorf("X-Real-IP = %q, want resolved client IP", got)
+		}
+		if got := r.Header.Get("X-Forwarded-For"); got != "2001:db8::42" {
+			t.Errorf("X-Forwarded-For = %q, want resolved client IP", got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer origin.Close()
+
+	proxy, err := NewOriginProxy(origin.URL)
+	if err != nil {
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.0.2.10:443"
+	req = req.WithContext(WithClientIP(req.Context(), "2001:db8::42"))
+
+	w := httptest.NewRecorder()
+	proxy.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+}
+
 func TestNewOriginProxy_InvalidTarget(t *testing.T) {
 	_, err := NewOriginProxy("://invalid-url")
 	if err == nil {
@@ -55,6 +83,41 @@ func TestNewOriginProxy_InvalidTarget(t *testing.T) {
 	_, err = NewOriginProxy("not-a-url")
 	if err == nil {
 		t.Fatal("expected error for URL without scheme/host")
+	}
+}
+
+func TestValidatePublicOriginRejectsInternalTargets(t *testing.T) {
+	cases := []string{
+		"http://127.0.0.1:8080",
+		"http://10.0.0.5:8080",
+		"http://172.16.0.10",
+		"http://192.168.1.10",
+		"http://169.254.169.254",
+		"http://[::1]:8080",
+	}
+	for _, target := range cases {
+		if err := ValidatePublicOrigin(target); err == nil {
+			t.Errorf("ValidatePublicOrigin(%q) = nil, want error", target)
+		}
+	}
+}
+
+func TestValidatePublicOriginAllowsPublicHTTPOrigins(t *testing.T) {
+	cases := []string{
+		"http://example.com",
+		"https://origin.example.com:8443",
+		"http://93.184.216.34",
+	}
+	for _, target := range cases {
+		if err := ValidatePublicOrigin(target); err != nil {
+			t.Errorf("ValidatePublicOrigin(%q) unexpected error: %v", target, err)
+		}
+	}
+}
+
+func TestPublicOriginTransportRejectsPrivateDialResult(t *testing.T) {
+	if !blockedOriginIP(net.ParseIP("127.0.0.1")) {
+		t.Fatal("loopback address must be blocked for public origins")
 	}
 }
 

@@ -1,8 +1,11 @@
 package tenant_test
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"sync"
 	"testing"
 
@@ -57,6 +60,101 @@ func TestGetByHost_Wildcard(t *testing.T) {
 	}
 	if got.ID != "default" {
 		t.Errorf("got tenant %q, want default", got.ID)
+	}
+}
+
+func TestGetByHost_LoadsDatabaseTenantBeforeWildcard(t *testing.T) {
+	store := tenant.NewStore()
+	defaultURL, _ := newOrigin(t)
+	customerURL, _ := newOrigin(t)
+	defaultProxy, _ := core.NewOriginProxy(defaultURL)
+	customerProxy, _ := core.NewOriginProxy(customerURL)
+	store.Add("default", tenant.TenantConfig{Target: defaultURL, Mode: config.ModeEnforce}, []string{"*"}, defaultProxy)
+	store.ProxyFactory = func(target string) (*httputil.ReverseProxy, error) {
+		if target != customerURL {
+			t.Fatalf("proxy factory target = %q, want customer origin", target)
+		}
+		return customerProxy, nil
+	}
+	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, error) {
+		if host != "customer.example.com" {
+			t.Fatalf("tenant loader host = %q, want customer.example.com", host)
+		}
+		return "customer", customerURL, "enforce", "", tenant.StatusActive, nil
+	}
+
+	got, err := store.GetByHost("customer.example.com")
+	if err != nil {
+		t.Fatalf("GetByHost: %v", err)
+	}
+	if got.ID != "customer" {
+		t.Fatalf("GetByHost returned %q, want database tenant", got.ID)
+	}
+}
+
+func TestGetByHostRejectsPendingDatabaseTenantBeforeWildcard(t *testing.T) {
+	store := tenant.NewStore()
+	defaultURL, _ := newOrigin(t)
+	pendingURL, _ := newOrigin(t)
+	defaultProxy, _ := core.NewOriginProxy(defaultURL)
+	pendingProxy, _ := core.NewOriginProxy(pendingURL)
+	store.Add("default", tenant.TenantConfig{Target: defaultURL, Mode: config.ModeEnforce}, []string{"*"}, defaultProxy)
+	store.ProxyFactory = func(target string) (*httputil.ReverseProxy, error) {
+		if target != pendingURL {
+			t.Fatalf("proxy factory target = %q, want pending origin", target)
+		}
+		return pendingProxy, nil
+	}
+	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, error) {
+		if host != "pending.example.com" {
+			t.Fatalf("tenant loader host = %q, want pending.example.com", host)
+		}
+		return "pending", pendingURL, "enforce", "", "pending_verification", nil
+	}
+
+	got, err := store.GetByHost("pending.example.com")
+	if err == nil {
+		t.Fatalf("pending domain routed to tenant %q; want not found", got.ID)
+	}
+	if got, err := store.GetByID("pending"); err != nil || got.ID != "pending" {
+		t.Fatalf("pending tenant should still be readable by ID for dashboard state, got tenant=%v err=%v", got, err)
+	}
+}
+
+func TestGetByHostNegativeCachesUnknownDatabaseHost(t *testing.T) {
+	store := tenant.NewStore()
+	store.ProxyFactory = func(target string) (*httputil.ReverseProxy, error) {
+		t.Fatalf("proxy factory should not run when loader misses, got target %q", target)
+		return nil, nil
+	}
+	var calls int
+	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, error) {
+		if host != "missing.example.com" {
+			t.Fatalf("tenant loader host = %q, want missing.example.com", host)
+		}
+		calls++
+		return "", "", "", "", "", errors.New("missing")
+	}
+
+	for i := 0; i < 100; i++ {
+		if _, err := store.GetByHost("missing.example.com"); err == nil {
+			t.Fatal("unknown host unexpectedly resolved")
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("unknown host should hit the loader once while negative-cached, got %d calls", calls)
+	}
+}
+
+func TestAddRejectsCrossTenantHostMapping(t *testing.T) {
+	store := tenant.NewStore()
+	originURL, _ := newOrigin(t)
+	proxy, _ := core.NewOriginProxy(originURL)
+	if err := store.Add("a", tenant.TenantConfig{Target: originURL, Mode: config.ModeEnforce}, []string{"Example.COM:443"}, proxy); err != nil {
+		t.Fatalf("add a: %v", err)
+	}
+	if err := store.Add("b", tenant.TenantConfig{Target: originURL, Mode: config.ModeEnforce}, []string{"example.com"}, proxy); err == nil {
+		t.Fatal("same canonical host must not map to two tenants")
 	}
 }
 

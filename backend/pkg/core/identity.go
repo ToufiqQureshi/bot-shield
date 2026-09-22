@@ -1,10 +1,13 @@
 package core
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 )
 
 // ClientIPResolver resolves a visitor address only through explicitly trusted
@@ -49,6 +52,7 @@ func (r *ClientIPResolver) ClientIP(req *http.Request) string {
 
 	forwarded, ok := forwardedIPs(req.Header.Values("X-Forwarded-For"))
 	if !ok {
+		observability.Inc("client_ip_forwarded_malformed_total")
 		return peer
 	}
 	for i := len(forwarded) - 1; i >= 0; i-- {
@@ -110,14 +114,64 @@ func canonicalIP(raw string) string {
 // requestHost canonicalizes the HTTP Host value for tenant lookup. Hostnames
 // are case-insensitive and an optional port is not part of tenant identity.
 func requestHost(r *http.Request) string {
+	host, _ := validatedRequestHost(r)
+	return host
+}
+
+func validatedRequestHost(r *http.Request) (string, bool) {
 	if r == nil {
+		return "", false
+	}
+	host := canonicalHost(r.Host)
+	return host, host != ""
+}
+
+func requestSNI(state *tls.ConnectionState) (string, bool) {
+	if state == nil || strings.TrimSpace(state.ServerName) == "" {
+		return "", true
+	}
+	host := canonicalHost(state.ServerName)
+	return host, host != ""
+}
+
+func hostMatchesTLS(r *http.Request, host string) bool {
+	sni, ok := requestSNI(r.TLS)
+	if !ok {
+		return false
+	}
+	if sni == "" {
+		return true
+	}
+	return host == sni
+}
+
+func canonicalHost(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	} else {
+		raw = strings.Trim(raw, "[]")
+	}
+	raw = strings.TrimSuffix(raw, ".")
+	if raw == "" || strings.ContainsAny(raw, " \t\r\n/\\") {
 		return ""
 	}
-	host := strings.TrimSpace(r.Host)
-	if parsed, _, err := net.SplitHostPort(host); err == nil {
-		host = parsed
-	} else {
-		host = strings.Trim(host, "[]")
+	if ip := net.ParseIP(raw); ip != nil {
+		return ip.String()
 	}
-	return strings.TrimSuffix(strings.ToLower(host), ".")
+	for _, label := range strings.Split(raw, ".") {
+		if label == "" || len(label) > 63 {
+			return ""
+		}
+		if strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return ""
+		}
+		for _, r := range label {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+				continue
+			}
+			return ""
+		}
+	}
+	return raw
 }
