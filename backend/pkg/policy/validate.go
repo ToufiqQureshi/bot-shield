@@ -15,16 +15,24 @@ import (
 // to surface them to the dashboard operator who wrote the rule.
 var (
 	ErrNoConditions             = errors.New("policy: rule must have at least one condition")
+	ErrTooManyConditions        = errors.New("policy: rule has too many conditions")
 	ErrUnknownField             = errors.New("policy: unknown condition field")
 	ErrUnknownOperator          = errors.New("policy: unknown condition operator")
 	ErrOperatorNotValidForField = errors.New("policy: operator is not valid for this field")
 	ErrUnknownAction            = errors.New("policy: unknown action")
 	ErrEmptyValue               = errors.New("policy: condition value must not be empty")
+	ErrValueTooLong             = errors.New("policy: condition value is too long")
 	ErrBadRegex                 = errors.New("policy: MATCHES value is not a valid regular expression")
 	ErrBadNumber                = errors.New("policy: Threat Score condition requires a numeric value")
 	ErrBadCIDR                  = errors.New("policy: IP Range value is not a valid CIDR")
 	ErrUAOnlyAllow              = errors.New("policy: a rule cannot allow traffic based only on User-Agent — it would skip scoring")
+	ErrUAOnlyBlock              = errors.New("policy: a rule cannot block traffic based only on User-Agent")
 	ErrDeceiveNotStricter       = errors.New("policy: a DECEIVE rule needs a Threat Score floor above the account's block threshold")
+)
+
+const (
+	maxRuleConditions    = 16
+	maxConditionValueLen = 512
 )
 
 // allowedOperators is the closed set of operators that mean something
@@ -54,6 +62,9 @@ func ValidateRule(r Rule, blockThreshold int) error {
 	if len(r.Conditions) == 0 {
 		return ErrNoConditions
 	}
+	if len(r.Conditions) > maxRuleConditions {
+		return ErrTooManyConditions
+	}
 	if !knownActions[r.Action] {
 		return fmt.Errorf("%w: %q", ErrUnknownAction, r.Action)
 	}
@@ -71,6 +82,9 @@ func ValidateRule(r Rule, blockThreshold int) error {
 	// server-verified (JA4, IP range) is no longer a bare claim.
 	if r.Action == ActionAllow && len(r.Conditions) == 1 && r.Conditions[0].Field == FieldUserAgent {
 		return ErrUAOnlyAllow
+	}
+	if r.Action == ActionBlock && len(r.Conditions) == 1 && r.Conditions[0].Field == FieldUserAgent {
+		return ErrUAOnlyBlock
 	}
 
 	if r.Action == ActionDeceive {
@@ -95,6 +109,9 @@ func validateCondition(c Condition) error {
 	}
 	if strings.TrimSpace(c.Value) == "" {
 		return ErrEmptyValue
+	}
+	if len(c.Value) > maxConditionValueLen {
+		return ErrValueTooLong
 	}
 	if c.Operator == OpMatches {
 		if _, err := regexp.Compile(c.Value); err != nil {

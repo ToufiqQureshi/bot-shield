@@ -5,8 +5,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/core"
 	"github.com/ToufiqQureshi/hakaishield/pkg/policy"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
 // With no provider attached, nothing about the request path changes and
@@ -87,35 +90,72 @@ func TestGuardPolicyProviderReturningNilRecordsNoOpinion(t *testing.T) {
 	}
 }
 
-// Mutation check (CLAUDE.md Section 12): if the DECISION-branch code
-// ever starts reading result.Action instead of the rule scorer's
-// decision, this test must fail. Two tenants, different policies, prove
-// evidence never crosses between them.
+// Two tenants with different rules must receive separate shadow opinions.
+// Neither policy may change the decision or origin forwarding.
 func TestGuardPolicyShadowIsPerTenant(t *testing.T) {
-	guard, tnA, _ := shadowFixture(t, config.PolicyBalanced)
-
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(origin.Close)
+	proxy, err := core.NewOriginProxy(origin.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := tenant.NewStore()
+	for _, id := range []string{"tenant-a", "tenant-b"} {
+		if err := store.Add(id, tenant.TenantConfig{Mode: config.ModeEnforce, Policy: config.PolicyBalanced}, []string{id + ".example.com"}, proxy); err != nil {
+			t.Fatal(err)
+		}
+	}
+	challengeHandler, err := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := core.NewGuard(store, challengeHandler)
 	policyA := &policy.Policy{OwnerUserID: "owner-a", Rules: []policy.Rule{
-		{ID: "a-rule", Enabled: true, Action: policy.ActionChallenge,
+		{ID: "a-rule", Enabled: true, Action: policy.ActionBlock,
+			Conditions: []policy.Condition{{Field: policy.FieldPath, Operator: policy.OpEquals, Value: "/"}}},
+	}}
+	policyB := &policy.Policy{OwnerUserID: "owner-b", Rules: []policy.Rule{
+		{ID: "b-rule", Enabled: true, Action: policy.ActionChallenge,
 			Conditions: []policy.Condition{{Field: policy.FieldPath, Operator: policy.OpEquals, Value: "/"}}},
 	}}
 	seen := map[string]bool{}
 	guard.WithPolicyProvider(func(tenantID string) *policy.Policy {
 		seen[tenantID] = true
-		if tenantID == tnA.ID {
+		if tenantID == "tenant-a" {
 			return policyA
 		}
+		if tenantID == "tenant-b" {
+			return policyB
+		}
+		t.Fatalf("unexpected tenant id %q", tenantID)
 		return nil
 	})
 
-	req := httptest.NewRequest("GET", "http://example.com/", nil)
-	rec := httptest.NewRecorder()
-	guard.ServeHTTP(rec, req)
-
-	recent := tnA.Trail.Recent(1)
-	if len(recent) != 1 || recent[0].Policy == nil || recent[0].Policy.RuleID != "a-rule" {
-		t.Fatalf("tenant A should see its own matched rule, got %+v", recent[0].Policy)
-	}
-	if !seen[tnA.ID] {
-		t.Fatalf("provider was never asked for tenant %q", tnA.ID)
+	for _, tc := range []struct{ tenantID, ruleID, action string }{
+		{"tenant-a", "a-rule", "BLOCK"},
+		{"tenant-b", "b-rule", "CHALLENGE"},
+	} {
+		req := httptest.NewRequest("GET", "http://"+tc.tenantID+".example.com/", nil)
+		rec := httptest.NewRecorder()
+		guard.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s visitor status = %d, want origin 200", tc.tenantID, rec.Code)
+		}
+		tn, err := store.GetByID(tc.tenantID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recent := tn.Trail.Recent(1)
+		if len(recent) != 1 || recent[0].Policy == nil || recent[0].Policy.RuleID != tc.ruleID || recent[0].Policy.Action != tc.action {
+			t.Fatalf("%s policy opinion = %+v, want %s/%s", tc.tenantID, recent, tc.ruleID, tc.action)
+		}
+		if recent[0].Decision != "allow" {
+			t.Fatalf("%s enforced decision changed to %q", tc.tenantID, recent[0].Decision)
+		}
+		if !seen[tc.tenantID] {
+			t.Fatalf("provider was never asked for tenant %q", tc.tenantID)
+		}
 	}
 }

@@ -149,7 +149,7 @@ func Evaluate(p *Policy, f Facts) MatchResult {
 		return MatchResult{}
 	}
 	for _, r := range p.Rules {
-		if !r.Enabled {
+		if !r.Enabled || !knownActions[r.Action] {
 			continue
 		}
 		if ruleMatches(r, f) {
@@ -165,7 +165,7 @@ func Evaluate(p *Policy, f Facts) MatchResult {
 // traffic), not a useful "match everything" shorthand, so it is treated
 // the same as a disabled rule.
 func ruleMatches(r Rule, f Facts) bool {
-	if len(r.Conditions) == 0 {
+	if len(r.Conditions) == 0 || len(r.Conditions) > maxRuleConditions {
 		return false
 	}
 	for _, c := range r.Conditions {
@@ -177,6 +177,9 @@ func ruleMatches(r Rule, f Facts) bool {
 }
 
 func (c Condition) matches(f Facts) bool {
+	if len(c.Value) > maxConditionValueLen {
+		return false
+	}
 	if notYetSupportedFields[c.Field] {
 		return false
 	}
@@ -186,6 +189,9 @@ func (c Condition) matches(f Facts) bool {
 	case FieldIP:
 		return stringMatch(c.Operator, f.IP, c.Value)
 	case FieldCIDR:
+		if c.Operator != OpEquals {
+			return false
+		}
 		return cidrMatch(f.IP, c.Value)
 	case FieldUserAgent:
 		return stringMatch(c.Operator, f.UA, c.Value)

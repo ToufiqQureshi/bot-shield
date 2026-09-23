@@ -2,8 +2,13 @@ package rules
 
 import (
 	"context"
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/policy"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 )
 
 func TestManaged_AllEnabledAndNamed(t *testing.T) {
@@ -69,5 +74,65 @@ func TestStore_NilPoolFailsClearly(t *testing.T) {
 	}
 	if err := s.SetEnabled(ctx, "usr_x", "rule_1", false); err == nil {
 		t.Error("SetEnabled(nil pool) = nil, want an error")
+	}
+}
+
+func TestValidateRuleRejectsUnsafeOrUnavailableRules(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []Condition
+		action     string
+	}{
+		{"no conditions", nil, "BLOCK"},
+		{"unknown field", []Condition{{Field: "Mystery", Operator: "EQUALS", Value: "x"}}, "BLOCK"},
+		{"unavailable field", []Condition{{Field: "ASN", Operator: "EQUALS", Value: "123"}}, "BLOCK"},
+		{"unknown operator", []Condition{{Field: "Request Path", Operator: "EXEC", Value: "/admin"}}, "BLOCK"},
+		{"unknown action", []Condition{{Field: "Request Path", Operator: "EQUALS", Value: "/admin"}}, "DELETE"},
+		{"UA only pass", []Condition{{Field: "User-Agent", Operator: "EQUALS", Value: "Googlebot"}}, "PASS"},
+		{"UA only block", []Condition{{Field: "User-Agent", Operator: "EQUALS", Value: "python-requests"}}, "BLOCK"},
+		{"deceive without score floor", []Condition{{Field: "Request Path", Operator: "EQUALS", Value: "/pricing"}}, "DECEIVE"},
+		{"deceive at live block bar", []Condition{{Field: "Threat Score", Operator: string(policy.OpGTE), Value: "100"}}, "DECEIVE"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateRule(tt.conditions, tt.action, signals.HardBlockThreshold()); !errors.Is(err, ErrInvalidRule) {
+				t.Fatalf("validateRule() = %v, want ErrInvalidRule", err)
+			}
+		})
+	}
+}
+
+func TestValidateRuleAllowsSupportedRulesAndUsesBlockFloor(t *testing.T) {
+	valid := []struct {
+		conditions []Condition
+		action     string
+	}{
+		{[]Condition{{Field: "JA4 Fingerprint", Operator: "EQUALS", Value: "t13d..."}}, "BLOCK"},
+		{[]Condition{{Field: "Request Path", Operator: "CONTAINS", Value: "/login"}}, "CHALLENGE"},
+		{[]Condition{{Field: "User-Agent", Operator: "EQUALS", Value: "Googlebot"}, {Field: "JA4 Fingerprint", Operator: "EQUALS", Value: "t13d..."}}, "PASS"},
+		{[]Condition{{Field: "Threat Score", Operator: string(policy.OpGTE), Value: "101"}}, "DECEIVE"},
+	}
+	for _, tt := range valid {
+		if err := validateRule(tt.conditions, tt.action, signals.HardBlockThreshold()); err != nil {
+			t.Errorf("validateRule(%v, %s) = %v", tt.conditions, tt.action, err)
+		}
+	}
+	deceive := []Condition{{Field: "Threat Score", Operator: string(policy.OpGTE), Value: "101"}}
+	if err := validateRule(deceive, "DECEIVE", 120); !errors.Is(err, ErrInvalidRule) {
+		t.Fatalf("deceive below owner block threshold = %v, want ErrInvalidRule", err)
+	}
+}
+
+func TestCreateRejectsInvalidRuleBeforeDatabase(t *testing.T) {
+	_, err := NewStore(nil).Create(context.Background(), "owner", "bad", []Condition{{Field: "ASN", Operator: "EQUALS", Value: "123"}}, "BLOCK")
+	if !errors.Is(err, ErrInvalidRule) {
+		t.Fatalf("Create() = %v, want ErrInvalidRule", err)
+	}
+}
+
+func TestCreateRejectsOversizedRuleNameBeforeDatabase(t *testing.T) {
+	_, err := NewStore(nil).Create(context.Background(), "owner", strings.Repeat("a", 129), []Condition{{Field: "Request Path", Operator: "EQUALS", Value: "/"}}, "BLOCK")
+	if !errors.Is(err, ErrInvalidRule) {
+		t.Fatalf("Create() = %v, want ErrInvalidRule", err)
 	}
 }

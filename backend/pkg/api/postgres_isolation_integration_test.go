@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -126,6 +127,34 @@ func TestPostgresTenantIsolationIntegration(t *testing.T) {
 	}
 	if userBBlock != 95 {
 		t.Fatalf("user-b settings changed to %d, want 95", userBBlock)
+	}
+
+	ruleStore := rules.NewStore(pool)
+	created, err := ruleStore.Create(ctx, "user-a", "login challenge", []rules.Condition{{
+		Field: "Request Path", Operator: "EQUALS", Value: "/login",
+	}}, "CHALLENGE")
+	if err != nil || created == nil {
+		t.Fatalf("create valid owner-scoped rule: rule=%+v err=%v", created, err)
+	}
+	userARules, err := ruleStore.List(ctx, "user-a")
+	if err != nil || len(userARules) != 1 || userARules[0].ID != created.ID {
+		t.Fatalf("user-a rules = %+v, err=%v", userARules, err)
+	}
+	userBRules, err := ruleStore.List(ctx, "user-b")
+	if err != nil || len(userBRules) != 1 || userBRules[0].ID != "rule-b" {
+		t.Fatalf("user-b rules leaked or changed: %+v, err=%v", userBRules, err)
+	}
+
+	if err := settings.NewStore(pool).Upsert(ctx, "user-a", settings.Protection{
+		BlockThreshold: 120, ChallengeThreshold: 50, ChallengeType: "pow", HoneypotEnabled: true,
+	}); err != nil {
+		t.Fatalf("raise user-a block threshold: %v", err)
+	}
+	_, err = ruleStore.Create(ctx, "user-a", "unsafe deceive", []rules.Condition{{
+		Field: "Threat Score", Operator: ">=", Value: "101",
+	}}, "DECEIVE")
+	if !errors.Is(err, rules.ErrInvalidRule) {
+		t.Fatalf("deceive below owner block floor = %v, want ErrInvalidRule", err)
 	}
 }
 

@@ -13,13 +13,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/ToufiqQureshi/hakaishield/pkg/policy"
+	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ErrNotFound is returned when a rule ID doesn't exist for the caller.
 var ErrNotFound = errors.New("rules: not found")
+
+// ErrInvalidRule identifies a rule the live policy matcher cannot safely use.
+var ErrInvalidRule = errors.New("rules: invalid rule")
 
 // ManagedRule is a built-in detection layer the product always runs
 // (pkg/signals). The dashboard lists these alongside custom rules so
@@ -113,8 +120,26 @@ func (s *Store) List(ctx context.Context, ownerUserID string) ([]CustomRule, err
 
 // Create inserts a new custom rule owned by ownerUserID.
 func (s *Store) Create(ctx context.Context, ownerUserID, name string, conditions []Condition, action string) (*CustomRule, error) {
+	if strings.TrimSpace(name) == "" || len(name) > 128 {
+		return nil, fmt.Errorf("%w: name must be 1 to 128 bytes", ErrInvalidRule)
+	}
+	liveBlockThreshold := signals.HardBlockThreshold()
+	if err := validateRule(conditions, action, liveBlockThreshold); err != nil {
+		return nil, err
+	}
 	if s.pool == nil {
 		return nil, errors.New("rules: database not configured")
+	}
+	if action == string(policy.ActionDeceive) {
+		protection, err := settings.NewStore(s.pool).Get(ctx, ownerUserID)
+		if err != nil {
+			return nil, fmt.Errorf("rules: reading protection settings: %w", err)
+		}
+		if protection.BlockThreshold > liveBlockThreshold {
+			if err := validateRule(conditions, action, protection.BlockThreshold); err != nil {
+				return nil, err
+			}
+		}
 	}
 	conditionsJSON, err := encodeConditions(conditions)
 	if err != nil {
@@ -138,6 +163,22 @@ func (s *Store) Create(ctx context.Context, ownerUserID, name string, conditions
 	}
 	r.Conditions = conditions
 	return &r, nil
+}
+
+// validateRule uses the same matcher contract that will later run in Guard.
+// Unsupported dashboard fields are rejected rather than stored as rules that
+// appear active but can never match a request.
+func validateRule(conditions []Condition, action string, blockThreshold int) error {
+	policyConditions := make([]policy.Condition, len(conditions))
+	for i, c := range conditions {
+		policyConditions[i] = policy.Condition{
+			Field: policy.Field(c.Field), Operator: policy.Operator(c.Operator), Value: c.Value,
+		}
+	}
+	if err := policy.ValidateRule(policy.Rule{Conditions: policyConditions, Action: policy.Action(action)}, blockThreshold); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidRule, err)
+	}
+	return nil
 }
 
 // SetEnabled toggles a rule the caller owns. It is scoped by

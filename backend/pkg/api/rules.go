@@ -78,6 +78,10 @@ func CreateRuleHandler(store *rules.Store, verifier *auth.Verifier) http.Handler
 		}
 
 		rule, err := store.Create(r.Context(), UserIDFromContext(r.Context()), req.Name, req.Conditions, req.Action)
+		if errors.Is(err, rules.ErrInvalidRule) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "could not create rule")
 			return

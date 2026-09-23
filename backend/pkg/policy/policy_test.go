@@ -1,6 +1,9 @@
 package policy
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestEvaluate_NilPolicyIsNoOp(t *testing.T) {
 	got := Evaluate(nil, Facts{Path: "/admin", Score: 999})
@@ -99,6 +102,30 @@ func TestEvaluate_UnknownOperatorNeverMatches(t *testing.T) {
 	got := Evaluate(p, Facts{Path: "/x"})
 	if got.Matched {
 		t.Fatalf("unknown operator matched: %+v", got)
+	}
+}
+
+func TestEvaluate_CIDRWithUnknownOperatorNeverMatches(t *testing.T) {
+	p := &Policy{Rules: []Rule{{ID: "r1", Enabled: true, Action: ActionBlock,
+		Conditions: []Condition{{Field: FieldCIDR, Operator: "INVALID", Value: "203.0.113.0/24"}}}}}
+	if got := Evaluate(p, Facts{IP: "203.0.113.5"}); got.Matched {
+		t.Fatalf("invalid CIDR operator matched: %+v", got)
+	}
+}
+
+func TestEvaluate_UnknownActionNeverMatches(t *testing.T) {
+	p := &Policy{Rules: []Rule{{ID: "r1", Enabled: true, Action: "INVALID",
+		Conditions: []Condition{{Field: FieldPath, Operator: OpEquals, Value: "/"}}}}}
+	if got := Evaluate(p, Facts{Path: "/"}); got.Matched {
+		t.Fatalf("unknown action matched: %+v", got)
+	}
+}
+
+func TestEvaluate_UnvalidatedOversizedRuleNeverMatches(t *testing.T) {
+	p := &Policy{Rules: []Rule{{ID: "r1", Enabled: true, Action: ActionBlock,
+		Conditions: []Condition{{Field: FieldPath, Operator: OpMatches, Value: strings.Repeat("a", maxConditionValueLen+1)}}}}}
+	if got := Evaluate(p, Facts{Path: strings.Repeat("a", maxConditionValueLen+1)}); got.Matched {
+		t.Fatalf("oversized regex matched: %+v", got)
 	}
 }
 

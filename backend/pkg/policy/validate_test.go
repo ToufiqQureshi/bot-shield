@@ -2,8 +2,23 @@ package policy
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
+
+func TestValidateRuleBoundsRequestPathWork(t *testing.T) {
+	tooMany := make([]Condition, maxRuleConditions+1)
+	for i := range tooMany {
+		tooMany[i] = Condition{Field: FieldPath, Operator: OpEquals, Value: "/"}
+	}
+	if err := ValidateRule(Rule{Action: ActionBlock, Conditions: tooMany}, 100); !errors.Is(err, ErrTooManyConditions) {
+		t.Fatalf("too many conditions = %v, want ErrTooManyConditions", err)
+	}
+	longRegex := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldPath, Operator: OpMatches, Value: strings.Repeat("a", maxConditionValueLen+1)}}}
+	if err := ValidateRule(longRegex, 100); !errors.Is(err, ErrValueTooLong) {
+		t.Fatalf("oversized regex = %v, want ErrValueTooLong", err)
+	}
+}
 
 func TestValidateRule_NoConditions(t *testing.T) {
 	err := ValidateRule(Rule{Action: ActionBlock}, 90)
@@ -118,6 +133,13 @@ func TestValidateRule_UAOnlyAllowRejected(t *testing.T) {
 	r := Rule{Action: ActionAllow, Conditions: []Condition{{Field: FieldUserAgent, Operator: OpEquals, Value: "Mozilla/5.0"}}}
 	if err := ValidateRule(r, 90); !errors.Is(err, ErrUAOnlyAllow) {
 		t.Fatalf("got %v, want ErrUAOnlyAllow", err)
+	}
+}
+
+func TestValidateRule_UAOnlyBlockRejected(t *testing.T) {
+	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldUserAgent, Operator: OpEquals, Value: "python-requests"}}}
+	if err := ValidateRule(r, 100); !errors.Is(err, ErrUAOnlyBlock) {
+		t.Fatalf("got %v, want ErrUAOnlyBlock", err)
 	}
 }
 
