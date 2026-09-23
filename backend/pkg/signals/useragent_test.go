@@ -80,3 +80,67 @@ func TestUAMismatch(t *testing.T) {
 		})
 	}
 }
+
+func TestIsScriptingTool_CatchesKnownTools(t *testing.T) {
+	uas := []string{
+		"curl/8.6.0",
+		"Wget/1.21.3",
+		"python-requests/2.32.5",
+		"python-urllib3/2.0",
+		"python-httpx/0.27.0",
+		"Python/3.11 aiohttp/3.9.0",
+		"Go-http-client/1.1",
+		"go-resty/2.11.0",
+		"okhttp/4.12.0",
+		"Java/17.0.1",
+		"Apache-HttpClient/4.5.13",
+		"node-fetch/3.3.2",
+		"axios/1.6.0",
+		"libwww-perl/6.72",
+		"GuzzleHttp/7.8",
+		"PostmanRuntime/7.36.0",
+		"insomnia/2023.5.8",
+		"Mozilla/5.0 Locust/2.20.0",
+		"Apache-HttpClient/4.5 (Java) - JMeter",
+		"HeadlessChrome/120.0.0.0",
+		"Mozilla/5.0 (compatible; PhantomJS/2.1.1)",
+		"selenium/4.16.0 (python webdriver)",
+		"Mozilla/5.0 Playwright/1.40.0",
+		"Mozilla/5.0 patchright/1.0",
+		"Mozilla/5.0 (compatible; Puppeteer/21.0.0)",
+		"Scrapy/2.11.0 (+https://scrapy.org)",
+		"nmap scripting engine",
+		"sqlmap/1.7.11",
+		"Nuclei - Open-source project (github.com/projectdiscovery/nuclei)",
+		"Mozilla/5.0 (compatible; Nessus)",
+	}
+	for _, ua := range uas {
+		t.Run(ua, func(t *testing.T) {
+			if !IsScriptingTool(ua) {
+				t.Errorf("IsScriptingTool(%q) = false, want true", ua)
+			}
+		})
+	}
+}
+
+// A real browser's UA must never trip this check — it is one of the two
+// signals allowed to score 100 alone (CLAUDE.md Section 6/14), so a
+// false positive here hard-blocks every visitor on that browser.
+func TestIsScriptingTool_RealBrowsersNeverMatch(t *testing.T) {
+	uas := []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+		"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
+		"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+	}
+	for _, ua := range uas {
+		t.Run(ua, func(t *testing.T) {
+			if IsScriptingTool(ua) {
+				t.Errorf("IsScriptingTool(%q) = true, want false — this would hard-block a real browser", ua)
+			}
+		})
+	}
+}

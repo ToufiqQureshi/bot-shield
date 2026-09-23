@@ -1,6 +1,7 @@
 package challenge
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -10,6 +11,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"image"
+	"image/draw"
+	"image/png"
 	"net"
 	"net/http"
 	"strconv"
@@ -55,8 +59,15 @@ type NonceStore interface {
 }
 
 type localNonceStore struct {
-	mu   sync.Mutex
-	used map[string]time.Time
+	mu      sync.Mutex
+	used    map[string]time.Time
+	ordered []nonceUse
+	head    int
+}
+
+type nonceUse struct {
+	nonce string
+	at    time.Time
 }
 
 // challengeMaxAge bounds how long an issued puzzle stays solvable —
@@ -121,58 +132,81 @@ func (c *Challenge) sign(payload string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// token binds a nonce, issue time, host, and the page to return to into one
-// tamper-evident string, so verification needs no server-side storage
-// per outstanding challenge.
-func (c *Challenge) token(nonce, redirectPath, host string, issuedAt time.Time) string {
+// token binds a nonce, issue time, difficulty, host, and the page to return
+// to into one tamper-evident string, so verification needs no server-side
+// storage per outstanding challenge and the client cannot pick its own
+// difficulty.
+func (c *Challenge) token(nonce, redirectPath, host string, difficulty int, issuedAt time.Time) string {
 	encodedPath := base64.RawURLEncoding.EncodeToString([]byte(redirectPath))
 	encodedHost := base64.RawURLEncoding.EncodeToString([]byte(canonicalHost(host)))
-	payload := strings.Join([]string{nonce, strconv.FormatInt(issuedAt.Unix(), 10), encodedPath, encodedHost}, "|")
+	payload := strings.Join([]string{nonce, strconv.FormatInt(issuedAt.Unix(), 10), strconv.Itoa(difficulty), encodedPath, encodedHost}, "|")
 	encoded := base64.RawURLEncoding.EncodeToString([]byte(payload))
 	return encoded + "." + c.sign(encoded)
+}
+
+// challengeToken is the verified content of an issued puzzle. Difficulty
+// travels inside the signature so a client cannot lower it.
+type challengeToken struct {
+	nonce        string
+	redirectPath string
+	difficulty   int
 }
 
 // parseToken verifies the signature and expiry and returns the
 // embedded fields. A tampered, malformed, or expired token is
 // rejected here, not left for the caller to notice.
-func (c *Challenge) parseToken(tok, host string) (nonce, redirectPath string, ok bool) {
+func (c *Challenge) parseToken(tok, host string) (challengeToken, bool) {
 	parts := strings.SplitN(tok, ".", 2)
 	if len(parts) != 2 {
-		return "", "", false
+		return challengeToken{}, false
 	}
 	encoded, sig := parts[0], parts[1]
 	if subtle.ConstantTimeCompare([]byte(sig), []byte(c.sign(encoded))) != 1 {
-		return "", "", false
+		return challengeToken{}, false
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return "", "", false
+		return challengeToken{}, false
 	}
-	fields := strings.SplitN(string(raw), "|", 4)
-	if len(fields) != 4 {
-		return "", "", false
+	fields := strings.SplitN(string(raw), "|", 5)
+	if len(fields) != 5 {
+		return challengeToken{}, false
 	}
 	issuedUnix, err := strconv.ParseInt(fields[1], 10, 64)
 	if err != nil {
-		return "", "", false
+		return challengeToken{}, false
 	}
 	issuedAt := time.Unix(issuedUnix, 0)
 	age := time.Since(issuedAt)
 	if age < 0 || age > challengeMaxAge {
-		return "", "", false // expired, or timestamped in the future
+		return challengeToken{}, false // expired, or timestamped in the future
 	}
-	pathBytes, err := base64.RawURLEncoding.DecodeString(fields[2])
+	difficulty, err := strconv.Atoi(fields[2])
 	if err != nil {
-		return "", "", false
+		return challengeToken{}, false
 	}
-	hostBytes, err := base64.RawURLEncoding.DecodeString(fields[3])
+	if difficulty < minDifficulty {
+		difficulty = minDifficulty
+	}
+	if difficulty > maxDifficulty {
+		difficulty = maxDifficulty
+	}
+	pathBytes, err := base64.RawURLEncoding.DecodeString(fields[3])
 	if err != nil {
-		return "", "", false
+		return challengeToken{}, false
+	}
+	hostBytes, err := base64.RawURLEncoding.DecodeString(fields[4])
+	if err != nil {
+		return challengeToken{}, false
 	}
 	if string(hostBytes) != canonicalHost(host) {
-		return "", "", false // token issued for a different host
+		return challengeToken{}, false // token issued for a different host
 	}
-	return fields[0], safeRedirectPath(string(pathBytes)), true
+	return challengeToken{
+		nonce:        fields[0],
+		redirectPath: safeRedirectPath(string(pathBytes)),
+		difficulty:   difficulty,
+	}, true
 }
 
 // canonicalHost normalizes the request host before it participates in signed
@@ -196,31 +230,33 @@ func (s *localNonceStore) Consume(_ context.Context, nonce string, now time.Time
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for key, usedAt := range s.used {
-		if now.Sub(usedAt) >= ttl {
-			delete(s.used, key)
-		}
+	// Issuance is chronological on the request path, so expired entries
+	// leave from the front. Work is proportional to entries actually evicted.
+	for s.head < len(s.ordered) && now.Sub(s.ordered[s.head].at) >= ttl {
+		s.popOldest()
 	}
 	if _, exists := s.used[nonce]; exists {
 		return false
 	}
 	if len(s.used) >= maxUsedChallenges {
-		// Keep verification available under a burst of successful solves while
-		// preserving the hard memory ceiling. The oldest nonce has the least
-		// remaining replay value and is safe to evict.
-		var oldestKey string
-		var oldestAt time.Time
-		for key, usedAt := range s.used {
-			if oldestKey == "" || usedAt.Before(oldestAt) {
-				oldestKey, oldestAt = key, usedAt
-			}
-		}
-		if oldestKey != "" {
-			delete(s.used, oldestKey)
-		}
+		// The oldest consumed nonce has the least replay life left.
+		s.popOldest()
 	}
 	s.used[nonce] = now
+	s.ordered = append(s.ordered, nonceUse{nonce: nonce, at: now})
+	if s.head > 1024 && s.head*2 >= len(s.ordered) {
+		copy(s.ordered, s.ordered[s.head:])
+		s.ordered = s.ordered[:len(s.ordered)-s.head]
+		s.head = 0
+	}
 	return true
+}
+
+func (s *localNonceStore) popOldest() {
+	oldest := s.ordered[s.head]
+	delete(s.used, oldest.nonce)
+	s.ordered[s.head] = nonceUse{}
+	s.head++
 }
 
 // RedisNonceStore shares replay protection across nodes. On Redis failure it
@@ -271,29 +307,69 @@ func randomNonce() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// validPoW verifies the Proof-of-Work: SHA-256(nonce + answer) must start with "00"
-func validPoW(nonce, answer string) bool {
-	// Prevent unbounded body attacks
-	if len(answer) > 20 {
+// validPoW verifies the Proof-of-Work: SHA-256(nonce + answer) must start
+// with `difficulty` hex zeros. The difficulty comes from the signed token,
+// never from the request, and is clamped so an absurd value cannot turn
+// verification into a long loop on our side.
+func validPoW(nonce, answer string, difficulty int) bool {
+	// Prevent unbounded body attacks. A counter for the hardest puzzle is
+	// still only a few digits, so a long answer is malformed by definition.
+	if len(answer) == 0 || len(answer) > 20 {
 		return false
+	}
+	if difficulty < minDifficulty {
+		difficulty = minDifficulty
+	}
+	if difficulty > maxDifficulty {
+		difficulty = maxDifficulty
 	}
 	sum := sha256.Sum256([]byte(nonce + answer))
 	hashHex := hex.EncodeToString(sum[:])
-	return strings.HasPrefix(hashHex, "00")
+	return strings.HasPrefix(hashHex, strings.Repeat("0", difficulty))
 }
 
-// canvasDataPrefix / minCanvasProofLen: a genuine canvas.toDataURL()
-// render is a base64 PNG of at least a few hundred bytes. This is a
-// shape check, not a render check — it's a client-reported string, so
-// a bot that specifically studies hakaishield can fake a value that
-// passes it without ever rendering anything. Documented as a known,
-// accepted limitation (see docs/DECISIONS.md): validating the actual
-// pixel content server-side is a project of its own, out of MVP scope.
+// Canvas data is untrusted. Keep both compressed and decoded work bounded
+// before inspecting pixels; a valid PNG by itself does not prove a browser ran.
 const canvasDataPrefix = "data:image/png;base64,"
-const minCanvasProofLen = 100
+const maxCanvasProofLen = 48 * 1024
+const canvasWidth, canvasHeight = 300, 150
 
 func validCanvasProof(proof string) bool {
-	return strings.HasPrefix(proof, canvasDataPrefix) && len(proof) > minCanvasProofLen
+	if !strings.HasPrefix(proof, canvasDataPrefix) || len(proof) > maxCanvasProofLen {
+		return false
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(proof, canvasDataPrefix))
+	if err != nil {
+		return false
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width != canvasWidth || config.Height != canvasHeight {
+		return false
+	}
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		return false
+	}
+	var pixels []byte
+	switch decoded := img.(type) {
+	case *image.NRGBA:
+		pixels = decoded.Pix
+	case *image.RGBA:
+		pixels = decoded.Pix
+	default:
+		canvas := image.NewNRGBA(image.Rect(0, 0, canvasWidth, canvasHeight))
+		draw.Draw(canvas, canvas.Bounds(), img, image.Point{}, draw.Src)
+		pixels = canvas.Pix
+	}
+	background := pixels[:4]
+	changed := 0
+	for i := 4; i < len(pixels); i += 4 {
+		pixel := pixels[i : i+4]
+		if pixel[0] != background[0] || pixel[1] != background[1] || pixel[2] != background[2] || pixel[3] != background[3] {
+			changed++
+		}
+	}
+	return changed >= 32 && changed < canvasWidth*canvasHeight/2
 }
 
 type challengeData struct {
@@ -302,6 +378,10 @@ type challengeData struct {
 	VerifyPath   string
 	RedirectPath string
 	Theme        string
+	// Difficulty is the number of leading hex zeros the page's PoW must
+	// produce. Rendered into the page so the client does the right amount
+	// of work; the server re-checks it from the signed token regardless.
+	Difficulty int
 }
 
 // challengePage's script base64-encodes the classic automation-tell
@@ -333,19 +413,34 @@ h2 { font-weight: normal; font-size: 1.2rem; }
 {{if eq .Theme "ghost"}}
 <!-- Invisible ghost mode -->
 {{else if eq .Theme "branded"}}
-<h2>Securing your connection...</h2><div class="loader"></div>
+<h2>Securing your connection...</h2><div class="loader" aria-hidden="true"></div>
 {{else}}
 <p>Checking your browser before continuing&hellip;</p>
 {{end}}
+<noscript><p>JavaScript is required to verify this browser. Enable it and reload this page, or contact the site owner for access.</p></noscript>
 <script>
 (async function () {
+  function showRecovery() {
+    document.body.textContent = "Browser verification could not complete. ";
+    var retry = document.createElement("a");
+    retry.href = "{{.RedirectPath}}";
+    retry.textContent = "Try again";
+    var notice = document.createElement("p");
+    notice.setAttribute("role", "alert");
+    notice.appendChild(retry);
+    document.body.appendChild(notice);
+  }
   try {
     var start = Date.now();
     
     // Proof-of-Work: find a counter where SHA-256(nonce + counter) starts
-    // with "00" (8 bits). ~256 iterations on average, so it finishes in
-    // well under 50ms. Deliberately low difficulty: this runs in front of
-    // every visitor and must not feel like a bottleneck.
+    // with the server's required number of leading hex zeros. The server
+    // picks that count from the request's risk, capped so even the hardest
+    // puzzle stays under a second on a phone. A clean visitor only ever
+    // computes a handful of hashes.
+    var difficulty = {{.Difficulty}};
+    var prefix = "";
+    for (var p = 0; p < difficulty; p++) { prefix += "0"; }
     var counter = 0;
     var answer = "";
     var enc = new TextEncoder();
@@ -354,15 +449,17 @@ h2 { font-weight: normal; font-size: 1.2rem; }
       var digest = await crypto.subtle.digest("SHA-256", data);
       var hashArray = Array.from(new Uint8Array(digest));
       var hashHex = hashArray.map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
-      if (hashHex.substring(0, 2) === "00") {
+      if (hashHex.substring(0, difficulty) === prefix) {
         answer = counter.toString();
         break;
       }
       counter++;
-      // Practically unreachable (odds ~1 in 3e9). If it ever happens the
-      // answer below fails server-side verification and the page retries,
-      // which is the safe failure direction (fail closed, not a bypass).
-      if (counter > 5000) { answer = ""; break; }
+      // A pathological cap only. At the hardest difficulty the expected
+      // count is 4096, so 200000 is roughly 49 standard deviations away:
+      // if it ever fires, the answer fails server-side verification and
+      // the page retries, which is the safe direction (fail closed, not
+      // a bypass) rather than hanging the tab forever.
+      if (counter > 200000) { answer = ""; break; }
     }
 
     var canvasProof = "";
@@ -467,10 +564,10 @@ h2 { font-weight: normal; font-size: 1.2rem; }
     if (res.redirected || res.ok) {
       window.location = res.url || "{{.RedirectPath}}";
     } else {
-      document.body.textContent = "Verification failed.";
+      showRecovery();
     }
   } catch (e) {
-    document.body.textContent = "Verification failed.";
+    showRecovery();
   }
 })();
 </script>
@@ -498,7 +595,17 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "challenge unavailable", http.StatusBadRequest)
 		return
 	}
-	tok := c.token(nonce, redirectPath, host, time.Now())
+	// Adaptive difficulty: the server decides how much work this visitor
+	// must do, from the risk score Guard already computed and from how many
+	// times this client has recently failed. Both are clamped to the
+	// mobile-safe range inside difficultyFor.
+	priorAttempts := c.attempts(r)
+	difficulty := difficultyFor(RiskFromContext(r.Context()), priorAttempts)
+	observability.Inc(counterIssued)
+	if priorAttempts >= attemptsPerStep {
+		observability.Inc(counterEscalatedIssued)
+	}
+	tok := c.token(nonce, redirectPath, host, difficulty, time.Now())
 
 	// Remember what this request looked like, so solving the challenge
 	// can label it human later. The sample is parked server-side against
@@ -521,6 +628,7 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 		VerifyPath:   verifyPath,
 		RedirectPath: redirectPath,
 		Theme:        theme,
+		Difficulty:   difficulty,
 	})
 }
 
@@ -535,24 +643,34 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nonce, redirectPath, ok := c.parseToken(r.FormValue("token"), r.Host)
+	info, ok := c.parseToken(r.FormValue("token"), r.Host)
 	if !ok {
 		http.Error(w, "invalid token", http.StatusForbidden)
+		return
+	}
+	// Validate the client-reported telemetry before spending anything else
+	// on it: a malformed field is a bad request, not a solve attempt.
+	telemetry, ok := parseTelemetry(r.Form)
+	if !ok {
+		observability.Inc(counterTelemetryBad)
+		http.Error(w, "malformed challenge telemetry", http.StatusBadRequest)
 		return
 	}
 	now := time.Now()
 	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Millisecond)
 	defer cancel()
-	if !c.nonceStore.Consume(ctx, nonce, now, challengeMaxAge) {
+	if !c.nonceStore.Consume(ctx, info.nonce, now, challengeMaxAge) {
 		http.Error(w, "challenge already used", http.StatusForbidden)
 		return
 	}
 	answer := r.FormValue("answer")
-	if !validPoW(nonce, answer) {
+	if !validPoW(info.nonce, answer, info.difficulty) {
+		c.failSolve(w, r)
 		http.Error(w, "incorrect answer", http.StatusForbidden)
 		return
 	}
 	if !validCanvasProof(r.FormValue("canvas")) {
+		c.failSolve(w, r)
 		http.Error(w, "invalid canvas proof", http.StatusForbidden)
 		return
 	}
@@ -561,8 +679,11 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 	// viewport, or a Chromium-without-Chrome client-hints brand, even
 	// when the browser itself is real (so canvas/sha256 pass) —
 	// ROADMAP item 6. We also detect headless cloud VM renderers
-	// (SwiftShader/llvmpipe).
-	if r.FormValue("automation") == "true" || r.FormValue("headless") == "true" {
+	// (SwiftShader/llvmpipe). These values are client-supplied, so they
+	// fail the challenge rather than labelling the visitor, and a
+	// suspiciously fast solve is only measured, never enforced.
+	if telemetry.Automation || telemetry.Headless {
+		c.failSolve(w, r)
 		http.Error(w, "automation detected", http.StatusForbidden)
 		return
 	}
@@ -570,25 +691,23 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 	// Verification grants a passed cookie, but the canvas and automation
 	// values are client supplied. Record only a candidate human label;
 	// the trainer excludes these observations by default.
-	c.labels.ChallengeSolved(nonce)
+	c.clearAttempts(w, r)
+	recordChallengeOutcome(true, r.UserAgent())
+	if telemetry.FastSolve {
+		observability.Inc(counterFastSolve)
+	}
+	c.labels.ChallengeSolved(info.nonce)
 
-	c.setPassedCookie(w, r.Host)
-	http.Redirect(w, r, redirectPath, http.StatusSeeOther)
+	c.setPassedCookie(w, r.Host, info.difficulty)
+	http.Redirect(w, r, info.redirectPath, http.StatusSeeOther)
 }
 
-func (c *Challenge) setPassedCookie(w http.ResponseWriter, host string) {
-	rawPayload := strings.Join([]string{strconv.FormatInt(time.Now().Unix(), 10), canonicalHost(host)}, "|")
-	payload := base64.RawURLEncoding.EncodeToString([]byte(rawPayload))
-	value := payload + "." + c.sign(payload)
-	http.SetCookie(w, &http.Cookie{
-		Name:     passedCookie,
-		Value:    value,
-		Path:     "/",
-		MaxAge:   int(passedMaxAge.Seconds()),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
+// failSolve records a rejected solve attempt: the outcome counters, and
+// the signed attempt cookie that makes this client's next puzzle harder.
+// It is one helper so no reject branch can forget one of the two.
+func (c *Challenge) failSolve(w http.ResponseWriter, r *http.Request) {
+	recordChallengeOutcome(false, r.UserAgent())
+	c.recordAttempt(w, r)
 }
 
 // Passed reports whether r already carries a valid, unexpired
@@ -610,8 +729,12 @@ func (c *Challenge) Passed(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	payload := strings.SplitN(string(rawPayload), "|", 2)
-	if len(payload) != 2 || payload[1] != canonicalHost(r.Host) {
+	payload := strings.SplitN(string(rawPayload), "|", 3)
+	if len(payload) != 3 || payload[2] != canonicalHost(r.Host) {
+		return false
+	}
+	difficulty, err := strconv.Atoi(payload[1])
+	if err != nil {
 		return false
 	}
 	issuedUnix, err := strconv.ParseInt(payload[0], 10, 64)
@@ -619,7 +742,11 @@ func (c *Challenge) Passed(r *http.Request) bool {
 		return false
 	}
 	age := time.Since(time.Unix(issuedUnix, 0))
-	return age >= 0 && age <= passedMaxAge
+	// Trust decays: a visitor who needed the hardest puzzle is trusted
+	// for a shorter window than one who passed the lightest (Phase 2).
+	// The window is re-derived from the signed difficulty, never from the
+	// client's cookie MaxAge, which it controls.
+	return age >= 0 && age <= passedTrustWindow(difficulty)
 }
 
 // Handler returns the HTTP surface for the challenge: GET issues a
