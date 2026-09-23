@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/auth"
@@ -152,7 +154,16 @@ func TenantPolicyPreviewHandler(store *tenantpolicy.Store, verifier *auth.Verifi
 			policyError(w, err)
 			return
 		}
-		p, err := policy.Compile(&policy.Policy{Rules: rev.Document.Rules})
+		candidate := &policy.Policy{Rules: rev.Document.Rules}
+		for _, raw := range rev.Document.Allowlist {
+			_, cidr, parseErr := net.ParseCIDR(raw)
+			if parseErr != nil {
+				writeError(w, http.StatusInternalServerError, "policy unavailable")
+				return
+			}
+			candidate.Allowlist = append(candidate.Allowlist, cidr)
+		}
+		p, err := policy.Compile(candidate)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "policy unavailable")
 			return
@@ -163,8 +174,13 @@ func TenantPolicyPreviewHandler(store *tenantpolicy.Store, verifier *auth.Verifi
 			return
 		}
 		req.Facts.Path = path
+		req.Facts.Method = strings.ToUpper(req.Facts.Method)
 		req.Facts.Class = policy.Classify(path, req.Facts.Method)
-		writeJSON(w, http.StatusOK, map[string]any{"version": rev.Version, "mode": "preview", "result": policy.Evaluate(p, req.Facts)})
+		req.Facts.Allowlisted = p.Allowlisted(req.Facts.IP)
+		if req.Facts.VerifiedAgent == "monitor" && !req.Facts.Allowlisted {
+			req.Facts.VerifiedAgent = ""
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"version": rev.Version, "mode": "preview", "hypothetical": true, "result": policy.Evaluate(p, req.Facts)})
 	})
 }
 

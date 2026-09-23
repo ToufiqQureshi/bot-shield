@@ -46,7 +46,7 @@ standard `{success,data|error}` envelope. `{id}` is the domain/tenant ID from
 | `GET /api/v1/domains/{id}/policy/history` | Latest 100 immutable revision summaries (version, actor, time, mode). |
 | `GET /api/v1/domains/{id}/policy/history/{version}` | Read one complete historical revision before rollback. |
 | `POST /api/v1/domains/{id}/policy/rollback` | Body: `expectedVersion`, `targetVersion`; creates a new shadow revision. |
-| `POST /api/v1/domains/{id}/policy/preview` | Hypothetical `facts` for the saved revision, with no visitor action. |
+| `POST /api/v1/domains/{id}/policy/preview` | Hypothetical `facts` for the saved revision, with no visitor action. Path/method/class and CIDR allowlist are normalized server-side; a supplied `search` verification is only a simulation assumption. |
 | `GET /api/v1/domains/{id}/policy/shadow` | Bounded local summary: matches, proposed disagreements, actions, skipped requests, readiness. |
 | `POST /api/v1/domains/{id}/policy/activate` | Body: `expectedVersion`; appends an enforce revision after the shadow gate. |
 
