@@ -157,3 +157,14 @@ the trainer refuses auto-collected database labels unless explicitly opted in.
 It also rejects incomplete JSONL samples. Tests, vet, and build passed.
 Gotcha: challenge and honeypot labels are candidate observations, not verified
 ground truth. The model remains shadow-only; do not enable learned enforcement.
+
+### 2026-09-23 — versioned tenant policy and guarded enforcement
+`11dece77` — Phase 1 backend: ordered tenant revisions, ownership/audit/
+rollback, preview and shadow summary APIs, compiled matcher, asynchronous
+provider, and action enforcement after a measured activation gate. The staged
+snapshot passed full Go test/vet/build, real Postgres isolation, and a
+hard-block PASS mutation check. See `PHASE1_POLICY.md`.
+Gotcha: production activation still needs representative traffic review and
+durable cross-node telemetry. Concurrent uncommitted Phase 2 challenge work
+in the shared tree currently fails a challenge flow test; it is not in this
+commit.
