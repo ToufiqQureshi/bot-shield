@@ -168,3 +168,17 @@ Gotcha: production activation still needs representative traffic review and
 durable cross-node telemetry. Concurrent uncommitted Phase 2 challenge work
 in the shared tree currently fails a challenge flow test; it is not in this
 commit.
+
+### 2026-09-23 — Phase 2 adaptive challenge, completed
+`959ab46d` (branch `phase2-challenge-trust`) — difficulty banded by the
+guard's risk score (1–3 hex zeros, clamped), escalation via a signed attempt
+cookie, trust decay 30/15/5 min on the passed cookie, bounded telemetry with
+browser-class counters, guard wiring, 16 new tests, 5 mutation checks, docs
+(PLAN/ROADMAP/DECISIONS/RESEARCH/PHASE2_STATUS).
+Gotcha: html/template's JS escaper pads interpolated numbers
+(`var difficulty =  1 ;`), so strict regexes silently match nothing — and
+test helpers must read the difficulty from the served page, never hardcode
+"00", which is a valid difficulty-1 answer and can make reject tests pass
+by accident. The branch also carries Codex's `5ae489b9` (scripting UA
+blocklist) because we share one working tree; merge both together or
+cherry-pick accordingly.

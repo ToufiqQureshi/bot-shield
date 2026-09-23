@@ -7,6 +7,40 @@ happens; don't let it go stale silently.
 
 ---
 
+## Proof-of-work challenges: Anubis and FCaptcha cost model (2026-09-23)
+
+Researched for Phase 2 (adaptive challenge difficulty) to pick a difficulty
+ceiling that cannot lock out real phones.
+
+**The mechanism both use:** the client must find an input whose SHA-256
+starts with N hex zeros. Expected attempts is 16^N, and each attempt is a
+separate awaited `crypto.subtle.digest` call in the browser — roughly
+0.05–0.3 ms each on desktop, several times slower on a mid-range phone.
+Anubis ships difficulty 4 (65k hashes, ~1–3 s desktop) as its default and
+documents that higher values trade directly against low-end devices;
+FCaptcha-style deployments keep visible work under ~1 s for the 95th
+percentile device rather than tuning for the median.
+
+**What this means for hakaishield's cap:** our range is 1–3 (16/256/4096
+hashes). Difficulty 3 is ~49σ below the page's own 200k-iteration safety
+cap and stays well under a second on desktop; raising to 4 multiplies the
+work ×16 and starts eating into Anubis's observed phone-time budget. The
+cap stays at 3 until a real mid-range device is measured (`DECISIONS.md`
+2026-09-23). Difficulty per extra zero is ×16, so the ladder is:
+
+- 1 → ~16 hashes (clean/strict traffic: imperceptible)
+- 2 → ~256 hashes (the original fixed puzzle)
+- 3 → ~4096 hashes (highest-scoring traffic, still mobile-safe)
+
+**Attack-side cost:** a native solver (Go/openssl, not a browser) does
+difficulty 3 in milliseconds, so the PoW's value is never "impossible" —
+it is that solving at scale through real browsers costs real latency, and
+the *server-chosen* difficulty (inside the signed token) lets us raise the
+price for exactly the clients that scored worst, which a fixed puzzle
+cannot do.
+
+---
+
 ## How Akamai / DataDome / Cloudflare actually detect bots
 
 Studied because hakaishield's detection layers are modeled on the same

@@ -10,6 +10,42 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Adaptive challenge difficulty: server-chosen, cookie-tracked, mobile-capped - 2026-09-23
+
+**Decision:** Phase 2's challenge difficulty is chosen by the server from
+the score `core.Guard` already computed, never from anything the client can
+influence, and it travels only inside the HMAC-signed challenge token.
+The range is 1–3 leading hex zeros (16/256/4096 expected `crypto.subtle`
+hashes). Escalation after failed solves rides a signed, host-bound attempt
+cookie with a hard cap (6 attempts, 15 min), deliberately not per-IP state —
+per-IP would punish everyone behind one corporate NAT for one noisy script.
+A passed cookie's trust window decays with the difficulty the visitor
+actually solved (30/15/5 min), re-derived from the difficulty inside the
+signature, not from the cookie's MaxAge (which the client controls).
+Client-reported telemetry (automation/headless/elapsed) is strictly bounded
+and shape-checked, 400 on malformed; a fast solve is measured, never
+enforced (a cached page or clock skew would otherwise eat a real visitor).
+
+**Why this shape:** the plan demanded a "strictly capped mobile-safe
+range" — difficulty 3 (4096 awaited hashes) is the ceiling until someone
+measures a real mid-range phone, because each extra zero multiplies work by
+16 on a browser API far slower than a native loop. The client cannot lower
+its difficulty (it would make the ladder decorative); it can only drop the
+attempt cookie, which loses it nothing it had not earned back.
+
+**Alternatives considered / rejected:** difficulty per IP or per session in
+server-side storage (rejected — new request-path state, NAT collateral,
+bounded-eviction burden for an input the signed cookie already carries);
+trust window enforced only by cookie MaxAge (rejected and mutation-tested —
+the client controls its own cookie store, so the window must re-derive from
+the signed payload, which is why `Passed()` parses 3 fields); escalating on
+one failed solve (rejected — one typo must not make a real visitor's next
+page load slower; the step is 2 failures). Honest gaps recorded: the
+telemetry envelope is only partially server-trusted — the client computes
+its own booleans, so they are bounded and measured, not trusted; real
+canvas validation remains ROADMAP item 28, which is what makes these
+booleans meaningfully harder to fake.
+
 ## Phase 1 policy engine: real DB-backed PolicyProvider, still shadow-only - 2026-09-23
 
 **Decision:** `backend/pkg/policyprovider` is a new package that closes the

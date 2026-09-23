@@ -417,6 +417,16 @@ always the operator.
 
 ## P1 — makes it meaningfully harder to bypass
 
+**Phase 2 challenge & continuous trust status (2026-09-23):** adaptive
+proof-of-work (difficulty 1–3 banded by risk score), progressive escalation
+via a signed attempt cookie (never per-IP), trust decay on the passed cookie
+(30/15/5 min by difficulty solved), and bounded client telemetry with
+browser-class counters are built in `pkg/challenge` and wired from
+`core.Guard`'s score. Difficulty lives only inside the signed token, so it
+cannot be lowered by a client. The canvas proof is still a shape check
+(item 28); the telemetry envelope's remaining gap (real server-side canvas
+validation) is that same item.
+
 **Phase 1 backend policy status (2026-09-23):** versioned tenant snapshots,
 ordered rules, preview, rollback, shadow evidence/summary, and gated
 enforcement code are implemented. Legacy dashboard rules remain account-wide

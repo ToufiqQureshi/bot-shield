@@ -116,6 +116,28 @@ Guardrails:
 Inspired by Anubis and FCaptcha: make automation pay a cost, but do not punish
 real users, mobile devices, or accessibility tools.
 
+**Current status (2026-09-23, built and verified):** adaptive proof-of-work,
+progressive escalation, and trust decay are implemented in `pkg/challenge`
+(`adaptive.go`, `auth.go`, `telemetry.go`) and wired end-to-end from
+`core.Guard` (`challenge.WithRisk(..., score)` in the DecisionChallenge
+branch). Difficulty is 1–3 leading hex zeros (16/256/4096 expected hashes),
+banded by score (≤0 → 1, <50 → 2, ≥50 → 3) plus one step per 2 failed
+solves, clamped to the mobile-safe cap. Failed solves ride a signed,
+host-bound attempt cookie (max 6, 15 min) — never per-IP state, so NAT users
+are not collateral. A passed cookie's trust window decays with the
+difficulty solved (30/15/5 min), re-derived from the difficulty inside the
+signature. Telemetry (automation/headless/elapsed) is strictly bounded and
+shape-checked (400 on malformed), measured by browser class through ten
+`challenge_*` counters; a fast solve is measured, never enforced. The
+difficulty travels only inside the signed token, so a client cannot lower
+it; the page renders it and tests derive it (`var difficulty = N`).
+Verified: `go build ./...`, `go vet ./...`, full `go test ./...` green, 13
+new challenge tests + 3 new guard end-to-end tests, 5 mutation checks (clamp
+removal, WithRisk removal, recordAttempt removal, telemetry gate removal,
+trust-window flattening — each went red, then restored green). Known limits:
+canvas proof is still a shape check (ROADMAP item 28), and `-race` could not
+run in the build environment (no gcc/cgo); the suite ran without it.
+
 | Feature | What will be implemented | Why it matters |
 |---|---|---|
 | Replay-safe challenge nonce store | Built in Phase 0 as Redis-backed, TTL-bound, single-use challenge state with degraded single-node mode. Phase 2 can tune it with policy/adaptive difficulty. | Stops token reuse across requests and nodes. |
