@@ -159,7 +159,7 @@ Gotcha: challenge and honeypot labels are candidate observations, not verified
 ground truth. The model remains shadow-only; do not enable learned enforcement.
 
 ### 2026-09-23 — versioned tenant policy and guarded enforcement
-`11dece77` — Phase 1 backend: ordered tenant revisions, ownership/audit/
+`11dece77` `6a0c3a00` — Phase 1 backend: ordered tenant revisions, ownership/audit/
 rollback, preview and shadow summary APIs, compiled matcher, asynchronous
 provider, and action enforcement after a measured activation gate. The staged
 snapshot passed full Go test/vet/build, real Postgres isolation, and a
