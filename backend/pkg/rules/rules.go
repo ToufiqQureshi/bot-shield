@@ -165,6 +165,47 @@ func (s *Store) Create(ctx context.Context, ownerUserID, name string, conditions
 	return &r, nil
 }
 
+// maxPolicyRules bounds how many of an account's rules a single policy
+// evaluation considers. Without a cap, one account accumulating rules
+// over time would grow the per-request matcher cost without limit — the
+// newest rules win, since List already orders by created_at DESC and
+// Evaluate stops at the first match, so this keeps the ones most likely
+// to reflect current intent (CLAUDE.md Section 15/19: bounded request-
+// path work).
+const maxPolicyRules = 200
+
+// ToPolicy converts ownerUserID's stored rules into the pkg/policy form
+// core.Guard's shadow evaluation reads. It is deliberately lossy in one
+// direction: a rule that no longer satisfies ValidateRule — for example
+// one saved before a guardrail existed, or with a field ValidateRule
+// used to accept — is silently left out of the evaluated policy rather
+// than returned as an error, because a stale row must never take down
+// evaluation for every other rule the account has. The dashboard's own
+// Create path is what stops new invalid rules from being saved.
+func ToPolicy(ownerUserID string, rows []CustomRule, blockThreshold int) *policy.Policy {
+	if len(rows) > maxPolicyRules {
+		rows = rows[:maxPolicyRules]
+	}
+	out := make([]policy.Rule, 0, len(rows))
+	for _, r := range rows {
+		conditions := make([]policy.Condition, len(r.Conditions))
+		for i, c := range r.Conditions {
+			conditions[i] = policy.Condition{
+				Field: policy.Field(c.Field), Operator: policy.Operator(c.Operator), Value: c.Value,
+			}
+		}
+		rule := policy.Rule{
+			ID: r.ID, Name: r.Name, Conditions: conditions,
+			Action: policy.Action(r.Action), Enabled: r.Enabled,
+		}
+		if err := policy.ValidateRule(rule, blockThreshold); err != nil {
+			continue
+		}
+		out = append(out, rule)
+	}
+	return &policy.Policy{OwnerUserID: ownerUserID, Rules: out}
+}
+
 // validateRule uses the same matcher contract that will later run in Guard.
 // Unsupported dashboard fields are rejected rather than stored as rules that
 // appear active but can never match a request.

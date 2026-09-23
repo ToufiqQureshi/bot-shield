@@ -27,6 +27,13 @@ type TenantConfig struct {
 	EvidenceToken string            // Bearer token for the per-request evidence endpoint
 	Deception     bool              // If true, high-confidence bot traffic is deceived instead of 403 blocked (ROADMAP 11a)
 	Status        string            // Domain lifecycle status; only active domains route visitor traffic.
+	// OwnerUserID identifies the dashboard account this tenant belongs
+	// to. mitigation_rules and protection_settings are keyed by this,
+	// not by tenant/domain ID (an account's rules apply across every
+	// domain it owns) — a core.Guard.PolicyProvider uses this to find
+	// which account's rules to evaluate for a request, never a
+	// visitor-supplied value (CLAUDE.md Section 16/17).
+	OwnerUserID string
 }
 
 // Tenant represents a single customer's isolated environment.
@@ -45,7 +52,7 @@ type ProxyFactory func(target string) (*httputil.ReverseProxy, error)
 // TenantLoader fetches a tenant row for lazy host-based loading. The default
 // implementation reads Postgres; the hook also keeps the store testable
 // without requiring a live database.
-type TenantLoader func(ctx context.Context, host string) (id, target, mode, evidenceToken, status string, err error)
+type TenantLoader func(ctx context.Context, host string) (id, target, mode, evidenceToken, status, ownerUserID string, err error)
 
 const StatusActive = "active"
 
@@ -194,12 +201,12 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 	if loader == nil {
 		loader = db.GetTenant
 	}
-	id, target, modeStr, evidenceToken, status, err := loader(ctx, host)
+	id, target, modeStr, evidenceToken, status, ownerUserID, err := loader(ctx, host)
 	if err != nil {
 		return nil, ErrTenantNotFound
 	}
 
-	return s.addFromDBRow(id, host, target, modeStr, evidenceToken, status)
+	return s.addFromDBRow(id, host, target, modeStr, evidenceToken, status, ownerUserID)
 }
 
 // addFromDBRow turns one tenants-table row into a live Tenant and
@@ -207,7 +214,7 @@ func (s *Store) fetchFromDB(host string) (*Tenant, error) {
 // found the row by ID and a proxy request that finds it later by host
 // share the same in-memory Stats/Trail rather than each starting a
 // fresh one.
-func (s *Store) addFromDBRow(id, host, target, modeStr, evidenceToken, status string) (*Tenant, error) {
+func (s *Store) addFromDBRow(id, host, target, modeStr, evidenceToken, status, ownerUserID string) (*Tenant, error) {
 	// A stored mode we can't parse must never silently decide behaviour.
 	// Treat an unknown value as enforce (fail closed) and say so, rather
 	// than letting Go's zero value quietly pick a mode for a live tenant.
@@ -226,6 +233,7 @@ func (s *Store) addFromDBRow(id, host, target, modeStr, evidenceToken, status st
 		Mode:          mode,
 		EvidenceToken: evidenceToken,
 		Status:        status,
+		OwnerUserID:   ownerUserID,
 	}
 
 	if err := s.Add(id, tenantConfig, []string{host}, proxy); err != nil {
@@ -255,12 +263,26 @@ func (s *Store) GetByID(id string) (*Tenant, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	host, target, modeStr, evidenceToken, status, err := db.GetTenantByID(ctx, id)
+	host, target, modeStr, evidenceToken, status, ownerUserID, err := db.GetTenantByID(ctx, id)
 	if err != nil {
 		return nil, ErrTenantNotFound
 	}
 
-	return s.addFromDBRow(id, host, target, modeStr, evidenceToken, status)
+	return s.addFromDBRow(id, host, target, modeStr, evidenceToken, status, ownerUserID)
+}
+
+// OwnerUserID resolves a tenant ID to the dashboard account that owns
+// it, or reports ok=false when the tenant can't be found or has no
+// owner on record (e.g. a tenant seeded without one). It exists so
+// pkg/policyprovider can bind a request's already-validated tenant
+// identity to that account's rules without importing tenant.Store's
+// full surface, and without ever accepting an owner ID from the caller.
+func (s *Store) OwnerUserID(tenantID string) (string, bool) {
+	t, err := s.GetByID(tenantID)
+	if err != nil || t.Config.OwnerUserID == "" {
+		return "", false
+	}
+	return t.Config.OwnerUserID, true
 }
 
 func (c TenantConfig) routesTraffic() bool {

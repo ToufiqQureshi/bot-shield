@@ -48,17 +48,25 @@ single-node fallback, ownership coverage includes deterministic API tests plus
 an opt-in real Postgres integration test, and aggregate operational counters
 cover JWKS, Goodbot DNS budget, Redis circuit, origin, and client-IP errors.
 
-Phase 1 policy/rule enforcement is in progress. `backend/pkg/policy` (pure
-condition matcher, rule/policy structs, `Evaluate`, and `ValidateRule` with
-the UA-only-allow and deceive-floor-above-block guardrails) is built and
-wired into `core.Guard` via an optional `PolicyProvider` in shadow mode
-only: a matched rule is recorded on `evidence.Evidence.Policy`, but
-`signals.Decision` remains the only thing that drives enforcement. No
-`PolicyProvider` is wired to a real store yet — `main.go` does not attach
-one, so this is currently a no-op in the running service until a provider
-backed by `pkg/rules`/`pkg/settings` is built and attached. The dashboard's
-rules/protection-settings APIs still only persist data; the implementation
-order below remains authoritative for what's left.
+Phase 1 policy/rule enforcement is live in shadow mode. `backend/pkg/policy`
+(pure condition matcher, rule/policy structs, `Evaluate`, and `ValidateRule`
+with the UA-only-allow and deceive-floor-above-block guardrails) is wired
+into `core.Guard` via an optional `PolicyProvider`. `main.go` now attaches a
+real one whenever `-db-url` is set: `backend/pkg/policyprovider` resolves a
+request's already-validated tenant to its owning account (`TenantConfig.
+OwnerUserID`, loaded from `tenants.owner_user_id`), reads that account's
+`pkg/rules` rows through a bounded, TTL-cached lookup (30s positive / 10s
+negative, capped at 4096 accounts), and converts them to a `policy.Policy`
+via `rules.ToPolicy` (silently drops any row that no longer passes
+`ValidateRule`, so one stale rule can't take down the rest). A matched rule
+is recorded on `evidence.Evidence.Policy`; `signals.Decision` — computed
+earlier and unconditionally — remains the only thing that drives
+allow/challenge/block/deceive. Still open before this can enforce: rule
+ordering/versioning/rollback, behavior for the guard branches that return
+before policy evaluation (verified bots, solved challenges, honeypot trips),
+regex precompilation (currently compiled per match), and a shadow-period
+measurement of agreement/false-positive rates. See `docs/DECISIONS.md` and
+`docs/PHASE1_PRODUCTION_REVIEW.md`.
 
 ## Non-Negotiable Product Rules
 

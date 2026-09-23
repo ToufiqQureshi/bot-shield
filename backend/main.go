@@ -26,6 +26,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/decide"
 	"github.com/ToufiqQureshi/hakaishield/pkg/labels"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
+	"github.com/ToufiqQureshi/hakaishield/pkg/policyprovider"
 	"github.com/ToufiqQureshi/hakaishield/pkg/rules"
 	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
@@ -237,6 +238,19 @@ func main() {
 		}
 		guard.WithShadowModel(model)
 		log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests); it records opinions and decides nothing", *modelPath, model.TrainedOn())
+	}
+
+	// A dashboard account's mitigation rules are evaluated alongside the
+	// rule scorer and recorded, never acted on — see
+	// docs/BACKEND_IMPLEMENTATION_PLAN.md Phase 1 and
+	// docs/PHASE1_PRODUCTION_REVIEW.md for what still gates enforcement.
+	// This only needs Postgres, not Supabase auth (unlike the dashboard
+	// API below): it reads already-stored rules server-side, nothing a
+	// visitor or a dashboard session touches directly.
+	if *dbURL != "" {
+		provider := policyprovider.New(store, rules.NewStore(db.DB), settings.NewStore(db.DB))
+		guard.WithPolicyProvider(provider.ForTenant)
+		log.Print("hakaishield: policy shadow provider enabled; it records rule-match opinions and decides nothing")
 	}
 
 	mux := http.NewServeMux()

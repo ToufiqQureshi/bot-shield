@@ -76,11 +76,11 @@ func TestGetByHost_LoadsDatabaseTenantBeforeWildcard(t *testing.T) {
 		}
 		return customerProxy, nil
 	}
-	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, error) {
+	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, string, error) {
 		if host != "customer.example.com" {
 			t.Fatalf("tenant loader host = %q, want customer.example.com", host)
 		}
-		return "customer", customerURL, "enforce", "", tenant.StatusActive, nil
+		return "customer", customerURL, "enforce", "", tenant.StatusActive, "owner-1", nil
 	}
 
 	got, err := store.GetByHost("customer.example.com")
@@ -89,6 +89,9 @@ func TestGetByHost_LoadsDatabaseTenantBeforeWildcard(t *testing.T) {
 	}
 	if got.ID != "customer" {
 		t.Fatalf("GetByHost returned %q, want database tenant", got.ID)
+	}
+	if got.Config.OwnerUserID != "owner-1" {
+		t.Fatalf("Config.OwnerUserID = %q, want owner-1 — a policy provider keys off this field", got.Config.OwnerUserID)
 	}
 }
 
@@ -105,11 +108,11 @@ func TestGetByHostRejectsPendingDatabaseTenantBeforeWildcard(t *testing.T) {
 		}
 		return pendingProxy, nil
 	}
-	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, error) {
+	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, string, error) {
 		if host != "pending.example.com" {
 			t.Fatalf("tenant loader host = %q, want pending.example.com", host)
 		}
-		return "pending", pendingURL, "enforce", "", "pending_verification", nil
+		return "pending", pendingURL, "enforce", "", "pending_verification", "owner-1", nil
 	}
 
 	got, err := store.GetByHost("pending.example.com")
@@ -128,12 +131,12 @@ func TestGetByHostNegativeCachesUnknownDatabaseHost(t *testing.T) {
 		return nil, nil
 	}
 	var calls int
-	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, error) {
+	store.TenantLoader = func(_ context.Context, host string) (string, string, string, string, string, string, error) {
 		if host != "missing.example.com" {
 			t.Fatalf("tenant loader host = %q, want missing.example.com", host)
 		}
 		calls++
-		return "", "", "", "", "", errors.New("missing")
+		return "", "", "", "", "", "", errors.New("missing")
 	}
 
 	for i := 0; i < 100; i++ {

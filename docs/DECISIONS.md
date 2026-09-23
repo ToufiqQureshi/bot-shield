@@ -10,6 +10,63 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Phase 1 policy engine: real DB-backed PolicyProvider, still shadow-only - 2026-09-23
+
+**Decision:** `backend/pkg/policyprovider` is a new package that closes the
+gap the previous entry below left open. `Provider.ForTenant(tenantID)`
+resolves the tenant to its owning account via a new `tenant.Store.
+OwnerUserID` method (never a caller-supplied owner), reads that account's
+rules through injected `ruleLister`/`settingsGetter` interfaces (satisfied
+by `*rules.Store`/`*settings.Store`, or fakes in tests), and returns a
+`*policy.Policy` built by a new `rules.ToPolicy` adapter. Results are
+cached per owner (not per tenant — an owner's rules apply across every
+domain they own) for 30 seconds, with a 10-second negative cache for a
+DB error or an owner with nothing configured, and a 4096-entry bound with
+oldest-first eviction. `main.go` attaches it (`guard.WithPolicyProvider
+(provider.ForTenant)`) whenever `-db-url` is set — no Supabase auth
+required, since this reads already-stored rules server-side. `tenant.
+TenantConfig` gained `OwnerUserID`, populated from a new `owner_user_id`
+select in `db.GetTenant`/`GetTenantByID` (the column already existed;
+nothing selected it before this).
+
+**Why:** This is the "remaining production gate #1" from `docs/
+PHASE1_PRODUCTION_REVIEW.md` — binding rules to validated tenant identity
+through a bounded, cached provider, tested through the real DB-to-guard
+path for two owners and two domains. `rules.ToPolicy` re-validates every
+row through `policy.ValidateRule` at read time (not just at Create) and
+drops anything that fails, because a guardrail added after a rule was
+saved must not silently start being enforced/ignored differently from
+what `ValidateRule` says today — the alternative (trusting stored rows
+unconditionally) would let a Create-time bug ship a rule that quietly
+never fires, or one written under different rules than current code
+ships with, evaluate anyway.
+
+**Alternatives considered / rejected:** Caching by tenant ID instead of
+owner ID (rejected and mutation-tested — `mitigation_rules` is
+owner-scoped, so two domains under one account must share one cache
+entry and one Postgres query, not one each; a test asserts `rules.List`
+is called once, not twice, for two tenants under the same owner).
+Precompiling `MATCHES` regular expressions when building the policy
+(deferred, not rejected — `Condition` would need a `sync.Once`-guarded
+field and a pointer-receiver `matches`, since the same `*policy.Policy`
+value is shared across concurrent requests once cached; that's a real
+concurrency hazard to introduce under time pressure for a feature that
+is still fully inert, so it's tracked as open work in the plan doc
+instead of rushed here). A live Postgres integration test in this
+package (rejected — `pkg/rules`' own Postgres integration test already
+covers the SQL; this package's test doubles plus one real-`tenant.Store`
++ real-`core.Guard` end-to-end test (`TestDBToGuardPath_TwoOwnersTwoDomains`)
+prove the wiring without needing a database in every CI run).
+
+**Revisit when:** Building the enforcement flip — needs rule ordering/
+version/rollback storage (`Policy.Version` has no persistence today),
+a decision for the guard branches that return before policy evaluation
+runs (verified good bots, already-solved challenges, honeypot trips all
+short-circuit before `shadowPolicyOpinion` is reached), and a shadow
+period's worth of `policy_shadow_match_total` / agreement data. Revisit
+regex precompilation once real traffic makes it a measured cost, not a
+guess.
+
 ## Phase 1 policy engine: pure package, shadow-only guard wiring, provider left unattached - 2026-09-23
 
 **Decision:** `backend/pkg/policy` evaluates an account's dashboard rules

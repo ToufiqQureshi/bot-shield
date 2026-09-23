@@ -136,3 +136,56 @@ func TestCreateRejectsOversizedRuleNameBeforeDatabase(t *testing.T) {
 		t.Fatalf("Create() = %v, want ErrInvalidRule", err)
 	}
 }
+
+func TestToPolicy_ValidRuleEvaluates(t *testing.T) {
+	rows := []CustomRule{
+		{ID: "r1", Name: "block admin", Enabled: true, Action: "BLOCK",
+			Conditions: []Condition{{Field: "Request Path", Operator: "EQUALS", Value: "/admin"}}},
+	}
+	p := ToPolicy("owner-1", rows, signals.HardBlockThreshold())
+	if p.OwnerUserID != "owner-1" {
+		t.Fatalf("OwnerUserID = %q, want owner-1", p.OwnerUserID)
+	}
+	result := policy.Evaluate(p, policy.Facts{Path: "/admin"})
+	if !result.Matched || result.RuleID != "r1" {
+		t.Fatalf("Evaluate = %+v, want matched r1", result)
+	}
+}
+
+// A row saved before a guardrail existed (or otherwise no longer valid)
+// must be dropped, not turn the whole policy into an error — every
+// other rule the account has must still evaluate.
+func TestToPolicy_DropsInvalidRowsKeepsValidOnes(t *testing.T) {
+	rows := []CustomRule{
+		{ID: "bad", Name: "stale UA-only allow", Enabled: true, Action: "PASS",
+			Conditions: []Condition{{Field: "User-Agent", Operator: "EQUALS", Value: "Mozilla/5.0"}}},
+		{ID: "good", Name: "block admin", Enabled: true, Action: "BLOCK",
+			Conditions: []Condition{{Field: "Request Path", Operator: "EQUALS", Value: "/admin"}}},
+	}
+	p := ToPolicy("owner-1", rows, signals.HardBlockThreshold())
+	if len(p.Rules) != 1 || p.Rules[0].ID != "good" {
+		t.Fatalf("Rules = %+v, want only the valid \"good\" rule", p.Rules)
+	}
+}
+
+func TestToPolicy_BoundsRuleCount(t *testing.T) {
+	rows := make([]CustomRule, maxPolicyRules+50)
+	for i := range rows {
+		rows[i] = CustomRule{ID: string(rune('a' + i%26)), Enabled: true, Action: "BLOCK",
+			Conditions: []Condition{{Field: "Request Path", Operator: "EQUALS", Value: "/x"}}}
+	}
+	p := ToPolicy("owner-1", rows, signals.HardBlockThreshold())
+	if len(p.Rules) > maxPolicyRules {
+		t.Fatalf("got %d rules, want at most %d", len(p.Rules), maxPolicyRules)
+	}
+}
+
+func TestToPolicy_EmptyRowsReturnsEmptyPolicy(t *testing.T) {
+	p := ToPolicy("owner-1", nil, signals.HardBlockThreshold())
+	if len(p.Rules) != 0 {
+		t.Fatalf("got %d rules, want 0 for no stored rows", len(p.Rules))
+	}
+	if policy.Evaluate(p, policy.Facts{Path: "/anything"}).Matched {
+		t.Fatal("empty policy matched a request")
+	}
+}
