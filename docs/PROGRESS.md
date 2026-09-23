@@ -119,6 +119,18 @@ Gotcha: the only reason Hetzner ever won was a wrong number — its famous
 Once that was corrected the cost gap vanished and latency decided it. Always
 check a provider's rate for the region you are actually deploying to.
 
+### 2026-09-23 — Phase 1 policy engine, shadow-only
+`d75a26e` — `pkg/policy`: pure Condition/Rule/Policy types, `Evaluate`
+(never errors/panics — unknown field/operator/zero-condition all resolve
+to no-match), `ValidateRule` (UA-only-allow and deceive-floor-above-block
+guardrails). `core.Guard` gets an optional `PolicyProvider` hook, shadow
+only: recorded on `evidence.Evidence.Policy`, never drives enforcement.
+Claude's half of a Phase 1 split with Codex CLI (`codex-claude-chat.json`).
+Gotcha: no provider is attached in `main.go` — this is inert in the
+running service until `TenantConfig.OwnerUserID` is plumbed through
+(column exists, loader doesn't select it) and a cached rules→policy
+adapter is built. See `DECISIONS.md` for the full reasoning.
+
 ### 2026-09-23 — PR #13 label and trainer safety
 `56433255` — Honeypot trips now emit a candidate label on the trip request;
 the trainer refuses auto-collected database labels unless explicitly opted in.
