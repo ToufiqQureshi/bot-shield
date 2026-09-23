@@ -7,8 +7,13 @@
 // the guesses it exists to improve on. Two sources qualify today, and
 // both are wired in pkg/core:
 //
-//   - a solved JS challenge, which proves a real browser ran real
-//     JavaScript, so the request is labelled human
+//   - a solved JS challenge, labelled human. Read the caveat in
+//     docs/LEARNED_SCORING.md 2.1 before trusting this one: the solve
+//     is checked by shape, not by rendering, so a client that studies
+//     the verify handler can produce a passing answer without running
+//     any JavaScript. It is independent of our score, which is what
+//     makes it a label at all, but it is forgeable and therefore a
+//     poisoning vector that the per-identity cap only narrows
 //   - a honeypot trip, which proves something walked the DOM and
 //     followed an invisible link, so the request is labelled automated
 //
@@ -91,8 +96,16 @@ type Collector struct {
 	queue  chan Sample
 	cap    *identityCap
 
+	// closing guards queue against a send that races Close. A select
+	// with a default case does not stop a send on a closed channel from
+	// panicking, and the race is reachable: http.Server.Shutdown returns
+	// when its timeout expires while the handlers it gave up on are
+	// still running, and the deferred Close in main.go then runs
+	// underneath them.
+	closing sync.RWMutex
+	closed  bool
+
 	done chan struct{}
-	stop sync.Once
 }
 
 // NewCollector starts the background writer. A nil writer makes every
@@ -136,6 +149,18 @@ func (c *Collector) Record(s Sample) {
 		return
 	}
 
+	// Held across the send so Close cannot shut the queue mid-send. It
+	// is a read lock, so concurrent requests still record in parallel;
+	// only Close excludes them, once, at shutdown.
+	c.closing.RLock()
+	defer c.closing.RUnlock()
+	if c.closed {
+		// Shutting down. The sample is lost, which is the same outcome
+		// as a sample still queued when the process exits.
+		observability.Inc("label_sample_dropped_total")
+		return
+	}
+
 	select {
 	case c.queue <- s:
 		observability.Inc("label_sample_queued_total")
@@ -154,7 +179,15 @@ func (c *Collector) Close() {
 	if c == nil {
 		return
 	}
-	c.stop.Do(func() { close(c.queue) })
+	c.closing.Lock()
+	first := !c.closed
+	c.closed = true
+	if first {
+		close(c.queue)
+	}
+	c.closing.Unlock()
+	// Waited on outside the lock: the writer must not be able to block
+	// a request that is holding the read lock on its way out.
 	<-c.done
 }
 

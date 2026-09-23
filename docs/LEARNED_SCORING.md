@@ -52,12 +52,43 @@ it would then score beautifully against the very data that misled it.
 Three candidate sources were examined against the code. They are not
 equally good, and the obvious one is the worst.
 
-### 2.1 Solved JS challenge → human ✅ the good one
+### 2.1 Solved JS challenge → human ⚠️ the best one we have, and it is forgeable
 
-`pkg/challenge` issues a proof-of-work plus canvas render plus automation
--global checks. A client that solves it ran real JavaScript in something
-browser-shaped. That is **independent evidence**: it is not our score, it
-is a capability test the client either passes or does not.
+`pkg/challenge` issues a proof-of-work plus a canvas render plus
+automation-global checks. A solve is **independent evidence**: it is not
+our score played back, it is a capability test the client either passes
+or does not. That independence is the whole reason it qualifies as a
+label.
+
+**But it does not prove a browser ran.** `verifyHandler` checks three
+things, and a plain HTTP script can satisfy all three:
+
+| Check | What it really proves |
+|---|---|
+| `validPoW` — sha256(nonce+answer) starts `00` | The client can compute sha256. Any language can. |
+| `validCanvasProof` — prefix `data:image/png;base64,` and length > 100 | The client can concatenate a string. The pixels are never decoded. |
+| `automation` / `headless` form fields are not `"true"` | Nothing. The client reports these about itself. |
+
+So the cost of injecting one forged `human` label is one challenge token
+and one nonce. `validCanvasProof` is documented in `DECISIONS.md` as an
+accepted limitation *for challenge bypass*, where the trade-off is
+reasonable. As a **training label source it is a poisoning vector**, and
+that is a different argument that was not made when it was accepted.
+
+**What bounds it today**
+
+- the nonce is single-use (`NonceStore.Consume`), so one solve is one
+  sample
+- `pkg/labels` caps one `(tenant, IP, JA4)` identity at 5 samples/hour
+  (`cap.go`)
+- nothing trained on this data is allowed to decide anything (section 3)
+
+An attacker rotating IPs defeats the cap. The real fix is to make the
+canvas proof mean something — decode the base64 PNG server-side and
+check dimensions, header sanity and pixel entropy, so the string has to
+come from an actual render. Until that exists, treat every
+`challenge_solved` sample as attacker-influencable and weigh it
+accordingly.
 
 **What has to be built.** The solve happens on a *later* request than the
 one that was scored, so the fired vector has to survive the round trip.

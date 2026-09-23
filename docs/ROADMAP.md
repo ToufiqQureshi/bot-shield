@@ -502,6 +502,49 @@ always the operator.
       Also see `docs/DECISIONS.md`, "Learned decision weights are a linear
       model over existing signals".
 
+- [ ] **28. Make the canvas proof mean something** — `validCanvasProof`
+      (`pkg/challenge/challenge.go`) checks that the submitted canvas is a
+      string starting `data:image/png;base64,` and longer than 100 bytes.
+      It never decodes it. Combined with a sha256 proof-of-work any language
+      can compute, and `automation`/`headless` fields the *client* reports
+      about itself, a plain HTTP script can pass the whole verify handler
+      without running a line of JavaScript.
+
+      As a challenge that is an accepted trade-off (`DECISIONS.md`): the
+      point is to cost a scraper something, not to be unbeatable. **As the
+      training-label source for item 25/26 it is a poisoning vector**, and
+      that argument was never made when the limitation was accepted. One
+      forged `human` label costs one challenge token and one nonce. The
+      per-identity cap (5/hour) bounds the rate; rotating IPs defeats it.
+
+      **Fix:** decode the base64 PNG server-side and check the IHDR header,
+      the expected dimensions and pixel entropy, so the string has to come
+      from a real render. Bounded work on a request that already cost the
+      client a proof-of-work, and it only runs on verify, not on every
+      request.
+
+      **Until then:** no model trained on `challenge_solved` samples may
+      enforce anything — which is already the rule (item 25), for a
+      different reason. See `docs/LEARNED_SCORING.md` 2.1.
+
+- [ ] **29. Label the honeypot trip on the request that trips it** —
+      `Guard.ServeHTTP` answers `signals.HoneypotPath` with a 404 and
+      returns before `collectLabels` runs (`pkg/core/guard.go`). The
+      `honeypot_trap` check only fires on a *later* request from the same
+      `(tenant, IP, JA4)` within the 6h TTL, so a bot that trips the trap
+      and leaves is never labelled. Nothing measures how often that
+      happens.
+
+      The trap request itself carries a perfectly good feature vector —
+      its UA, headers and JA4 are real evidence, and the honeypot bit is
+      stripped from the sample anyway. Evaluate and record it in the
+      `firstTrip` branch, and add `label_honeypot_trip_total` so the yield
+      against `label_sample_queued_total` is visible instead of assumed.
+
+      **Owner decision, not a bug:** this changes which traffic the model
+      trains on, so it belongs with the selection-bias question in
+      `docs/LEARNED_SCORING.md` 3.
+
 - [ ] **19. Known-browser fingerprint database** — a maintained set of
       JA4 fingerprints for real browser builds, refreshed on a
       schedule, so `UAMismatch` can answer *"is this actually Chrome

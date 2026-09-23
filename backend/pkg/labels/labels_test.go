@@ -201,3 +201,43 @@ func TestRecordNeverBlocks(t *testing.T) {
 		t.Fatal("Record blocked on a full queue: this runs in the request path")
 	}
 }
+
+// http.Server.Shutdown returns once its timeout expires, but the
+// handlers it gave up on keep running. Close then races them, and a
+// send on a closed channel panics even inside a select with a default
+// case - so the queue alone cannot make Record safe here.
+func TestRecordAfterCloseDoesNotPanic(t *testing.T) {
+	c := NewCollector(&fakeWriter{})
+	c.Close()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Record panicked after Close: %v", r)
+		}
+	}()
+	c.Record(validSample())
+}
+
+// Close is called from a deferred cleanup while a request that outlived
+// Shutdown is still recording. Neither side may panic.
+func TestCloseWhileRecordingConcurrently(t *testing.T) {
+	c := NewCollector(&fakeWriter{})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Record panicked during Close: %v", r)
+				}
+			}()
+			for j := 0; j < 200; j++ {
+				c.Record(validSample())
+			}
+		}()
+	}
+	c.Close()
+	wg.Wait()
+}
