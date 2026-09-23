@@ -420,7 +420,7 @@ always the operator.
 - [~] **25. Learned scoring weights (`pkg/decide`)** — the scoring engine's
       weights (item 5) are hand-chosen guesses. `pkg/decide` fits them to
       labelled traffic instead: logistic regression over the same checks,
-      typed decision plus calibrated probability, confidence, and a
+      typed decision plus estimated probability, confidence, and a
       per-feature contribution breakdown. Pure Go, in-process, 14 ns and zero
       allocations per request, no new dependency.
 
@@ -429,9 +429,10 @@ always the operator.
       what the rules actually did. `cmd/hakaishield-train` fits a model from
       labelled traffic in the shape the evidence trail already records.
 
-      **Blocked on labels, not code.** Training needs requests whose true
-      nature is known from something that actually knows — a solved challenge,
-      a verified good-bot reverse lookup, a customer report. Labelling from the
+      **Blocked on verified labels, not inference code.** Challenge solves are
+      forgeable human candidates; honeypot hits are automated candidates,
+      with possible prefetch/accessibility false positives. Operator-reviewed
+      labels are required before claiming model quality. Labelling from the
       current rule score would only teach the model to repeat the guesses it
       exists to improve on. The next step is item 26, not more model code.
 
@@ -464,7 +465,7 @@ always the operator.
       whole thing through, and two of its findings contradict the obvious
       plan:
 
-      - A **solved JS challenge** is a good human label, but the solve
+      - A **solved JS challenge** is a human candidate, but the solve
         arrives on a later request than the one that was scored, so the
         fired vector has to be parked against the challenge nonce
         (`pkg/challenge` already has a Redis `NonceStore`). It must not
@@ -479,18 +480,17 @@ always the operator.
         from the vector of any sample it labelled, or the model just
         learns the label back.
       - **Selection bias** is the real trap: under PolicyBalanced only
-        score>0 traffic is challenged, so every human label comes from a
-        human who already looked suspicious. Pick a correction before
+        score>0 traffic is challenged, so every human candidate comes from
+        traffic that already looked suspicious. Pick a correction before
         collecting, not after.
 
-      **Status: collection built, bias correction not.** `pkg/labels`
-      collects both usable sources behind `-collect-labels` (needs
-      `-db-url`), stores them in `training_samples` tenant-scoped with no
-      IP/UA/path kept, and `cmd/hakaishield-train -db-url` trains straight
-      off them. Recording is 102ns and zero-allocation on the request
-      path, off a bounded queue that drops rather than blocking a
-      visitor. Per-identity caps are in, so one client cannot own the
-      training set.
+      **Status: candidate collection built, verification and bias correction
+      not.** `pkg/labels` stores the two candidate sources behind
+      `-collect-labels` with tenant, mask and source, but no IP/UA/path.
+      The first honeypot request is captured once. The trainer refuses
+      automatic DB candidates unless `-allow-unverified-labels` is
+      explicitly set for shadow experiments; curated JSONL remains usable.
+      The bounded queue and per-identity cap limit request cost and volume.
 
       **Still open:** the selection-bias correction (§3 of
       `LEARNED_SCORING.md`) is an unmade product decision, and the parked

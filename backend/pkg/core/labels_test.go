@@ -155,8 +155,8 @@ func TestHoneypotTripBecomesAnAutomatedLabelWithoutItsOwnBit(t *testing.T) {
 	trap.RemoteAddr = "203.0.113.77:5555"
 	guard.ServeHTTP(httptest.NewRecorder(), trap)
 
-	// The trip is evidence that scoring reads, so the next request from
-	// the same caller is the one that fires honeypot_trap.
+	// A trap hit must be captured even if this caller never requests
+	// another page. A subsequent request must not duplicate its label.
 	next := httptest.NewRequest("GET", "http://example.com/products", nil)
 	next.Header.Set("User-Agent", "Mozilla/5.0 Chrome/120.0")
 	next.RemoteAddr = "203.0.113.77:5555"
@@ -164,8 +164,8 @@ func TestHoneypotTripBecomesAnAutomatedLabelWithoutItsOwnBit(t *testing.T) {
 	recorder.Close()
 
 	got := w.samples()
-	if len(got) == 0 {
-		t.Fatal("a honeypot trip produced no label")
+	if len(got) != 1 {
+		t.Fatalf("trap plus subsequent request produced %d labels, want 1: %+v", len(got), got)
 	}
 	honeypot, ok := signals.FeatureBit(signals.FeatureHoneypotTrap)
 	if !ok {
@@ -184,6 +184,18 @@ func TestHoneypotTripBecomesAnAutomatedLabelWithoutItsOwnBit(t *testing.T) {
 		return
 	}
 	t.Fatalf("no honeypot-sourced sample among %+v", got)
+}
+
+func TestHoneypotTripWithoutFollowupProducesALabel(t *testing.T) {
+	guard, _, w, recorder := labelFixture(t, config.PolicyBalanced)
+	trap := httptest.NewRequest("GET", "http://example.com"+signals.HoneypotPath, nil)
+	trap.RemoteAddr = "203.0.113.78:5555"
+	guard.ServeHTTP(httptest.NewRecorder(), trap)
+	recorder.Close()
+	got := w.samples()
+	if len(got) != 1 || got[0].Source != labels.SourceHoneypotTrap || !got[0].Automated {
+		t.Fatalf("single trap hit produced %+v, want one automated honeypot sample", got)
+	}
 }
 
 // With no recorder attached — the default — nothing is collected and

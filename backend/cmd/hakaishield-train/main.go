@@ -7,9 +7,9 @@
 //	{"signals":["ua_mismatch","header_anomaly"],"automated":true}
 //	{"signals":[],"automated":false}
 //
-// The label is the part that has to be earned. "automated" must come from
-// something that actually knows — a solved challenge, a verified good-bot
-// reverse lookup, a customer's own report. Labelling with the current
+// The label is the part that has to be earned. For production evaluation,
+// "automated" must come from independent review, not a forgeable challenge
+// solve or a possible browser prefetch. Labelling with the current
 // rule score would only teach the model to repeat the guesses it exists
 // to improve on, and the resulting model would look excellent against the
 // very data that misled it.
@@ -38,7 +38,7 @@ import (
 // labelled is one line of the input file.
 type labelled struct {
 	Signals   []string `json:"signals"`
-	Automated bool     `json:"automated"`
+	Automated *bool    `json:"automated"`
 }
 
 func main() {
@@ -46,6 +46,7 @@ func main() {
 	dbURL := flag.String("db-url", os.Getenv("DATABASE_URL"), "read labelled traffic collected by the proxy's -collect-labels instead of a file. Falls back to $DATABASE_URL.")
 	tenant := flag.String("tenant", "", "train on one tenant's traffic only; empty trains a model shared across tenants")
 	maxSamples := flag.Int("max-samples", 200_000, "most recent samples to read when training from the database")
+	allowUnverifiedLabels := flag.Bool("allow-unverified-labels", false, "experimental: train from automatically collected candidate labels; output is for shadow analysis only")
 	out := flag.String("out", "", "where to write the trained model (default: stdout)")
 	holdout := flag.Float64("holdout", 0.2, "share of the data held back to score the model on traffic it was not trained on")
 	blockAt := flag.Float64("block-at", decide.DefaultOptions().BlockAt, "probability at or above which the model would block")
@@ -53,14 +54,15 @@ func main() {
 	flag.Parse()
 
 	if err := run(runOptions{
-		in:          *in,
-		out:         *out,
-		dbURL:       *dbURL,
-		tenant:      *tenant,
-		maxSamples:  *maxSamples,
-		holdout:     *holdout,
-		challengeAt: *challengeAt,
-		blockAt:     *blockAt,
+		in:                    *in,
+		out:                   *out,
+		dbURL:                 *dbURL,
+		tenant:                *tenant,
+		maxSamples:            *maxSamples,
+		allowUnverifiedLabels: *allowUnverifiedLabels,
+		holdout:               *holdout,
+		challengeAt:           *challengeAt,
+		blockAt:               *blockAt,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "hakaishield-train: %v\n", err)
 		os.Exit(1)
@@ -71,17 +73,21 @@ func main() {
 // than eight positional arguments because most of them are numbers and
 // swapping two would be silent.
 type runOptions struct {
-	in          string
-	out         string
-	dbURL       string
-	tenant      string
-	maxSamples  int
-	holdout     float64
-	challengeAt float64
-	blockAt     float64
+	in                    string
+	out                   string
+	dbURL                 string
+	tenant                string
+	maxSamples            int
+	allowUnverifiedLabels bool
+	holdout               float64
+	challengeAt           float64
+	blockAt               float64
 }
 
 func run(opts runOptions) error {
+	if opts.in == "" && opts.dbURL != "" && !opts.allowUnverifiedLabels {
+		return errors.New("automatically collected labels are unverified; supply curated -in data, or use -allow-unverified-labels for shadow-only experiments")
+	}
 	if opts.holdout < 0 || opts.holdout >= 1 {
 		return fmt.Errorf("holdout %v must be in [0,1)", opts.holdout)
 	}
@@ -246,12 +252,22 @@ func readSamples(r io.Reader, features []string) ([]decide.Sample, error) {
 		if err := dec.Decode(&l); err != nil {
 			return nil, fmt.Errorf("line %d: %w", line, err)
 		}
+		if l.Signals == nil {
+			return nil, fmt.Errorf("line %d: missing signals array", line)
+		}
+		if l.Automated == nil {
+			return nil, fmt.Errorf("line %d: missing automated label", line)
+		}
+		var extra any
+		if err := dec.Decode(&extra); err != io.EOF {
+			return nil, fmt.Errorf("line %d: extra content after sample: %v", line, err)
+		}
 
 		fired, err := decide.Vector(features, l.Signals)
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", line, err)
 		}
-		samples = append(samples, decide.Sample{Fired: fired, Automated: l.Automated})
+		samples = append(samples, decide.Sample{Fired: fired, Automated: *l.Automated})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err

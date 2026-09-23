@@ -1,21 +1,12 @@
 // Package labels collects labelled traffic for the learned scorer
 // (pkg/decide) to train on.
 //
-// A label is only worth having if it comes from something that actually
-// knows whether a request was automated, independently of our own
-// scoring. Labelling from the rule score would teach the model to repeat
-// the guesses it exists to improve on. Two sources qualify today, and
-// both are wired in pkg/core:
+// These are candidate labels, not verified ground truth. Labelling from
+// the rule score would teach the model to repeat its own guesses. Two
+// independent observations are collected:
 //
-//   - a solved JS challenge, labelled human. Read the caveat in
-//     docs/LEARNED_SCORING.md 2.1 before trusting this one: the solve
-//     is checked by shape, not by rendering, so a client that studies
-//     the verify handler can produce a passing answer without running
-//     any JavaScript. It is independent of our score, which is what
-//     makes it a label at all, but it is forgeable and therefore a
-//     poisoning vector that the per-identity cap only narrows
-//   - a honeypot trip, which proves something walked the DOM and
-//     followed an invisible link, so the request is labelled automated
+//   - a solved challenge, which can also be forged by a purpose-built client
+//   - a honeypot hit, which can also come from prefetch or accessibility tools
 //
 // docs/LEARNED_SCORING.md is the full write-up: which other sources look
 // obvious and are traps, the selection bias in this data, and why
@@ -35,7 +26,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 )
 
-// Sample is one labelled request, in the form the trainer needs.
+// Sample is one candidate-labelled request.
 //
 // It deliberately holds no IP, user agent, path or body. A model trains
 // on which checks fired, and nothing else here is worth the storage, the
@@ -49,10 +40,10 @@ type Sample struct {
 	// FeatureVersion names the check list that produced Fired. The mask
 	// is positional, so a sample without this is not interpretable.
 	FeatureVersion string
-	// Automated is the label.
+	// Automated is the observed label, not a verified classification.
 	Automated bool
-	// Source says which independent signal supplied the label, so a
-	// poisoned batch can be found and dropped later.
+	// Source records provenance so candidate observations can be reviewed
+	// or excluded during training.
 	Source string
 	// Identity is the (tenant, IP, JA4) triple this sample came from. It
 	// is used to cap how much one client can contribute and is never

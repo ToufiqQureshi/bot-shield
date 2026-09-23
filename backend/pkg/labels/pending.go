@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// A solved challenge is the cleanest human label available, but the
+// A solved challenge is a human candidate, but the
 // solve arrives on a different request from the one that was scored. The
 // fired checks have to wait somewhere in between, keyed by the challenge
 // nonce.

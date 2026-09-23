@@ -332,18 +332,21 @@ own scoring — label from the rule score and the model just learns to repeat
 the guesses it exists to improve on, then scores brilliantly against the very
 data that misled it.
 
-Two sources qualify, and both collect themselves once `-collect-labels` is on:
+Two candidate sources collect themselves once `-collect-labels` is on:
 
-**A solved JS challenge → human.** The client ran real JavaScript, completed a
-proof-of-work, rendered a canvas, and exposed no automation globals. That is a
-capability test, not our opinion. The solve arrives on a *later* request than
+**A solved JS challenge → human candidate.** The proof-of-work can be computed
+by an automated client; canvas and automation fields are client supplied and
+can be forged. This is an observation, not verified ground truth. The solve
+arrives on a *later* request than
 the one that was scored, so the fired mask is parked server-side against the
 challenge nonce and claimed when the solve lands. It is never put in the token
 — the token goes to the client, and handing a bot a list of the checks it
 tripped tells it exactly what to fix.
 
-**A honeypot trip → automated.** An invisible, `aria-hidden`, `nofollow` link
-that only something walking the DOM would follow. One rule: `honeypot_trap` is
+**A honeypot trip → automated candidate.** An invisible, `aria-hidden`,
+`nofollow` link is strong evidence, but prefetch and accessibility tools can
+also reach it. The first trap hit is captured without a follow-up request.
+One rule: `honeypot_trap` is
 stripped from the sample it labelled. Leave it in and the model just learns
 "honeypot_trap means automated" — which is the label, not a finding. The other
 eight checks on that request are the part worth learning from.
@@ -362,8 +365,8 @@ squarely at legitimate bots.
 ### The trap you should know about before you touch any of this
 
 **Selection bias.** Under the default policy, only traffic that already scored
-above zero gets challenged. So every human label we collect comes from a human
-who **already looked suspicious**.
+above zero gets challenged. So every human candidate we collect comes from
+traffic that **already looked suspicious**.
 
 Think of a doctor who only ever examines people in a hospital, then concludes
 most people are ill.
@@ -387,12 +390,16 @@ cd backend
 # 1. Collect. Records, decides nothing. Needs a database.
 ./hakaishield -target https://example.com -db-url "$DATABASE_URL" -collect-labels
 
-# 2. Train, once there is traffic. Takes about a second.
-go run ./cmd/hakaishield-train -db-url "$DATABASE_URL" -out model.json
+# 2. Train on independently reviewed labels.
+go run ./cmd/hakaishield-train -in verified-labels.jsonl -out model.json
 
 # 3. Load it — SHADOW. It still decides nothing.
 ./hakaishield -target https://example.com -model model.json
 ```
+
+The trainer refuses automatically collected database candidates by default.
+`-allow-unverified-labels` permits DB training only as a shadow experiment;
+its held-out score does not prove production accuracy.
 
 Watch collection with the counters on the observability endpoint:
 

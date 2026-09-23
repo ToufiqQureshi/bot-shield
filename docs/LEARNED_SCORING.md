@@ -26,7 +26,7 @@
 | `Evidence.Model` — the recorded opinion | **built**, nothing reads it yet |
 | `pkg/labels` — collection, caps, parked samples | **built**, tested |
 | `training_samples` table + `-collect-labels` | **built** |
-| `cmd/hakaishield-train -db-url` — train off it | **built** |
+| `cmd/hakaishield-train -db-url` — candidate-data experiment | **built, explicit opt-in only** |
 | **Selection-bias correction (§3)** | **not built — an unmade decision** |
 | Retention on a schedule | `db.DeleteSamplesBefore` exists, nothing calls it |
 | Dashboard surface for any of it | not built, deliberately |
@@ -52,7 +52,7 @@ it would then score beautifully against the very data that misled it.
 Three candidate sources were examined against the code. They are not
 equally good, and the obvious one is the worst.
 
-### 2.1 Solved JS challenge → human ⚠️ the best one we have, and it is forgeable
+### 2.1 Solved JS challenge → human candidate, not ground truth
 
 `pkg/challenge` issues a proof-of-work plus a canvas render plus
 automation-global checks. A solve is **independent evidence**: it is not
@@ -83,19 +83,15 @@ that is a different argument that was not made when it was accepted.
   (`cap.go`)
 - nothing trained on this data is allowed to decide anything (section 3)
 
-An attacker rotating IPs defeats the cap. The real fix is to make the
-canvas proof mean something — decode the base64 PNG server-side and
-check dimensions, header sanity and pixel entropy, so the string has to
-come from an actual render. Until that exists, treat every
-`challenge_solved` sample as attacker-influencable and weigh it
-accordingly.
+An attacker rotating IPs defeats the cap. Decoding the PNG and checking
+dimensions and pixel entropy would reduce trivial forgery, but still would
+not establish human ground truth. Treat every `challenge_solved` sample
+as attacker-influencable until independently verified.
 
-**What has to be built.** The solve happens on a *later* request than the
-one that was scored, so the fired vector has to survive the round trip.
-The challenge token carries a nonce, and `pkg/challenge` already has a
-`NonceStore` backed by Redis. Store `nonce → fired bitmask` there
-alongside the nonce, and on a successful verify, emit
-`(fired, automated=false)`.
+The solve happens later than scoring. The fired vector is parked server-side
+against the nonce and emitted as a **candidate**
+`(fired, automated=false, source=challenge_solved)` after verification.
+The trainer excludes these database observations by default.
 
 **Do not put the bitmask in the token.** The token goes to the client.
 Handing a bot a signed list of which of our checks it tripped tells it
@@ -105,17 +101,18 @@ token-gated and never gets wildcard CORS. Keep it server-side.
 **A failed or abandoned challenge is not a bot label.** A real person on
 a slow phone, with JS disabled, on a locked-down corporate browser, or
 who simply closed the tab, produces exactly the same non-solve as a
-scraper. Only solves are labels. Non-solves are unlabelled, and that is
+scraper. Only solves are human candidates. Non-solves are unlabelled, and that is
 fine — an unlabelled sample costs nothing.
 
-### 2.2 Honeypot trip → automated ⚠️ usable, with one rule
+### 2.2 Honeypot trip → automated candidate, with one rule
 
 `pkg/deception` injects a `display:none`, `aria-hidden`, `rel=nofollow`
 link. Fetching it means something walked the DOM and followed a link no
 person sees. That is independent of our scoring — it is behaviour.
 
-**The rule: `honeypot_trap` must be dropped from the feature vector of
-any sample it labelled.** It is one of the nine checks. Leave it in and
+The first trap request itself supplies one candidate, even if no later
+request arrives. **`honeypot_trap` must be dropped from its feature vector.**
+It is one of the nine checks. Leave it in and
 the model simply learns "honeypot_trap means automated", which is the
 label, not a finding. The other eight features are what we want it to
 learn from on those samples.
@@ -155,8 +152,8 @@ when there are customers; it does not gate item 26.
 ## 3. The problem nobody notices until the model is wrong
 
 **Selection bias.** Under `PolicyBalanced` only traffic that scored above
-zero is challenged. So every human label we collect comes from a human
-who *already looked suspicious*. We will have no labels at all for the
+zero is challenged. So every human candidate we collect comes from traffic
+that *already looked suspicious*. We will have no labels at all for the
 clean majority.
 
 Two consequences:
@@ -202,8 +199,8 @@ because the system taught itself.
 
 So:
 
-- **Collection is automatic.** Labels accumulate without anyone doing
-  anything.
+- **Collection is automatic.** Candidate observations accumulate without
+  anyone doing anything.
 - **Training is a command.** Someone runs it and reads the numbers.
 - **Deployment is a separate decision.** A trained model goes into shadow
   first, never straight into enforcement.
@@ -266,13 +263,13 @@ signals.Evaluate → Evaluation{Score, Signals, Fired}
   ↓
   ├─ challenged → nonce stored with Fired (Redis, already there)
   │                 ↓
-  │              solved? → (Fired, automated=false)   ← independent
+  │              solved? → human candidate, source=challenge_solved
   │
-  └─ honeypot trip → (Fired minus honeypot_trap, automated=true)
+  └─ first honeypot hit → automated candidate, trap bit cleared
                           ↓
-                    training_sample table (tenant-scoped, bounded)
+                    training_samples table (tenant-scoped; retention pending)
                           ↓
-                    export to JSONL  ─── a human runs this
+                    source review / independently verified JSONL
                           ↓
                     cmd/hakaishield-train
                           ↓
@@ -309,17 +306,19 @@ label_sample_dropped_total   queue full - the writer cannot keep up
 label_written_total          actually stored
 ```
 
-Once there is traffic, train straight off it:
+Automatically collected rows are candidates, so training from the database
+is refused by default. Use independently reviewed labels in a JSONL file:
 
 ```bash
-go run ./cmd/hakaishield-train -db-url "$DATABASE_URL" -out model.json
+go run ./cmd/hakaishield-train -in verified-labels.jsonl -out model.json
 ./hakaishield -target https://example.com -model model.json   # shadow
 ```
 
-`-tenant <id>` trains one customer's model instead of a shared one. The
-trainer filters on this build's feature version, so rows captured before
-a check was added or reordered are left out rather than silently
-misread. A file still works too, for a set produced by hand:
+`-allow-unverified-labels` explicitly permits experimental DB training
+for shadow analysis only; its scores do not prove production accuracy.
+`-tenant <id>` filters the DB rows to one customer, but the proxy still
+applies a loaded model globally in shadow. The trainer filters on this
+build's feature version. A reviewed file uses:
 
 ```bash
 go run ./cmd/hakaishield-train -in labelled.jsonl -out model.json
@@ -343,9 +342,10 @@ visitor a customer would have lost.
 
 All of these, not some:
 
-- [x] Labels come from independent sources only (§2), with `honeypot_trap`
-      excluded from the samples it labelled. (Built; `pkg/core/guard.go`
-      clears the bit, and a mutation check fails if it stops.)
+- [ ] Labels have independently verified ground truth. Challenge solves
+      and honeypot hits are candidate observations only. The trainer
+      refuses these DB rows by default, and `honeypot_trap` is excluded
+      from its own candidate sample.
 - [ ] The selection-bias question (§3) has an answer written in
       `DECISIONS.md`.
 - [x] Per-identity sample caps exist, so one client cannot flood the set.

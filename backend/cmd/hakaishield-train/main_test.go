@@ -83,6 +83,9 @@ func TestRunRefusesUnusableInput(t *testing.T) {
 	}{
 		{"a truncated line", `{"signals":[],"automated":` + "\n", "line 1"},
 		{"a misspelled field", `{"signal":[],"automated":false}` + "\n", "unknown field"},
+		{"a missing label", `{"signals":[]}` + "\n", "missing automated"},
+		{"a missing feature list", `{"automated":false}` + "\n", "missing signals"},
+		{"two objects on one line", `{"signals":[],"automated":false}{"signals":[],"automated":true}` + "\n", "line 1"},
 		{"a check from another build", `{"signals":["not_a_real_check"],"automated":true}` + "\n", "not_a_real_check"},
 		{"an empty file", "", "no labelled traffic"},
 	}
@@ -103,6 +106,13 @@ func TestRunRefusesUnusableInput(t *testing.T) {
 				t.Errorf("run(%s) error = %q, want it to mention %q", tc.name, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestRunRefusesAutomaticallyCollectedLabelsByDefault(t *testing.T) {
+	err := run(runOptions{dbURL: "postgres://unused", holdout: 0.2, challengeAt: 0.5, blockAt: 0.9})
+	if err == nil || !strings.Contains(err.Error(), "unverified") {
+		t.Fatalf("run() error = %v, want an unverified-label gate before any database read", err)
 	}
 }
 

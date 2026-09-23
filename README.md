@@ -85,7 +85,7 @@ cd backend && go build -o hakaishield .
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — hakaishield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
 | `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
-| `-collect-labels` | Collect labelled traffic (solved challenges and honeypot trips) so a scoring model can be trained later. Needs `-db-url`. Records only which checks fired — no IP, user agent, path or body. Off by default. |
+| `-collect-labels` | Collect candidate labels from solved challenges and honeypot hits for later review. Needs `-db-url`. Records only which checks fired — no IP, user agent, path or body. Off by default. |
 | `-model` | A trained decision model (see below) to score alongside the rules. It records what it would have decided and never affects a decision. Unset leaves it off. A model that does not match this build's checks refuses to start. |
 | `-db-url` | PostgreSQL URL for your Supabase project's database (Project Settings → Database in the Supabase dashboard). Required, along with `-supabase-url`, for the dashboard's domains/rules/settings API. |
 | `-supabase-url` | Your Supabase project URL (e.g. `https://xxxx.supabase.co`). Used to verify dashboard session JWTs against that project's published JWKS — no shared secret needed. Required, along with `-db-url`, for that same API. |
@@ -126,8 +126,8 @@ is worth 50, a header anomaly 25, and so on. Those are reasonable
 guesses, but they are guesses.
 
 `-model` loads a model that answers the same question from the same
-signals with weights **fitted to real labelled traffic**. It returns a
-typed decision, a calibrated probability, a confidence, and a breakdown
+signals with weights fitted to operator-reviewed labelled traffic. It returns a
+typed decision, an estimated probability, a confidence, and a breakdown
 of exactly what each signal contributed — so it stays as explainable as
 the rules it sits beside.
 
@@ -141,33 +141,31 @@ decision your visitor actually got. That is how a model earns the right
 to enforce — by being compared against the rules on your real traffic
 first. It also will not block on a single signal, however certain it is.
 
-**Collecting the training data.** `-collect-labels` accumulates it from
+**Collecting candidate data.** `-collect-labels` accumulates it from
 your own traffic, with no work on your part:
 
 ```bash
 ./hakaishield -target https://example.com -db-url "$DATABASE_URL" -collect-labels
 ```
 
-A solved challenge is a human label — the client ran real JavaScript,
-drew a real canvas and showed no automation globals, none of which is
-our own guess. A honeypot trip is an automated one. Only which checks
-fired is stored: no IP, user agent, path or body. One client can
-contribute a bounded number of samples an hour, so nobody can fill your
-training set with labels about themselves.
+A solved challenge is a human *candidate*: its canvas and automation fields
+are client supplied and can be forged. A honeypot hit is an automated
+candidate; prefetch and accessibility tools can also hit the trap. Only which
+checks fired is stored: no IP, user agent, path or body. An identity is capped
+at five samples per hour, which limits volume but does not verify a label.
 
 Collecting costs about 100 nanoseconds per labelled request and never
 blocks a visitor: samples go onto a bounded queue and are dropped, and
 counted, rather than making someone wait on a database.
 
-**Training** then reads straight from it:
+**Training** requires a curated JSONL file with independently checked labels:
 
 ```bash
-go run ./cmd/hakaishield-train -db-url "$DATABASE_URL" -out model.json
+go run ./cmd/hakaishield-train -in verified-labels.jsonl -out model.json
 ./hakaishield -target https://example.com -model model.json
 ```
 
-A file works too, one JSON object per line in the shape the evidence
-trail already records:
+Use one JSON object per line in the shape the evidence trail records:
 
 ```bash
 # {"signals":["ua_mismatch","header_anomaly"],"automated":true}
@@ -186,9 +184,10 @@ from something that actually knows, independently of hakaishield's own
 score — labelling from that score would only teach the model to repeat
 the guesses it exists to improve on.
 
-Which sources qualify is less obvious than it looks: a solved challenge
-does, a honeypot trip does with one caveat, and a verified good-bot
-lookup does not. That, the collection pipeline, and the bar a model has
+The database candidates can be used for shadow-only experiments with
+`-allow-unverified-labels`; the trainer refuses them by default. A verified
+good-bot lookup is not a usable training label either. The collection
+pipeline and the bar a model has
 to clear before it may decide anything are in
 [`docs/LEARNED_SCORING.md`](docs/LEARNED_SCORING.md).
 

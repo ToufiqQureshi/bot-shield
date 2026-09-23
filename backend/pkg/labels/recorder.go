@@ -47,19 +47,9 @@ func (r *Recorder) ChallengeIssued(nonce string, s Sample) {
 	r.pending.park(nonce, s, r.now())
 }
 
-// ChallengeSolved labels the request that led to this challenge as human.
-// The solve is independent of anything our own scoring decided, which is
-// what makes it a label rather than our own guess repeated back.
-//
-// It is not proof that a browser ran. The verify handler checks the
-// proof-of-work hash, that the canvas string has a PNG data-URL prefix
-// and some length, and that the client did not itself report being
-// automated (pkg/challenge, validCanvasProof). A script that reproduces
-// those three passes without rendering anything, so this source can be
-// poisoned by an attacker willing to spend one nonce per sample. The
-// per-identity cap bounds the rate, not the ceiling for someone rotating
-// addresses. docs/LEARNED_SCORING.md 2.1 has the full caveat; it is one
-// reason no model trained on this data may decide anything yet.
+// ChallengeSolved records a human candidate for the challenged request.
+// The canvas and automation fields are client supplied, so a solve is
+// insufficient proof of a human for production training.
 func (r *Recorder) ChallengeSolved(nonce string) {
 	if r == nil {
 		return

@@ -115,9 +115,10 @@ from real traffic instead — logistic regression, pure Go, 14 nanoseconds per
 request, and it still produces a per-check explanation rather than a black-box
 number.
 
-`pkg/labels` collects the training data automatically: a solved challenge is a
-human label, a honeypot trip is an automated one. Both are independent of our
-own scoring, which is what makes them worth training on.
+`pkg/labels` collects candidate observations automatically. A solved challenge
+can be forged by an automated client, and a honeypot hit can come from prefetch
+or accessibility software. The trainer requires curated labels by default;
+the collected rows support review and explicit shadow-only experiments.
 
 **It decides nothing.** It runs in shadow and records what it would have done.
 See §5.

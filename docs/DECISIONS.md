@@ -1513,9 +1513,10 @@ architecture.
   checks (`ja4_blocklist`, `scripting_tool`); the model has no equivalent
   verification behind any one weight, so it gets the stricter rule
   (Sections 10, 14).
-- **The blocker is labels, not code.** Training needs requests whose true
-  nature is known from something that actually knows — a solved challenge, a
-  verified good-bot reverse lookup, a customer report. Labelling with the
+- **The blocker is verified labels, not inference code.** Challenge solves and
+  honeypot hits are candidates, not ground truth; see the correction below.
+  An independently reviewed customer report can supply a stronger label.
+  Labelling with the
   current rule score would only teach the model to repeat the guesses it exists
   to improve on, and it would then score excellently against the very data that
   misled it. Until that labelling exists, `pkg/decide` is a working pipeline
@@ -1524,3 +1525,20 @@ architecture.
   do not match the running build is refused at load, because the fired-check
   vector is positional and a stale model would apply every weight to the wrong
   signal.
+
+## Automatically collected labels are candidates, not ground truth — 2026-09-23
+
+**Correction to the 2026-09-22 decision above.** A challenge solve does not
+prove a human used a browser: proof-of-work is computable by any client, and
+the canvas and automation fields are client supplied. A honeypot hit is strong
+automation evidence but can also come from prefetch or accessibility software.
+The per-identity cap limits volume; it does not authenticate either label.
+
+**Decision.** Keep collecting source-tagged candidates for investigation, but
+make `hakaishield-train -db-url` refuse them by default. An operator can use
+`-allow-unverified-labels` for a shadow-only experiment, or supply independently
+reviewed JSONL through `-in`. The proxy has no learned enforcement mode. Before
+one is designed, obtain verified labels, correct selection bias, compare false
+positives with the rules on held-out data, and resolve whether models are
+tenant-specific or shared. The first honeypot hit now captures its own sample;
+no follow-up request is required.

@@ -553,10 +553,9 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Everything above passed, so this client ran real JavaScript, drew a
-	// real canvas, and showed no automation globals. That is independent
-	// of anything our scoring decided, which is what makes it a label
-	// worth training on (docs/LEARNED_SCORING.md).
+	// Verification grants a passed cookie, but the canvas and automation
+	// values are client supplied. Record only a candidate human label;
+	// the trainer excludes these observations by default.
 	c.labels.ChallengeSolved(nonce)
 
 	c.setPassedCookie(w, r.Host)

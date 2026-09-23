@@ -1,5 +1,5 @@
 // Package decide turns the signals a request fired into one typed,
-// calibrated decision.
+// probabilistic opinion.
 //
 // The rule scorer in pkg/signals adds fixed hand-chosen weights and
 // compares the total to a fixed threshold. That works, but the weights are
@@ -63,8 +63,8 @@ type Model struct {
 // Explain when the evidence trail needs the reasons too.
 type Prediction struct {
 	Decision signals.Decision
-	// Probability is the model's calibrated estimate that the request is
-	// automated, in [0,1].
+	// Probability is the model's estimate that the request is automated,
+	// in [0,1]. Calibration against representative traffic is not proven.
 	Probability float64
 	// Confidence is how far the estimate sits from undecided, in [0,1]:
 	// 0 means the model is guessing, 1 means it is certain. It is derived

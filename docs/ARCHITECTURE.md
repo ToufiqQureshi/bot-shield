@@ -280,21 +280,16 @@ object per line in the shape the evidence trail already records:
 {"signals":[],"automated":false}
 ```
 
-**Labels are collected, not typed in.** `-collect-labels` (with `-db-url`)
-turns on `pkg/labels`, which takes a human label from every solved
-challenge and an automated one from every honeypot trip, and stores only
-the fired mask plus the label — tenant-scoped, no IP, user agent, path or
-body. Recording is 102ns and zero-allocation, onto a bounded queue that
-drops rather than blocking a visitor on a database, and one (tenant, IP,
-JA4) identity is capped so it cannot fill the set with labels about
-itself. `cmd/hakaishield-train -db-url` trains straight off it.
-
-**What is still missing is the bias correction, not the plumbing.** `automated` has to come from something
-that actually knows, and which sources qualify is less obvious than it looks —
-a solved challenge does, a verified good-bot lookup does not. The whole
-pipeline, the traps in it, and the gate a model has to pass before it may
-decide anything are written up in **`docs/LEARNED_SCORING.md`**. Roadmap items
-25 and 26.
+**Candidate observations are collected.** `-collect-labels` (with
+`-db-url`) records challenge solves and first honeypot hits with source,
+tenant and fired mask, but no IP, user agent, path or body. The bounded
+queue drops rather than blocking visitors, and an identity cap limits
+sample volume. Neither source is verified ground truth: client-provided
+challenge fields can be forged, and prefetch or accessibility tools can
+reach a trap. The trainer rejects database candidates by default; curated
+`-in` labels are the safe input path. `-allow-unverified-labels` permits
+shadow-only experiments. The model still never enforces; independent
+labels, bias correction and held-out comparison remain open (items 25/26).
 
 ---
 

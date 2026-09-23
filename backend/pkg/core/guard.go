@@ -139,6 +139,19 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Decision: signals.DecisionBlock.String(),
 				Enforced: enforced,
 			})
+			if g.labels != nil {
+				// Capture the trap request itself. A crawler may leave after
+				// fetching this URL, so waiting for a later request loses it.
+				fired := signals.Evaluate(signals.RequestFacts{
+					IP: ip, JA4: ja4, UA: r.UserAgent(), Header: r.Header,
+					Path: r.URL.Path, Tenant: tenant.ID,
+				}).Fired
+				g.labels.HoneypotTripped(labels.Sample{
+					TenantID: tenant.ID, Fired: fired &^ honeypotBit,
+					FeatureVersion: signals.FeatureVersion(),
+					Identity:       labelIdentity(tenant.ID, ip, ja4),
+				})
+			}
 		}
 		// A 404 gives the crawler nothing back: no hint the path was
 		// special, and no body worth fetching again.
@@ -208,8 +221,6 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Enforced: enforced,
 		Model:    g.shadowOpinion(evaluation.Fired, decision),
 	})
-
-	g.collectLabels(r, tenant.ID, ip, ja4, evaluation.Fired)
 
 	// The dashboard wants to know what would have happened, but the
 	// visitor is forwarded regardless. Nothing a client's real customer
@@ -281,42 +292,12 @@ func (g *Guard) shadowOpinion(fired uint32, ruleDecision signals.Decision) *evid
 	}
 }
 
-// honeypotBit is resolved once rather than looked up per request: the
-// lookup walks the check list comparing names, and this runs on every
-// request whether or not labels are being collected. Zero means this
-// build has no honeypot check, which disables honeypot labelling rather
-// than silently matching the wrong bit.
+// honeypotBit is resolved once so the trap cannot teach the model its
+// own label. A zero bit is safe: the trap cannot appear in a sample.
 var honeypotBit = func() uint32 {
 	bit, _ := signals.FeatureBit(signals.FeatureHoneypotTrap)
 	return bit
 }()
-
-// collectLabels records the labels this request supplies, if any.
-//
-// Only the honeypot produces one here. A solved challenge is labelled
-// where the solve actually happens, in pkg/challenge, because that is
-// the request that proves anything.
-func (g *Guard) collectLabels(r *http.Request, tenantID, ip, ja4 string, fired uint32) {
-	if g.labels == nil {
-		return
-	}
-
-	if honeypotBit == 0 || fired&honeypotBit == 0 {
-		return
-	}
-
-	// The honeypot bit is cleared before the sample is stored. Left in,
-	// the model would learn "honeypot_trap means automated", which is
-	// the label rather than a finding - the other checks that fired on
-	// the same request are the part worth learning from
-	// (docs/LEARNED_SCORING.md).
-	g.labels.HoneypotTripped(labels.Sample{
-		TenantID:       tenantID,
-		Fired:          fired &^ honeypotBit,
-		FeatureVersion: signals.FeatureVersion(),
-		Identity:       labelIdentity(tenantID, ip, ja4),
-	})
-}
 
 // labelIdentity is the key the per-identity sample cap counts against.
 // It is never stored with the sample: it exists to stop one client

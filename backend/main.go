@@ -106,7 +106,7 @@ func main() {
 	trustedProxyCIDRs := flag.String("trusted-proxy-cidrs", "", "comma-separated proxy CIDRs allowed to supply X-Forwarded-For; leave empty to trust only direct peers")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", os.Getenv("DATABASE_URL"), "PostgreSQL URL for the Supabase project's database (Project Settings > Database in the Supabase dashboard). Falls back to $DATABASE_URL (including from a local .env file) if unset.")
-	collectLabels := flag.Bool("collect-labels", false, "collect labelled traffic (solved challenges and honeypot trips) for training a scoring model. Requires -db-url. Off by default; see docs/LEARNED_SCORING.md.")
+	collectLabels := flag.Bool("collect-labels", false, "collect candidate observations from solved challenges and honeypot hits. Requires -db-url. Off by default; see docs/LEARNED_SCORING.md.")
 	modelPath := flag.String("model", "", "trained decision model (pkg/decide) to score alongside the rules in shadow; it never affects a decision. Unset leaves it off.")
 	supabaseURL := flag.String("supabase-url", os.Getenv("SUPABASE_URL"), "Supabase project URL (e.g. https://xxxx.supabase.co); used to verify dashboard session JWTs against the project's published JWKS. Required, with -db-url, to enable the domains/rules/settings API. Falls back to $SUPABASE_URL (including from a local .env file) if unset.")
 	flag.Parse()
@@ -224,7 +224,7 @@ func main() {
 		recorder := labels.NewRecorder(db.SampleStore{})
 		guard.WithLabelRecorder(recorder)
 		defer recorder.Close()
-		log.Printf("hakaishield: collecting training labels (check list %s); it records traffic and decides nothing", signals.FeatureVersion())
+		log.Printf("hakaishield: collecting candidate labels (check list %s); it records traffic and decides nothing", signals.FeatureVersion())
 	}
 
 	// A model scores alongside the rules and is recorded, never acted on.
