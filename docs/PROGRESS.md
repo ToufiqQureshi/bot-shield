@@ -111,7 +111,7 @@ datacenter as the proxy. Proxy in Singapore with an origin in India makes an
 Indian visitor cross that link three times — ~180–240 ms, not ~60 ms.
 
 ### 2026-09-23 — hosting settled: DigitalOcean Bangalore
-`PENDING` — DEPLOYMENT.md §3 rewritten again. DO Bangalore ($24/mo, 4 TB
+`4bd5221` — DEPLOYMENT.md §3 rewritten again. DO Bangalore ($24/mo, 4 TB
 included, $0.01/GiB) costs the same as Hetzner Singapore at 10 TB and sits in
 India: 5–40 ms instead of 55–70 ms. `deploy/` retargeted.
 Gotcha: the only reason Hetzner ever won was a wrong number — its famous
