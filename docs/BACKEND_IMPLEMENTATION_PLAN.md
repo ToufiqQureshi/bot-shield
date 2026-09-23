@@ -48,9 +48,17 @@ single-node fallback, ownership coverage includes deterministic API tests plus
 an opt-in real Postgres integration test, and aggregate operational counters
 cover JWKS, Goodbot DNS budget, Redis circuit, origin, and client-IP errors.
 
-Phase 1 policy/rule enforcement has not started: the current rules and
-protection-settings APIs persist dashboard data but do not yet alter live
-scoring. The implementation order below remains authoritative.
+Phase 1 policy/rule enforcement is in progress. `backend/pkg/policy` (pure
+condition matcher, rule/policy structs, `Evaluate`, and `ValidateRule` with
+the UA-only-allow and deceive-floor-above-block guardrails) is built and
+wired into `core.Guard` via an optional `PolicyProvider` in shadow mode
+only: a matched rule is recorded on `evidence.Evidence.Policy`, but
+`signals.Decision` remains the only thing that drives enforcement. No
+`PolicyProvider` is wired to a real store yet — `main.go` does not attach
+one, so this is currently a no-op in the running service until a provider
+backed by `pkg/rules`/`pkg/settings` is built and attached. The dashboard's
+rules/protection-settings APIs still only persist data; the implementation
+order below remains authoritative for what's left.
 
 ## Non-Negotiable Product Rules
 

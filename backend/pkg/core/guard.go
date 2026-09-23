@@ -10,6 +10,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
 	"github.com/ToufiqQureshi/hakaishield/pkg/labels"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
+	"github.com/ToufiqQureshi/hakaishield/pkg/policy"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
@@ -31,7 +32,21 @@ type Guard struct {
 	// been looked at on real traffic. Nil is the normal state and costs
 	// nothing.
 	model *decide.Model
+	// policyProvider, when set, is asked for the requesting tenant's
+	// dashboard-authored mitigation policy so it can be evaluated
+	// alongside the rule scorer, the same shadow-only pattern as model.
+	// It never picks Decision (docs/BACKEND_IMPLEMENTATION_PLAN.md Phase
+	// 1 guardrail: policy output earns enforcement in a later, separate
+	// change). Nil is the normal state and costs nothing.
+	policyProvider PolicyProvider
 }
+
+// PolicyProvider returns the current policy for one tenant, or nil when
+// that tenant has none configured. It is a function rather than a
+// concrete store so core.Guard never has to import the storage/database
+// details of how a policy is assembled from an account's rules — see
+// pkg/policy's doc comment on why that package stays storage-agnostic.
+type PolicyProvider func(tenantID string) *policy.Policy
 
 // NewGuard combines the tenant store with a challenge.Challenge instance
 // into the real allow/challenge/block decision. In config.ModeShadow it
@@ -72,6 +87,18 @@ func (g *Guard) WithLabelRecorder(r *labels.Recorder) *Guard {
 // swapping it on a guard that is already serving would be a data race.
 func (g *Guard) WithShadowModel(m *decide.Model) *Guard {
 	g.model = m
+	return g
+}
+
+// WithPolicyProvider attaches a lookup for each tenant's dashboard rules
+// so they can be evaluated in shadow mode. Passing nil turns it off,
+// which is the default.
+//
+// Call it during setup, before the guard serves traffic, for the same
+// reason as WithShadowModel: the field is read without locking on the
+// request path.
+func (g *Guard) WithPolicyProvider(p PolicyProvider) *Guard {
+	g.policyProvider = p
 	return g
 }
 
@@ -220,6 +247,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Decision: decision.String(),
 		Enforced: enforced,
 		Model:    g.shadowOpinion(evaluation.Fired, decision),
+		Policy:   g.shadowPolicyOpinion(tenant.ID, facts, score, r.Method),
 	})
 
 	// The dashboard wants to know what would have happened, but the
@@ -289,6 +317,43 @@ func (g *Guard) shadowOpinion(fired uint32, ruleDecision signals.Decision) *evid
 		Probability: p.Probability,
 		Confidence:  p.Confidence,
 		Reasons:     reasons,
+	}
+}
+
+// shadowPolicyOpinion evaluates the tenant's dashboard rules against
+// this request, if a provider is attached, and returns what they would
+// have done. It returns nil when no provider is configured (the normal
+// case) or when the tenant has no policy — both cost nothing beyond the
+// provider lookup itself.
+//
+// Like shadowOpinion, this never influences ruleDecision: pkg/policy is
+// evaluated purely for the evidence trail until a later, separately
+// reviewed change lets it drive enforcement.
+func (g *Guard) shadowPolicyOpinion(tenantID string, facts signals.RequestFacts, score int, method string) *evidence.PolicyOpinion {
+	if g.policyProvider == nil {
+		return nil
+	}
+	p := g.policyProvider(tenantID)
+	if p == nil {
+		return nil
+	}
+
+	result := policy.Evaluate(p, policy.Facts{
+		IP:     facts.IP,
+		JA4:    facts.JA4,
+		UA:     facts.UA,
+		Path:   facts.Path,
+		Method: method,
+		Score:  score,
+	})
+	if result.Matched {
+		observability.Inc("policy_shadow_match_total")
+	}
+	return &evidence.PolicyOpinion{
+		Matched:  result.Matched,
+		RuleID:   result.RuleID,
+		RuleName: result.RuleName,
+		Action:   string(result.Action),
 	}
 }
 

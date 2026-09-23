@@ -33,6 +33,22 @@ type Evidence struct {
 	// model earns the right to enforce, by being compared against the
 	// rules on real traffic first.
 	Model *ModelOpinion `json:"model,omitempty"`
+	// Policy is what the account's dashboard-authored mitigation rules
+	// (pkg/policy) would have decided, present only when a policy
+	// provider is attached. Like Model, it never affects Decision — see
+	// docs/BACKEND_IMPLEMENTATION_PLAN.md Phase 1: policy output only
+	// starts driving enforcement in a later, separately reviewed change.
+	Policy *PolicyOpinion `json:"policy,omitempty"`
+}
+
+// PolicyOpinion is what one account's mitigation rules would have done
+// with a request, per pkg/policy.Evaluate. A nil RuleID means no rule
+// matched.
+type PolicyOpinion struct {
+	Matched  bool   `json:"matched"`
+	RuleID   string `json:"ruleId,omitempty"`
+	RuleName string `json:"ruleName,omitempty"`
+	Action   string `json:"action,omitempty"`
 }
 
 // ModelOpinion is the learned model's view of one request. It is a plain

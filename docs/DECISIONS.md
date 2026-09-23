@@ -10,6 +10,53 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Phase 1 policy engine: pure package, shadow-only guard wiring, provider left unattached - 2026-09-23
+
+**Decision:** `backend/pkg/policy` evaluates an account's dashboard rules
+against a request (`Evaluate`) with no database or HTTP dependency, and
+validates a candidate rule (`ValidateRule`) against two structural
+guardrails: a rule cannot grant PASS from a single User-Agent condition
+alone, and a DECEIVE rule needs a Threat Score floor strictly above the
+account's configured block threshold. `core.Guard` gained an optional
+`PolicyProvider func(tenantID string) *policy.Policy` hook (mirrors the
+existing `WithShadowModel` pattern): when attached, the match is recorded
+on `evidence.Evidence.Policy`, but `signals.Decision` — computed earlier,
+unconditionally — is the only thing `ServeHTTP`'s switch acts on. No
+provider is constructed or attached in `main.go` in this change, so the
+feature is inert in the deployed service until that follow-up lands.
+
+**Why:** This is the split agreed with Codex CLI (working the same repo,
+see `codex-claude-chat.json`) for Phase 1 of
+`docs/BACKEND_IMPLEMENTATION_PLAN.md`: Claude takes `pkg/policy` and the
+shadow-only `guard.go` wiring; Codex takes `pkg/rules` Create/Update
+validation (unknown field/operator/action, zero-condition block/deceive
+rules) using the same `ValidateRule` guardrails. Landing the provider
+wiring separately — rather than in the same change — keeps this slice to
+files neither side needs to touch to build the other's half, and keeps
+the "shadow before enforce" guardrail literal: there is no code path yet
+that can act on a policy match at all, not just a flag that's off.
+
+**Alternatives considered / rejected:** Loading rules straight from
+`pkg/rules`'s Postgres store inside `guard.go` (rejected — `TenantConfig`
+has no `OwnerUserID` today, `pkg/tenant`'s DB loader doesn't select it,
+and wiring that in touches `pkg/tenant`/`pkg/db`/`main.go`, none of which
+either side had claimed in the relay coordination; doing it under time
+pressure risked a collision with Codex's `pkg/rules` work happening in
+parallel). Making `pkg/policy` import `pkg/rules` directly for a
+`CustomRule`→`Rule` adapter (rejected — keeps the two packages
+independently testable and avoids a one-directional dependency neither
+side asked for yet).
+
+**Revisit when:** Building the real `PolicyProvider` — needs
+`TenantConfig.OwnerUserID` loaded from the `tenants` row (the column
+already exists, `pkg/tenant`'s `TenantLoader` just doesn't select it
+yet), a `pkg/rules`→`pkg/policy` adapter, and a bounded/TTL-cached lookup
+so the request path doesn't take a Postgres round trip per request (same
+cost concern as the existing `negativeHost` cache in `pkg/tenant`). Only
+after a measured shadow period with recorded agree/disagree data (see
+`observability.Inc("policy_shadow_match_total")`) does policy output earn
+a second, separately reviewed change to actually drive enforcement.
+
 ## Audit P0 routing, JA4, host-cache, and public-origin posture - 2026-09-22
 
 **Decision:** Internal challenge routes are mounted exactly (/__hakaishield/challenge and /__hakaishield/verify) instead of claiming the whole /__hakaishield/ subtree; aggregate JA4 velocity fails open until a common-browser prefix database is loaded; unknown Host database misses are negatively cached for a short bounded TTL; and customer/dashboard-created origins use a public-origin proxy that rejects internal IP targets and rechecks the connected address at dial time.
