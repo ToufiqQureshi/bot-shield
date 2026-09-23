@@ -60,23 +60,54 @@ HTTPS mode — TCP mode passes bytes through without terminating.
 The comparison that decided it, for a product whose dominant cost is
 bandwidth (§4):
 
-| | Price | Bandwidth included | Latency from India |
-|---|---|---|---|
-| **Hetzner CX22** | ~€4.5/mo | **20 TB**, then ~$0.001/GB | 60–150 ms (Singapore) |
-| AWS Mumbai (free tier) | free for 12 months | 100 GB, then $0.09/GB | best |
-| DigitalOcean Bangalore | $4/mo | 1 TB | best |
-| Contabo | €5/mo | 32 TB | 150–200 ms |
+| | Price | Bandwidth included | Overage | Latency from India |
+|---|---|---|---|---|
+| **Hetzner CPX11, Singapore** | ~€7.90/mo | **0.5 TB** | **€7.40/TB** (~$0.008/GB) | ~55–70 ms |
+| Hetzner CX22, EU (Falkenstein) | ~€4.5/mo | 20 TB | €1.00/TB (~$0.001/GB) | 130–180 ms |
+| AWS Mumbai (free tier) | free for 12 months | 100 GB | $0.09/GB | best |
+| DigitalOcean Bangalore | $4/mo | 1 TB | $0.01/GB | best |
+| Contabo | €5/mo | 32 TB | — | 150–200 ms |
 
-**Hetzner is ~90x cheaper per GB of egress than AWS**, and egress is the line
-item that grows with the product. 20 TB included covers a great deal of real
-traffic before anything is billed at all.
+**Read the Singapore row carefully — it is not the headline Hetzner number.**
+Hetzner's famous "20 TB included, €1/TB after" is **EU-only**. Asia-Pacific
+servers include **0.5 TB** and charge **€7.40/TB** — 7.4× the EU overage rate.
+An earlier version of this document quoted the EU figures against a Singapore
+deployment, which was simply wrong.
+
+**The decision survives the correction, with a thinner margin.** At €7.40/TB
+Singapore is still roughly **11× cheaper per GB than AWS Mumbai's $0.09/GB**,
+not the 90× the EU figures imply:
+
+| Monthly egress | Hetzner Singapore | AWS Mumbai | EU Hetzner, for reference |
+|---|---|---|---|
+| 1 TB (≈10M requests × 100 KB) | ~€3.70 | ~$81 | €0 |
+| 10 TB | ~€70 | ~$900 | €0 |
+| 100 TB | ~€736 | ~$9,200 | ~€80 |
+
+**CX22 is not available in Singapore.** The CX series is EU-only. Singapore
+offers the AMD shared-vCPU **CPX** line (CPX11 from ~€7.90/mo) and the
+dedicated-vCPU **CCX** line (CCX13 from ~€21.50/mo). Provisioning fails if you
+go looking for a CX box in that region.
 
 **What is given up, stated plainly:** Hetzner has no India datacenter.
-Singapore is the closest region, so Indian visitors pay 60–150 ms of network
-latency that AWS Mumbai would not charge them. For a proxy sitting in front of
-a site, that latency is added to every request. It is a real cost, accepted
-because bandwidth economics decide this product's viability and latency does
-not.
+Singapore is the closest region at roughly **55–70 ms** RTT from Mumbai over
+the SEA-ME-WE-6 / MIST / i2i cable routes — better than the 130–180 ms an EU
+region costs, worse than the 5–40 ms an India-local provider gives.
+
+**The latency trap that matters more than the number.** hakaishield is a
+reverse proxy, so a request crosses the network *twice*: visitor → proxy, then
+proxy → origin, and back. Put the proxy in Singapore and leave the origin on an
+Indian host and an Indian visitor pays the Singapore hop **three times**
+(≈180–240 ms added), because the traffic flies to Singapore, back to India for
+the origin, and out again.
+
+> **Rule: the origin must sit in the same datacenter as hakaishield.** Then
+> proxy→origin is sub-millisecond and the visitor pays the ~60 ms once. This is
+> not an optimisation; getting it wrong triples the penalty.
+
+If the customer's origin cannot move, that customer wants the sideband mode
+(ROADMAP 27), not the proxy — which is a second, independent reason that item
+exists.
 
 AWS Mumbai was the other serious candidate — free for a year and physically
 close. Rejected because the free tier ends, and at that point its 100 GB
@@ -91,8 +122,14 @@ Finland, the US and Singapore.
 ### The setup
 
 ```text
-Hetzner CX22 (~€4.5/mo, Singapore)   Ubuntu, plain public IP
-  2 vCPU, 4 GB RAM, 20 TB traffic
+Hetzner CPX11 (~€7.90/mo, Singapore)  Ubuntu, plain public IP
+  2 vCPU, 2 GB RAM, 40 GB NVMe
+  0.5 TB traffic included, then €7.40/TB
+  (CX22 does not exist in Singapore — CX is EU-only. CPX/CCX only.)
+  CPX11 has 2 GB where the CX22 plan had 4 GB. It runs hakaishield plus
+  Redis in Docker, which fits, but leaves little headroom. Take CPX21
+  (3 vCPU / 4 GB / 80 GB) if the box starts swapping under load test —
+  that is the actual like-for-like replacement, not CPX11.
   Firewall: 443 (traffic), 80 (certbot renewal), 22 (SSH, your IP only)
 
 Postgres   -> Supabase. Managed backups, and a dead box does not take the
@@ -215,11 +252,13 @@ Up to ~70% off compute. Irrelevant while compute is a rounding error next to
 bandwidth, and useless against bandwidth itself.
 
 **7. When bandwidth dominates, leave AWS for the data plane.**
-Hetzner includes ~20 TB per server and charges roughly **$0.001/GB** on
-overage — about **90× cheaper** than AWS's $0.09/GB. At 100 TB/month the same
-traffic is thousands of dollars on AWS and a rounding error on Hetzner. Egress
-pricing, not compute pricing, is what should pick the host for this product at
-scale.
+Hetzner charges **€1.00/TB** (~$0.001/GB) on overage in the EU and
+**€7.40/TB** (~$0.008/GB) in Singapore, against AWS's **$0.09/GB** — so roughly
+**90× cheaper from the EU, 11× from Singapore**. Quote the rate for the region
+you are actually in; the EU number is the one everyone repeats and it does not
+apply to Asia-Pacific (§3). At 100 TB/month that is ~€80 in the EU, ~€736 in
+Singapore and ~$9,200 on AWS. Egress pricing, not compute pricing, is what
+should pick the host for this product at scale.
 
 **8. Set a billing alarm before anything else.**
 AWS Budgets, alert at a number that would hurt. Free tier ending is silent, and
@@ -394,7 +433,10 @@ Checked 2026-09-22. Prices and vendor behaviour change — re-verify.
 - NAT Gateway hourly + per-GB charges, and Savings Plans not covering them:
   [CloudForecast](https://www.cloudforecast.io/blog/aws-nat-gateway-pricing-and-cost/),
   [enforza](https://enforza.io/aws-nat-gateway-cost/)
-- Hetzner included bandwidth and ~$0.001/GB overage:
+- Hetzner per-region included bandwidth (EU 20 TB vs Asia-Pacific 0.5 TB) and
+  overage (€1.00/TB EU, €7.40/TB Singapore), and CX being EU-only while
+  Singapore offers CPX/CCX — re-verified 2026-09-23 against Hetzner's own docs
+  and pricing pages:
   [Cherry Servers](https://www.cherryservers.com/blog/free-egress-cloud-providers),
   [EgressCost comparison](https://egresscost.com/compare/)
 - DataDome's sideband/edge-module architecture, ~2ms decisions, keep-alive

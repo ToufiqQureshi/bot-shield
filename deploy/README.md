@@ -14,7 +14,9 @@ constant and quietly guts detection. Nothing errors.
 ## What goes where
 
 ```text
-Hetzner CX22 (~€4.5/mo, Singapore — no India DC, so 60–150ms from India)
+Hetzner CPX11 (~€7.90/mo, Singapore — CX is EU-only, so CPX/CCX there).
+No India DC: ~55–70ms from Mumbai. Put the ORIGIN in the same datacenter,
+or an Indian visitor pays that hop three times (see docs/DEPLOYMENT.md §3).
 ├── hakaishield   :443, in Docker
 └── Redis         no published port; only hakaishield reaches it
 
