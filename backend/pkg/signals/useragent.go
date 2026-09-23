@@ -9,9 +9,48 @@ var browserMarkers = []string{"Chrome/", "Firefox/", "Safari/", "Edg/"}
 // (Googlebot, etc). That's not a lie, so it's not a mismatch target.
 var crawlerMarkers = []string{"bot", "spider", "crawl"}
 
-// scriptingMarkers match generic HTTP libraries or CLI tools that
-// are typically used by scrapers and scripts rather than browsers.
-var scriptingMarkers = []string{"curl", "wget", "python-urllib", "python-requests", "go-http-client", "locust", "postman", "headless", "playwright", "patchright", "puppeteer"}
+// scriptingMarkers match generic HTTP libraries, CLI tools, headless
+// automation frameworks, load-test tools, and recon/vuln scanners —
+// nothing a real browser's own UA string ever contains, so this list
+// only grows by adding another honest self-declaration, never by
+// guessing at a real browser variant (CLAUDE.md Section 14: a false
+// entry here would hard-block that browser's users outright, since
+// scripting_tool is one of the two checks allowed to score 100 alone).
+//
+// This is a blunt, high-confidence instrument: it only catches a tool
+// that hasn't bothered to fake its User-Agent. A stealth automation
+// stack (Patchright-class) that drives a real, unmodified browser
+// engine sends a real browser's UA and is invisible to this check by
+// construction — see docs/SIGNAL_COVERAGE.md Section 4. Closing that
+// gap is behavioral/browser-integrity scoring (Phase 3), not a bigger
+// list here.
+var scriptingMarkers = []string{
+	// generic HTTP client libraries
+	"curl", "wget", "httpie",
+	"python-urllib", "python-requests", "python-httpx", "aiohttp",
+	"go-http-client", "go-resty",
+	"okhttp", "java/", "apache-httpclient",
+	"node-fetch", "axios/",
+	"libwww-perl", "guzzlehttp", "urllib3", "libcurl",
+
+	// API testing / load-testing tools
+	"postman", "insomnia",
+	"locust", "jmeter", "gatling", "k6", "vegeta", "wrk/", "artillery", "siege/", "apachebench",
+
+	// headless browser / automation frameworks
+	"headless", "phantomjs", "selenium", "webdriver",
+	"playwright", "patchright", "puppeteer",
+	"nightmare", "casperjs", "splash",
+
+	// scraping frameworks
+	"scrapy", "mechanize",
+
+	// recon / vulnerability scanners (not a bot in the scraping sense,
+	// but never a real visitor's browser either)
+	"nmap", "nikto", "sqlmap", "nuclei", "masscan", "zgrab",
+	"gobuster", "dirbuster", "wpscan", "acunetix", "nessus",
+	"burpsuite", "zaproxy",
+}
 
 // claimsBrowser reports whether ua claims to be a real browser,
 // rather than a script or a bot that's already honest about itself.
