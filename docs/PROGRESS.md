@@ -79,3 +79,12 @@ Lint went to 0 issues repo-wide, 13 of which pre-dated the branch.
 Gotcha: the fired mask is **positional**. Reorder or rename a check and every
 saved model and stored sample silently means something else. `FeatureVersion()`
 is what guards it — do not work around it.
+
+### 2026-09-23 — hosting decided: Hetzner
+`e36d0f4` — DEPLOYMENT.md §3 rewritten from "AWS because free tier" to the
+actual decision, with the comparison that drove it (Hetzner 20 TB included and
+~$0.001/GB overage vs AWS 100 GB then $0.09/GB).
+Gotcha: Hetzner has **no India datacenter**. Singapore is closest, so Indian
+visitors pay 60–150 ms that AWS Mumbai would not charge — accepted because
+bandwidth decides this product's economics and latency does not. Revisit if
+that stops being true.

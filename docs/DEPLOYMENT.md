@@ -53,38 +53,66 @@ HTTPS mode — TCP mode passes bytes through without terminating.
 
 ---
 
-## 3. Why AWS
+## 3. Why Hetzner
 
-Honestly: **because there is a year of free tier available.** That is a real
-reason and it is the deciding one right now.
+**Decided 2026-09-23: Hetzner Cloud.**
 
-The secondary reason is that "deployed on AWS" is worth something in an
-interview. But it is worth much less than being able to explain *this page* —
-"I could not use a managed edge because the product depends on the raw TLS
-ClientHello" is an answer that shows judgement. "I used AWS" is not.
+The comparison that decided it, for a product whose dominant cost is
+bandwidth (§4):
+
+| | Price | Bandwidth included | Latency from India |
+|---|---|---|---|
+| **Hetzner CX22** | ~€4.5/mo | **20 TB**, then ~$0.001/GB | 60–150 ms (Singapore) |
+| AWS Mumbai (free tier) | free for 12 months | 100 GB, then $0.09/GB | best |
+| DigitalOcean Bangalore | $4/mo | 1 TB | best |
+| Contabo | €5/mo | 32 TB | 150–200 ms |
+
+**Hetzner is ~90x cheaper per GB of egress than AWS**, and egress is the line
+item that grows with the product. 20 TB included covers a great deal of real
+traffic before anything is billed at all.
+
+**What is given up, stated plainly:** Hetzner has no India datacenter.
+Singapore is the closest region, so Indian visitors pay 60–150 ms of network
+latency that AWS Mumbai would not charge them. For a proxy sitting in front of
+a site, that latency is added to every request. It is a real cost, accepted
+because bandwidth economics decide this product's viability and latency does
+not.
+
+AWS Mumbai was the other serious candidate — free for a year and physically
+close. Rejected because the free tier ends, and at that point its 100 GB
+egress allowance and $0.09/GB rate make it the most expensive option on this
+list for exactly the thing we do most of.
+
+Hetzner is not a small operator, which is worth recording since the website
+does not suggest otherwise: founded 1997, over 500,000 servers, more than a
+million cloud instances, a 99.9% monthly SLA, and datacenters in Germany,
+Finland, the US and Singapore.
 
 ### The setup
 
 ```text
-EC2 t3.micro (free tier)   Ubuntu, in a PUBLIC subnet
-  + Elastic IP             free while attached; without it the IP changes
-                           on stop/start and DNS breaks
-  + Internet Gateway       NOT a NAT Gateway — see §5
-  Security group:          443 (traffic), 80 (certbot), 22 (SSH, your IP only)
+Hetzner CX22 (~€4.5/mo, Singapore)   Ubuntu, plain public IP
+  2 vCPU, 4 GB RAM, 20 TB traffic
+  Firewall: 443 (traffic), 80 (certbot renewal), 22 (SSH, your IP only)
 
-Postgres   -> Supabase (separate free tier; keeps RAM off the 1 GB box)
-Redis      -> Docker on the same box (velocity checks; fails open without it)
-TLS certs  -> certbot / Let's Encrypt, auto-renew
+Postgres   -> Supabase. Managed backups, and a dead box does not take the
+              customer data with it.
+Redis      -> Docker on the same box, no published port. Velocity counters
+              only; losing them fails those signals open.
+Dashboard  -> Vercel or Cloudflare Pages. Static files, free, and NOT in the
+              request path — so TLS termination there does not matter.
+TLS certs  -> certbot / Let's Encrypt, auto-renewed with a reload hook.
 ```
 
-**No ALB. No CloudFront. No NAT Gateway.** All three are either fatal to the
-product or an unnecessary bill.
+**No load balancer, no CDN in front.** Both terminate TLS and would break the
+product — see §1.
 
-### If this outgrows free tier
+### Moving later costs nothing
 
-A plain VPS is dramatically cheaper for this workload — see §6. The move is
-easy because there is nothing AWS-specific in the deployment: it is a Go binary,
-a Redis container and a certificate.
+There is nothing host-specific in the deployment: a Go binary, a Redis
+container and a certificate. If the India latency turns out to matter more
+than the bandwidth bill, moving to AWS Mumbai or DigitalOcean Bangalore is an
+afternoon.
 
 ---
 
@@ -160,7 +188,9 @@ bandwidth bill**, before counting the origin load saved. The challenge page is
 a few KB; deception responses can be made deliberately small. This is the one
 "cost optimisation" that is also the feature.
 
-**2. Never put a NAT Gateway in the path.**
+**2. On AWS, never put a NAT Gateway in the path.** (Not applicable on
+Hetzner, kept because the trap is expensive and someone will evaluate AWS
+again.)
 It bills twice: ~$0.045/hour (~$32/month per AZ) **plus $0.045/GB** for every
 byte through it. At 1 TB that is another $45 on top of the $81 egress, for
 nothing. Put the instance in a **public subnet with an Internet Gateway**,

@@ -14,7 +14,7 @@ constant and quietly guts detection. Nothing errors.
 ## What goes where
 
 ```text
-Hetzner CX22 (~€4/mo, Singapore for India latency)
+Hetzner CX22 (~€4.5/mo, Singapore — no India DC, so 60–150ms from India)
 ├── hakaishield   :443, in Docker
 └── Redis         no published port; only hakaishield reaches it
 
