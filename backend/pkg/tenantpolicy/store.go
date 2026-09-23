@@ -184,7 +184,7 @@ func (s *Store) Save(ctx context.Context, ownerID, tenantID, actorID string, exp
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var id string
 	if err = tx.QueryRow(ctx, `SELECT id FROM tenants WHERE id=$1 AND owner_user_id=$2 FOR UPDATE`, tenantID, ownerID).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

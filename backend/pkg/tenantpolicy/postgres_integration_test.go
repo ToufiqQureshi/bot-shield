@@ -111,7 +111,7 @@ func TestPostgresRevisionIsolationAndRollback(t *testing.T) {
 		go func() { _, err := s.Save(ctx, "alice", "ta", "alice", 3, doc); results <- err }()
 	}
 	a, b := <-results, <-results
-	if !((a == nil && errors.Is(b, ErrConflict)) || (b == nil && errors.Is(a, ErrConflict))) {
+	if (a != nil || !errors.Is(b, ErrConflict)) && (b != nil || !errors.Is(a, ErrConflict)) {
 		t.Fatalf("concurrent optimistic writes = %v, %v", a, b)
 	}
 }
