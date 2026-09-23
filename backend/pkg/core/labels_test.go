@@ -225,13 +225,18 @@ func solveFromPage(t *testing.T, c *challenge.Challenge, body, host string) {
 
 	tm := regexp.MustCompile(`token", "([^"]+)"`).FindStringSubmatch(body)
 	nm := regexp.MustCompile(`encode\("([^"]+)"`).FindStringSubmatch(body)
-	if tm == nil || nm == nil {
-		t.Fatalf("could not extract token/nonce from the challenge page")
+	dm := regexp.MustCompile(`var difficulty =\s*(\d+)`).FindStringSubmatch(body)
+	if tm == nil || nm == nil || dm == nil {
+		t.Fatalf("could not extract token/nonce/difficulty from the challenge page")
+	}
+	difficulty := 0
+	for _, ch := range dm[1] {
+		difficulty = difficulty*10 + int(ch-'0')
 	}
 
 	form := url.Values{}
 	form.Set("token", tm[1])
-	form.Set("answer", solvePoW(nm[1]))
+	form.Set("answer", solvePoW(nm[1], difficulty))
 	form.Set("canvas", "data:image/png;base64,"+strings.Repeat("A", 150))
 
 	post := httptest.NewRequest(http.MethodPost, "/__hakaishield/verify", strings.NewReader(form.Encode()))

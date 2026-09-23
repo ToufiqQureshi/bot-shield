@@ -211,11 +211,15 @@ func TestGuardBlocksMaliciousJA4(t *testing.T) {
 }
 
 // solvePoW returns the smallest counter whose SHA-256 with nonce starts
-// with "00" — the 8-bit proof-of-work the challenge page's JS computes.
-func solvePoW(nonce string) string {
+// with `zeros` leading hex zeros — exactly the proof-of-work the challenge
+// page's JS computes for the difficulty the server picked. Callers must
+// read `zeros` from the served page (see solveChallenge), never hardcode
+// it, or a difficulty change silently breaks (or over-satisfies) them.
+func solvePoW(nonce string, zeros int) string {
+	prefix := strings.Repeat("0", zeros)
 	for i := 0; ; i++ {
 		sum := sha256.Sum256([]byte(nonce + strconv.Itoa(i)))
-		if hex.EncodeToString(sum[:])[:2] == "00" {
+		if hex.EncodeToString(sum[:])[:zeros] == prefix {
 			return strconv.Itoa(i)
 		}
 	}
@@ -238,10 +242,15 @@ func solveChallenge(t *testing.T, c *challenge.Challenge, host string) *http.Coo
 	// The page's JS feeds the nonce into its PoW loop (`encode("nonce" +
 	// counter)`), so match the string literal, not a parenthesised call.
 	nm := regexp.MustCompile(`encode\("([^"]+)"`).FindStringSubmatch(body)
-	if tm == nil || nm == nil {
-		t.Fatalf("could not extract token/nonce from challenge page: %s", body)
+	dm := regexp.MustCompile(`var difficulty =\s*(\d+)`).FindStringSubmatch(body)
+	if tm == nil || nm == nil || dm == nil {
+		t.Fatalf("could not extract token/nonce/difficulty from challenge page: %s", body)
 	}
-	answer := solvePoW(nm[1])
+	difficulty := 0
+	for _, ch := range dm[1] {
+		difficulty = difficulty*10 + int(ch-'0')
+	}
+	answer := solvePoW(nm[1], difficulty)
 
 	form := url.Values{}
 	form.Set("token", tm[1])

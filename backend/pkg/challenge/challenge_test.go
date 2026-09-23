@@ -23,6 +23,10 @@ var (
 	// call is followed by ` + counter` rather than `)`. Match the string
 	// literal itself, not a parenthesised call.
 	nonceRe = regexp.MustCompile(`encode\("([^"]+)"`)
+	// The server renders the required PoW difficulty into the page so the
+	// browser knows how much work to do. html/template's JS escaper pads
+	// the value with spaces (` 1 `), so allow whitespace around it.
+	difficultyRe = regexp.MustCompile(`var difficulty =\s*(\d+)`)
 )
 
 const (
@@ -40,33 +44,57 @@ func newChallenge(t *testing.T) *challenge.Challenge {
 }
 
 // solvePoW returns the smallest counter whose SHA-256 with nonce starts
-// with "00" — the 8-bit proof-of-work the challenge page's JS computes.
-func solvePoW(nonce string) string {
+// with `zeros` leading hex zeros — exactly the proof-of-work the
+// challenge page's JS computes for the difficulty the server picked.
+// Tests must derive `zeros` from the served page, never hardcode it, or
+// a difficulty change silently breaks (or worse, over-satisfies) them.
+func solvePoW(nonce string, zeros int) string {
+	prefix := strings.Repeat("0", zeros)
 	for i := 0; ; i++ {
 		sum := sha256.Sum256([]byte(nonce + strconv.Itoa(i)))
-		if hex.EncodeToString(sum[:])[:2] == "00" {
+		if hex.EncodeToString(sum[:])[:zeros] == prefix {
 			return strconv.Itoa(i)
 		}
 	}
 }
 
-// wrongPoW returns a counter whose hash does NOT satisfy the PoW, for
-// exercising the reject path with a well-formed but incorrect answer.
-func wrongPoW(nonce string) string {
+// wrongPoW returns a counter whose hash does NOT satisfy the `zeros`
+// proof-of-work, for exercising the reject path with a well-formed but
+// incorrect answer.
+func wrongPoW(nonce string, zeros int) string {
+	prefix := strings.Repeat("0", zeros)
 	for i := 0; ; i++ {
 		sum := sha256.Sum256([]byte(nonce + strconv.Itoa(i)))
-		if hex.EncodeToString(sum[:])[:2] != "00" {
+		if hex.EncodeToString(sum[:])[:zeros] != prefix {
 			return strconv.Itoa(i)
 		}
 	}
+}
+
+// pageDifficulty reads the `var difficulty = N` the server rendered into
+// the page. It fails the test when absent rather than guessing, so a
+// helper can never silently solve the wrong puzzle.
+func pageDifficulty(t *testing.T, body string) int {
+	t.Helper()
+	m := difficultyRe.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("challenge page does not render a difficulty: %s", body)
+	}
+	d, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("bad difficulty %q: %v", m[1], err)
+	}
+	return d
 }
 
 func validCanvas() string {
 	return "data:image/png;base64," + strings.Repeat("A", 150)
 }
 
-// fetchPage performs GET and extracts token + nonce from the JS.
-func fetchPage(t *testing.T, h http.Handler, path string) (token, nonce string) {
+// fetchPage performs GET and extracts token + nonce + the difficulty the
+// page was told to solve, so helpers always do the work the real page
+// would do.
+func fetchPage(t *testing.T, h http.Handler, path string) (token, nonce string, difficulty int) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	rec := httptest.NewRecorder()
@@ -80,7 +108,7 @@ func fetchPage(t *testing.T, h http.Handler, path string) (token, nonce string) 
 	if tm == nil || nm == nil {
 		t.Fatalf("could not extract token/nonce from: %s", body)
 	}
-	return tm[1], nm[1]
+	return tm[1], nm[1], pageDifficulty(t, body)
 }
 
 // postVerify posts the challenge answer form.
@@ -102,20 +130,25 @@ func TestChallengeRealFlowPasses(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
 
-	token, nonce := fetchPage(t, h, challengePath+"?next=1")
-	rec := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
+	token, nonce, difficulty := fetchPage(t, h, challengePath+"?next=1")
+	rec := postVerify(h, token, solvePoW(nonce, difficulty), validCanvas(), "false")
 
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status: want 303, got %d", rec.Code)
 	}
-	cookies := rec.Result().Cookies()
-	if len(cookies) == 0 {
+	// The issued cookie must be accepted by Passed(). The verify response
+	// also clears the attempt cookie, so pick the passed cookie by name.
+	var pass *http.Cookie
+	for _, ck := range rec.Result().Cookies() {
+		if ck.Name == "X-HakaiShield-Passed" {
+			pass = ck
+		}
+	}
+	if pass == nil {
 		t.Fatal("expected a passed cookie, got none")
 	}
-
-	// The issued cookie must be accepted by Passed()
 	passReq := httptest.NewRequest(http.MethodGet, "/", nil)
-	passReq.AddCookie(cookies[0])
+	passReq.AddCookie(pass)
 	if !c.Passed(passReq) {
 		t.Fatal("Passed() returned false for a freshly issued cookie")
 	}
@@ -141,8 +174,8 @@ func TestChallengeRedisNonceStoreRejectsReplayAcrossInstances(t *testing.T) {
 	nodeA.SetNonceStore(challenge.NewRedisNonceStore(rdb, "test:nonce:"))
 	nodeB.SetNonceStore(challenge.NewRedisNonceStore(rdb, "test:nonce:"))
 
-	token, nonce := fetchPage(t, nodeA.Handler(), challengePath+"?next=1")
-	answer := solvePoW(nonce)
+	token, nonce, difficulty := fetchPage(t, nodeA.Handler(), challengePath+"?next=1")
+	answer := solvePoW(nonce, difficulty)
 	if rec := postVerify(nodeA.Handler(), token, answer, validCanvas(), "false"); rec.Code != http.StatusSeeOther {
 		t.Fatalf("first verify status = %d, want 303", rec.Code)
 	}
@@ -155,8 +188,8 @@ func TestChallengeRedisNonceStoreRejectsReplayAcrossInstances(t *testing.T) {
 func TestChallengeRejectsWrongAnswer(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
-	rec := postVerify(h, token, wrongPoW(nonce), validCanvas(), "false")
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
+	rec := postVerify(h, token, wrongPoW(nonce, difficulty), validCanvas(), "false")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("wrong answer must not pass")
 	}
@@ -166,8 +199,8 @@ func TestChallengeRejectsWrongAnswer(t *testing.T) {
 func TestChallengeRejectsAutomationFlag(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
-	rec := postVerify(h, token, solvePoW(nonce), validCanvas(), "true")
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
+	rec := postVerify(h, token, solvePoW(nonce, difficulty), validCanvas(), "true")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("automation=true must not pass")
 	}
@@ -177,8 +210,8 @@ func TestChallengeRejectsAutomationFlag(t *testing.T) {
 func TestChallengeRejectsMissingCanvas(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
-	rec := postVerify(h, token, solvePoW(nonce), "", "false")
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
+	rec := postVerify(h, token, solvePoW(nonce, difficulty), "", "false")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("missing canvas must not pass")
 	}
@@ -188,9 +221,9 @@ func TestChallengeRejectsMissingCanvas(t *testing.T) {
 func TestChallengeRejectsTamperedToken(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
 	tampered := token[:len(token)-1] + "X"
-	rec := postVerify(h, tampered, solvePoW(nonce), validCanvas(), "false")
+	rec := postVerify(h, tampered, solvePoW(nonce, difficulty), validCanvas(), "false")
 	if rec.Code == http.StatusSeeOther {
 		t.Fatal("tampered token must not pass")
 	}
@@ -199,11 +232,11 @@ func TestChallengeRejectsTamperedToken(t *testing.T) {
 func TestChallengeRejectsTokenOnDifferentHost(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
 
 	form := url.Values{}
 	form.Set("token", token)
-	form.Set("answer", solvePoW(nonce))
+	form.Set("answer", solvePoW(nonce, difficulty))
 	form.Set("canvas", validCanvas())
 	req := httptest.NewRequest(http.MethodPost, verifyPath, strings.NewReader(form.Encode()))
 	req.Host = "other.example"
@@ -219,12 +252,12 @@ func TestChallengeRejectsTokenOnDifferentHost(t *testing.T) {
 func TestChallengeTokenIsSingleUse(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
-	first := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
+	first := postVerify(h, token, solvePoW(nonce, difficulty), validCanvas(), "false")
 	if first.Code != http.StatusSeeOther {
 		t.Fatalf("first verification: want 303, got %d", first.Code)
 	}
-	second := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
+	second := postVerify(h, token, solvePoW(nonce, difficulty), validCanvas(), "false")
 	if second.Code == http.StatusSeeOther {
 		t.Fatal("a challenge token must not be reusable")
 	}
@@ -243,8 +276,8 @@ func TestPassedRejectsForgedCookie(t *testing.T) {
 func TestPassedRejectsCookieOnDifferentHost(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
-	passResponse := postVerify(h, token, solvePoW(nonce), validCanvas(), "false")
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
+	passResponse := postVerify(h, token, solvePoW(nonce, difficulty), validCanvas(), "false")
 	if passResponse.Code != http.StatusSeeOther {
 		t.Fatalf("verification: want 303, got %d", passResponse.Code)
 	}
@@ -288,11 +321,11 @@ func TestChallengeHandlerMethodNotAllowed(t *testing.T) {
 func TestChallengeRejectsHeadlessFlag(t *testing.T) {
 	c := newChallenge(t)
 	h := c.Handler()
-	token, nonce := fetchPage(t, h, challengePath)
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
 
 	form := url.Values{}
 	form.Set("token", token)
-	form.Set("answer", solvePoW(nonce))
+	form.Set("answer", solvePoW(nonce, difficulty))
 	form.Set("canvas", validCanvas())
 	form.Set("automation", "false")
 	form.Set("headless", "true")

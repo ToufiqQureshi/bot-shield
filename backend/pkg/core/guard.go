@@ -315,9 +315,11 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tenant.Origin.ServeHTTP(w, r.WithContext(ctx))
 	case signals.DecisionChallenge:
 		// Carry what this request looked like into the challenge, so a
-		// solve can label it human. Nothing about the challenge itself
-		// changes.
-		challengeRequest := r.WithContext(labels.WithSample(r.Context(), labels.Sample{
+		// solve can label it human, and the risk score this request already
+		// earned, so the challenge picks a matching difficulty (Phase 2).
+		// Without the score, every challenge would be issued at the
+		// lightest difficulty and the adaptive behaviour would be inert.
+		challengeRequest := r.WithContext(labels.WithSample(challenge.WithRisk(r.Context(), score), labels.Sample{
 			TenantID:       tenant.ID,
 			Fired:          evaluation.Fired,
 			FeatureVersion: signals.FeatureVersion(),
