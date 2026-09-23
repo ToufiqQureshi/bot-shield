@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# One-time provisioning for a fresh Hetzner/EC2 box. Run as root.
+# One-time provisioning for a fresh Ubuntu box. Run as root.
+#
+# Written against a DigitalOcean droplet (docs/DEPLOYMENT.md §3) but there is
+# nothing provider-specific in it — it works on any Ubuntu host that gives you
+# a plain public IP and port 443.
 #
 #   bash deploy/setup.sh neurofiq.in you@example.com
 #

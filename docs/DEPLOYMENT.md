@@ -53,83 +53,127 @@ HTTPS mode — TCP mode passes bytes through without terminating.
 
 ---
 
-## 3. Why Hetzner
+## 3. Where it is hosted, and why the answer moved
 
-**Decided 2026-09-23: Hetzner Cloud.**
+**Decided 2026-09-23: DigitalOcean Bangalore.**
 
-The comparison that decided it, for a product whose dominant cost is
-bandwidth (§4):
+This section was rewritten twice in one day. Both rewrites are recorded
+because the reason it moved matters more than the answer.
 
-| | Price | Bandwidth included | Overage | Latency from India |
+### The comparison, with the corrected numbers
+
+| | Latency from India | Included transfer | Overage | 4 GB box |
 |---|---|---|---|---|
-| **Hetzner CPX11, Singapore** | ~€7.90/mo | **0.5 TB** | **€7.40/TB** (~$0.008/GB) | ~55–70 ms |
-| Hetzner CX22, EU (Falkenstein) | ~€4.5/mo | 20 TB | €1.00/TB (~$0.001/GB) | 130–180 ms |
-| AWS Mumbai (free tier) | free for 12 months | 100 GB | $0.09/GB | best |
-| DigitalOcean Bangalore | $4/mo | 1 TB | $0.01/GB | best |
-| Contabo | €5/mo | 32 TB | — | 150–200 ms |
+| **DigitalOcean Bangalore** | **5–40 ms** | **4 TB** | **$0.01/GiB** (~$10/TB) | **$24/mo** |
+| Hetzner Singapore (CPX21) | 55–70 ms | 0.5–1 TB | €7.40/TB (~$8/TB) | ~€13/mo |
+| Hetzner EU (Falkenstein) | 130–180 ms | 20 TB | €1.00/TB (~$1/TB) | ~€7.55/mo |
+| AWS Mumbai EC2 | 5–40 ms | 100 GB | **$0.09/GB** (~$92/TB) | ~$15/mo + egress |
+| AWS Lightsail Mumbai | 5–40 ms | half the listed figure | $0.09/GB | $12/mo+ |
 
-**Read the Singapore row carefully — it is not the headline Hetzner number.**
-Hetzner's famous "20 TB included, €1/TB after" is **EU-only**. Asia-Pacific
-servers include **0.5 TB** and charge **€7.40/TB** — 7.4× the EU overage rate.
-An earlier version of this document quoted the EU figures against a Singapore
-deployment, which was simply wrong.
+At 10 TB/month: **DigitalOcean ~$84, Hetzner Singapore ~$90, AWS Mumbai
+~$900+.** DigitalOcean and Hetzner are the same price. One of them is in
+India.
 
-**The decision survives the correction, with a thinner margin.** At €7.40/TB
-Singapore is still roughly **11× cheaper per GB than AWS Mumbai's $0.09/GB**,
-not the 90× the EU figures imply:
+### Why this was not obvious the first time
 
-| Monthly egress | Hetzner Singapore | AWS Mumbai | EU Hetzner, for reference |
+The first version of this section picked Hetzner on its headline bandwidth
+numbers — 20 TB included, €1/TB overage, "90× cheaper than AWS". Those are
+Hetzner's **EU** figures, and we were choosing Singapore, which includes
+0.5 TB and charges **€7.40/TB**.
+
+That single wrong number distorted everything. At a fake ~$1/TB, Hetzner
+looked so far ahead that the 60 ms latency penalty seemed worth paying and
+no other provider needed a serious look. At Singapore's real ~$8/TB, the
+cost gap to DigitalOcean Bangalore disappears — and once the costs are
+level, there is no argument left for putting the box 60 ms away from the
+customers.
+
+**The lesson worth keeping:** a provider's famous number is usually its
+best region's number. Check the rate for the region you are actually
+deploying to before you let it decide anything.
+
+### Why DigitalOcean Bangalore
+
+1. **It is in India.** 5–40 ms from Indian cities instead of 55–70 ms from
+   Singapore. For a reverse proxy this is the number that shows up on every
+   request the customer's visitors make (see the round-trip maths below).
+2. **Bandwidth is priced flat.** $0.01/GiB overage with **no regional
+   variation** — a Bangalore droplet costs the same per GiB as a New York
+   one. AWS charges 9× that in Mumbai, and Lightsail halves the included
+   allowance in Mumbai specifically.
+3. **It is a plain droplet.** Public IP, port 443 straight to our process.
+   That is the entire requirement from §1, and it is met without a load
+   balancer — which is the only way to meet it (§2).
+4. **4 TB included on the $24 box** ≈ 40M requests at 100 KB before
+   anything is billed at all.
+
+### What the latency actually costs
+
+A fresh HTTPS connection is three round trips: TCP (1) + TLS 1.3 (1) +
+request (1).
+
+| | RTT | Fresh connection | Keep-alive reuse |
 |---|---|---|---|
-| 1 TB (≈10M requests × 100 KB) | ~€3.70 | ~$81 | €0 |
-| 10 TB | ~€70 | ~$900 | €0 |
-| 100 TB | ~€736 | ~$9,200 | ~€80 |
+| Bangalore | ~20 ms | ~60 ms | ~20 ms |
+| Singapore | ~60 ms | ~180 ms | ~60 ms |
 
-**CX22 is not available in Singapore.** The CX series is EU-only. Singapore
-offers the AMD shared-vCPU **CPX** line (CPX11 from ~€7.90/mo) and the
-dedicated-vCPU **CCX** line (CCX13 from ~€21.50/mo). Provisioning fails if you
-go looking for a CX box in that region.
+So Singapore would have cost an Indian visitor **~120 ms on first connect
+and ~40 ms on every request after**. Over 100 ms is perceptible, and it is
+the *customer's* site that feels slow, not ours — we would have been
+trading their conversion rate for our margin. Hosting in India removes the
+trade entirely rather than justifying it.
 
-**What is given up, stated plainly:** Hetzner has no India datacenter.
-Singapore is the closest region at roughly **55–70 ms** RTT from Mumbai over
-the SEA-ME-WE-6 / MIST / i2i cable routes — better than the 130–180 ms an EU
-region costs, worse than the 5–40 ms an India-local provider gives.
+**The trap that survives any provider choice.** hakaishield is a reverse
+proxy, so a request crosses the network twice: visitor → proxy, then
+proxy → origin. Putting the proxy far from the origin makes the visitor pay
+that distance **three times**, not once.
 
-**The latency trap that matters more than the number.** hakaishield is a
-reverse proxy, so a request crosses the network *twice*: visitor → proxy, then
-proxy → origin, and back. Put the proxy in Singapore and leave the origin on an
-Indian host and an Indian visitor pays the Singapore hop **three times**
-(≈180–240 ms added), because the traffic flies to Singapore, back to India for
-the origin, and out again.
+> **Rule: the origin must sit in the same region as hakaishield.** Then
+> proxy→origin is sub-millisecond and the visitor pays the hop once. Getting
+> this wrong triples the penalty rather than adding to it.
 
-> **Rule: the origin must sit in the same datacenter as hakaishield.** Then
-> proxy→origin is sub-millisecond and the visitor pays the ~60 ms once. This is
-> not an optimisation; getting it wrong triples the penalty.
+If a customer's origin cannot move to our region, that customer wants the
+sideband mode (ROADMAP 27), where their CDN serves the bytes and only calls
+us for a verdict — so our location stops mattering. **Latency is the second
+reason item 27 exists, not just egress cost.**
 
-If the customer's origin cannot move, that customer wants the sideband mode
-(ROADMAP 27), not the proxy — which is a second, independent reason that item
-exists.
+### Runners-up, and what would bring them back
 
-AWS Mumbai was the other serious candidate — free for a year and physically
-close. Rejected because the free tier ends, and at that point its 100 GB
-egress allowance and $0.09/GB rate make it the most expensive option on this
-list for exactly the thing we do most of.
+**Hetzner Singapore** — the same money, 40 ms further away. It only wins if
+the customer base stops being India-centric, or if a plan's included
+transfer turns out to beat DigitalOcean's 4 TB at our actual volume.
+Re-check both before dismissing it; the box itself is cheaper (~€13 vs $24).
 
-Hetzner is not a small operator, which is worth recording since the website
-does not suggest otherwise: founded 1997, over 500,000 servers, more than a
-million cloud instances, a 99.9% monthly SLA, and datacenters in Germany,
-Finland, the US and Singapore.
+**Hetzner EU** — genuinely the cheapest bandwidth on this page at €1/TB, and
+genuinely unusable for Indian visitors at 130–180 ms. It becomes correct the
+day a European customer is worth more than the Indian ones.
+
+**AWS Mumbai** — best-in-class latency, and the most expensive egress here
+by an order of magnitude. Rejected on the only line item that grows with the
+product. Also note the free tier changed on **15 July 2025**: accounts
+created after that date get $100–200 of credits for up to six months, not
+twelve months of free t2/t3.micro. Verify which kind of account you have
+before planning around it.
+
+**AWS ALB / CloudFront in front of any of these** — breaks the product
+silently (§1, §2). Not a cost question.
+
+### Migration is cheap, which is why this was not worth agonising over
+
+`deploy/` is Docker + compose + systemd + `setup.sh`. Moving providers is:
+provision a box, run `setup.sh`, change DNS. Nothing in the application is
+provider-specific. The cost of picking wrong is an afternoon, not a rewrite
+— so the decision above is firm without being irreversible.
+
 
 ### The setup
 
 ```text
-Hetzner CPX11 (~€7.90/mo, Singapore)  Ubuntu, plain public IP
-  2 vCPU, 2 GB RAM, 40 GB NVMe
-  0.5 TB traffic included, then €7.40/TB
-  (CX22 does not exist in Singapore — CX is EU-only. CPX/CCX only.)
-  CPX11 has 2 GB where the CX22 plan had 4 GB. It runs hakaishield plus
-  Redis in Docker, which fits, but leaves little headroom. Take CPX21
-  (3 vCPU / 4 GB / 80 GB) if the box starts swapping under load test —
-  that is the actual like-for-like replacement, not CPX11.
+DigitalOcean Basic Droplet, region BLR1 (Bangalore)   Ubuntu LTS
+  2 vCPU, 4 GB RAM, $24/mo, 4 TB transfer included, $0.01/GiB after
+  Plain public IP. No load balancer — see below.
+  The $12 / 2 GB droplet also runs it, but 2 GB is tight for
+  hakaishield plus Redis in Docker. 4 GB is the one to buy.
   Firewall: 443 (traffic), 80 (certbot renewal), 22 (SSH, your IP only)
 
 Postgres   -> Supabase. Managed backups, and a dead box does not take the
@@ -147,8 +191,8 @@ product — see §1.
 ### Moving later costs nothing
 
 There is nothing host-specific in the deployment: a Go binary, a Redis
-container and a certificate. If the India latency turns out to matter more
-than the bandwidth bill, moving to AWS Mumbai or DigitalOcean Bangalore is an
+container and a certificate. If the bandwidth bill ever outgrows the latency
+benefit, moving to Hetzner (Singapore or EU) is an
 afternoon.
 
 ---
@@ -252,13 +296,22 @@ Up to ~70% off compute. Irrelevant while compute is a rounding error next to
 bandwidth, and useless against bandwidth itself.
 
 **7. When bandwidth dominates, leave AWS for the data plane.**
-Hetzner charges **€1.00/TB** (~$0.001/GB) on overage in the EU and
-**€7.40/TB** (~$0.008/GB) in Singapore, against AWS's **$0.09/GB** — so roughly
-**90× cheaper from the EU, 11× from Singapore**. Quote the rate for the region
-you are actually in; the EU number is the one everyone repeats and it does not
-apply to Asia-Pacific (§3). At 100 TB/month that is ~€80 in the EU, ~€736 in
-Singapore and ~$9,200 on AWS. Egress pricing, not compute pricing, is what
-should pick the host for this product at scale.
+Egress overage, same traffic, per TB:
+
+| | Rate | 100 TB/month |
+|---|---|---|
+| Hetzner EU | €1.00/TB (~$0.001/GB) | ~€80 |
+| **DigitalOcean, any region** | **$0.01/GiB (~$10/TB)** | **~$1,000** |
+| Hetzner Singapore | €7.40/TB (~$0.008/GB) | ~€736 |
+| AWS | $0.09/GB | ~$9,200 |
+
+So roughly **9× cheaper than AWS on DigitalOcean, 11× from Hetzner Singapore,
+90× from Hetzner EU**. Quote the rate for the region you are actually in —
+Hetzner's EU number is the one everyone repeats and it does not apply to
+Asia-Pacific (§3). DigitalOcean is the outlier here in a useful way: its rate
+does **not** vary by region, so an India deployment costs the same per GiB as a
+US one. Egress pricing, not compute pricing, is what should pick the host for
+this product at scale.
 
 **8. Set a billing alarm before anything else.**
 AWS Budgets, alert at a number that would hurt. Free tier ending is silent, and
