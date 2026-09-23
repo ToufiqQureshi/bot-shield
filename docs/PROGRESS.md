@@ -118,3 +118,10 @@ Gotcha: the only reason Hetzner ever won was a wrong number — its famous
 "20 TB / €1 per TB" is **EU-only**, and Singapore is 0.5 TB / €7.40 per TB.
 Once that was corrected the cost gap vanished and latency decided it. Always
 check a provider's rate for the region you are actually deploying to.
+
+### 2026-09-23 — PR #13 label and trainer safety
+`56433255` — Honeypot trips now emit a candidate label on the trip request;
+the trainer refuses auto-collected database labels unless explicitly opted in.
+It also rejects incomplete JSONL samples. Tests, vet, and build passed.
+Gotcha: challenge and honeypot labels are candidate observations, not verified
+ground truth. The model remains shadow-only; do not enable learned enforcement.
