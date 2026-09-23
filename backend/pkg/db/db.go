@@ -28,7 +28,18 @@ func Init(databaseURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, databaseURL)
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return fmt.Errorf("unable to parse database config: %w", err)
+	}
+
+	// Bounded connection limits for production grade multi-tenant scale.
+	config.MaxConns = 25
+	config.MinConns = 5
+	config.MaxConnLifetime = 1 * time.Hour
+	config.MaxConnIdleTime = 15 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
@@ -14,9 +14,6 @@ const tabs = [
   { path: '/domains-siem', label: 'Domains' },
 ];
 
-// Shared with child pages via useOutletContext<LayoutContext>() so
-// Overview/EvidenceLogs/etc. know which protected domain they're
-// looking at without each re-fetching the domain list themselves.
 export interface LayoutContext {
   domains: Domain[];
   selectedDomain: Domain | null;
@@ -42,12 +39,7 @@ export default function Layout() {
         setDomains(d);
         setSelectedDomain(d[0] ?? null);
       })
-      .catch(() => {
-        // Domain load failure isn't fatal to the rest of the
-        // dashboard shell — pages that need a domain handle an
-        // empty selection themselves rather than this component
-        // blocking the whole layout on one failed request.
-      })
+      .catch(() => {})
       .finally(() => !cancelled && setDomainsLoading(false));
     supabase.auth.getUser().then(({ data }) => !cancelled && setUser(data.user)).catch(() => {});
     return () => {
@@ -55,12 +47,17 @@ export default function Layout() {
     };
   }, []);
 
-  // DomainsSiem calls this after a successful add so the header's domain
-  // switcher reflects it immediately, instead of only after a reload.
-  const handleDomainAdded = (domain: Domain) => {
+  const handleDomainAdded = useCallback((domain: Domain) => {
     setDomains((prev) => [domain, ...prev]);
     setSelectedDomain((prev) => prev ?? domain);
-  };
+  }, []);
+
+  const contextValue = useMemo<LayoutContext>(() => ({
+    domains,
+    selectedDomain,
+    domainsLoading,
+    onDomainAdded: handleDomainAdded,
+  }), [domains, selectedDomain, domainsLoading, handleDomainAdded]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -185,7 +182,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-4 py-6">
-        <Outlet context={{ domains, selectedDomain, domainsLoading, onDomainAdded: handleDomainAdded } satisfies LayoutContext} />
+        <Outlet context={contextValue} />
       </main>
     </div>
   );

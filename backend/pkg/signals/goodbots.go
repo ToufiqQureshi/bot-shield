@@ -77,14 +77,15 @@ var (
 )
 
 // IsGoodBotClaim checks if the User-Agent claims to be a major search engine crawler.
-func IsGoodBotClaim(ua string) (isClaim bool, domains []string) {
+// Returns the crawler pattern name alongside the valid domain slice.
+func IsGoodBotClaim(ua string) (isClaim bool, botName string, domains []string) {
 	lowerUA := strings.ToLower(ua)
 	for _, bot := range knownGoodBots {
 		if strings.Contains(lowerUA, bot.UAPattern) {
-			return true, bot.Domains
+			return true, bot.UAPattern, bot.Domains
 		}
 	}
-	return false, nil
+	return false, "", nil
 }
 
 // IsVerifiedGoodBot verifies whether a client IP claiming to be a search engine
@@ -95,15 +96,14 @@ func IsVerifiedGoodBot(ip, ua string) bool {
 		return false
 	}
 
-	isClaim, validDomains := IsGoodBotClaim(ua)
+	isClaim, botName, validDomains := IsGoodBotClaim(ua)
 	if !isClaim {
 		return false
 	}
 
-	// Cache by the claimed bot family rather than the complete User-Agent.
-	// A caller can vary arbitrary UA suffixes; including them would let an
-	// attacker turn a single source IP into unbounded cache keys.
-	cacheKey := ip + "|" + strings.Join(validDomains, ",")
+	// Cache by the claimed bot family name rather than joining domain slices.
+	// This avoids allocating an intermediate slice and joined string per request.
+	cacheKey := ip + "|" + botName
 	botCacheMu.RLock()
 	entry, found := botCache[cacheKey]
 	botCacheMu.RUnlock()

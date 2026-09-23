@@ -134,7 +134,9 @@ var checks = []struct {
 // explanation must use this method rather than calling Score and Analyze
 // separately.
 func Evaluate(f RequestFacts) Evaluation {
-	e := Evaluation{}
+	e := Evaluation{
+		Signals: make([]string, 0, len(checks)),
+	}
 	for _, c := range checks {
 		if c.fired(f) {
 			e.Score += c.weight

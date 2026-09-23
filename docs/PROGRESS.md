@@ -3669,6 +3669,29 @@ Remaining gaps:
   - Phase 1 is still not started: dashboard custom rules/settings persist data
     but do not alter live scoring or enforcement.
 
+## 2026-09-22 — High-Impact Audit Optimizations (Go Backend + React Dashboard)
+
+Changed:
+  - `backend/pkg/signals/score.go`: pre-allocated `e.Signals = make([]string, 0, len(checks))` in `Evaluate()` to eliminate request-path heap re-allocations on dynamic slice expansion.
+  - `backend/pkg/signals/goodbots.go` & `goodbots_test.go`: refactored `IsGoodBotClaim` to return the crawler pattern name (`botName`) directly, generating cache keys without `strings.Join` or intermediate string slice allocations.
+  - `backend/pkg/auth/jwt.go`: integrated `golang.org/x/sync/singleflight` to collapse concurrent JWKS refreshes into a single outbound HTTP request, preventing thundering herd spikes to Supabase Auth.
+  - `backend/pkg/db/db.go`: configured explicit production bounds on `pgxpool` (`MaxConns: 25`, `MinConns: 5`, `MaxConnLifetime: 1h`, `MaxConnIdleTime: 15m`).
+  - `dashboard/package.json`: removed unused dependencies (`@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`, `canvas-confetti`).
+  - `dashboard/src/App.tsx`: converted static route imports to `React.lazy()` with `<Suspense fallback={<PageLoader />}>`, enabling code-splitting across all 18 pages.
+  - `dashboard/src/components/Layout.tsx`: wrapped `Outlet` context value in `useMemo` and callbacks in `useCallback` to stop child re-render cascades.
+  - `dashboard/src/pages/EvidenceLogs.tsx`: memoized log filtering and sorting via `useMemo`.
+  - Created `docs/AUDIT_AND_OPTIMIZATIONS.md` documenting every optimization, root cause, and performance/cloud-cost impact.
+
+Why:
+  Staff-level audit to optimize performance, minimize cloud infrastructure costs, eliminate request-path GC/heap allocations, prevent database/network exhaustion, and drastically reduce client bundle download size.
+
+Tested how:
+  - `cd backend && go test ./...` — all packages pass 100%.
+  - `cd backend && go test -bench=. -benchmem ./pkg/signals ./pkg/core` — verified baseline & optimization memory/CPU stats.
+
+Known gaps / follow-up:
+  - Continue profiling Redis pipeline operations under sustained multi-node load.
+
 ## 2026-09-22 - Audit P0 fixes: internal route shadowing, JA4 fail-open, unknown-host cache, and origin SSRF guard
 
 Changed:

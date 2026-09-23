@@ -23,7 +23,7 @@ func TestIsGoodBotClaim(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		claim, _ := IsGoodBotClaim(tt.ua)
+		claim, _, _ := IsGoodBotClaim(tt.ua)
 		if claim != tt.isClaim {
 			t.Errorf("IsGoodBotClaim(%q) = %v, want %v", tt.ua, claim, tt.isClaim)
 		}
