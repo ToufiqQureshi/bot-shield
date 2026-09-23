@@ -417,6 +417,14 @@ always the operator.
 
 ## P1 — makes it meaningfully harder to bypass
 
+**Phase 1 backend policy status (2026-09-23):** versioned tenant snapshots,
+ordered rules, preview, rollback, shadow evidence/summary, and gated
+enforcement code are implemented. Legacy dashboard rules remain account-wide
+and shadow-only. Live false-positive review, durable cross-node shadow
+metrics, and a tenant policy dashboard editor remain before calling this a
+production self-service feature. See `PHASE1_POLICY.md` and
+`PHASE1_PRODUCTION_REVIEW.md`.
+
 - [~] **25. Learned scoring weights (`pkg/decide`)** — the scoring engine's
       weights (item 5) are hand-chosen guesses. `pkg/decide` fits them to
       labelled traffic instead: logistic regression over the same checks,

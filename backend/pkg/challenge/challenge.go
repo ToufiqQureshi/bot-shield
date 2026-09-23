@@ -38,6 +38,16 @@ type Challenge struct {
 	labels *labels.Recorder
 }
 
+type themeContextKey struct{}
+
+// WithTheme selects a validated tenant theme for this request only.
+func WithTheme(ctx context.Context, theme string) context.Context {
+	if theme != "ghost" && theme != "branded" {
+		return ctx
+	}
+	return context.WithValue(ctx, themeContextKey{}, theme)
+}
+
 // NonceStore consumes solved challenge nonces exactly once. Implementations
 // must be bounded and fast because verification is visitor-controlled.
 type NonceStore interface {
@@ -495,18 +505,22 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 	// the nonce and deliberately never put in the token: the token goes
 	// to the client, and a list of which checks a bot tripped tells it
 	// exactly what to fix.
-	if sample, ok := labels.SampleFrom(r.Context()); ok {
+	if sample, ok := labels.SampleFrom(r.Context()); ok && c.labels != nil {
 		c.labels.ChallengeIssued(nonce, sample)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	theme := c.theme
+	if selected, ok := r.Context().Value(themeContextKey{}).(string); ok {
+		theme = selected
+	}
 	_ = challengePage.Execute(w, challengeData{
 		Nonce:        nonce,
 		Token:        tok,
 		VerifyPath:   verifyPath,
 		RedirectPath: redirectPath,
-		Theme:        c.theme,
+		Theme:        theme,
 	})
 }
 

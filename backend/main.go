@@ -31,6 +31,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenantpolicy"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/redis/go-redis/v9"
@@ -240,17 +241,14 @@ func main() {
 		log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests); it records opinions and decides nothing", *modelPath, model.TrainedOn())
 	}
 
-	// A dashboard account's mitigation rules are evaluated alongside the
-	// rule scorer and recorded, never acted on — see
-	// docs/BACKEND_IMPLEMENTATION_PLAN.md Phase 1 and
-	// docs/PHASE1_PRODUCTION_REVIEW.md for what still gates enforcement.
-	// This only needs Postgres, not Supabase auth (unlike the dashboard
-	// API below): it reads already-stored rules server-side, nothing a
-	// visitor or a dashboard session touches directly.
+	// The proxy loads versioned tenant policy asynchronously. Legacy account
+	// rules remain shadow-only; activated tenant revisions may enforce.
+	// This only needs Postgres, not dashboard Supabase auth.
+	var provider *policyprovider.Provider
 	if *dbURL != "" {
-		provider := policyprovider.New(store, rules.NewStore(db.DB), settings.NewStore(db.DB))
+		provider = policyprovider.New(store, rules.NewStore(db.DB), settings.NewStore(db.DB)).WithTenantPolicies(tenantpolicy.NewStore(db.DB))
 		guard.WithPolicyProvider(provider.ForTenant)
-		log.Print("hakaishield: policy shadow provider enabled; it records rule-match opinions and decides nothing")
+		log.Print("hakaishield: tenant policy provider enabled")
 	}
 
 	mux := http.NewServeMux()
@@ -301,6 +299,14 @@ func main() {
 		mux.HandleFunc("/api/v1/rules", api.RulesListHandler(rulesStore, verifier))
 		mux.HandleFunc("/api/v1/rules/custom", api.CreateRuleHandler(rulesStore, verifier))
 		mux.HandleFunc("/api/v1/rules/{id}/toggle", api.ToggleRuleHandler(rulesStore, verifier))
+		policyStore := tenantpolicy.NewStore(db.DB)
+		mux.HandleFunc("/api/v1/domains/{id}/policy", api.TenantPolicyHandler(policyStore, provider, verifier))
+		mux.HandleFunc("/api/v1/domains/{id}/policy/history", api.TenantPolicyHistoryHandler(policyStore, verifier))
+		mux.HandleFunc("/api/v1/domains/{id}/policy/history/{version}", api.TenantPolicyVersionHandler(policyStore, verifier))
+		mux.HandleFunc("/api/v1/domains/{id}/policy/rollback", api.TenantPolicyRollbackHandler(policyStore, provider, verifier))
+		mux.HandleFunc("/api/v1/domains/{id}/policy/preview", api.TenantPolicyPreviewHandler(policyStore, verifier))
+		mux.HandleFunc("/api/v1/domains/{id}/policy/shadow", api.TenantPolicyShadowHandler(policyStore, store, verifier))
+		mux.HandleFunc("/api/v1/domains/{id}/policy/activate", api.TenantPolicyActivateHandler(policyStore, provider, store, verifier))
 		mux.HandleFunc("/api/v1/settings/protection", api.ProtectionSettingsHandler(settingsStore, verifier))
 		mux.HandleFunc("/api/v1/dashboard/top-offenders", api.TopOffendersHandler(store, verifier))
 		mux.HandleFunc("/api/v1/dashboard/evidence-logs", api.EvidenceLogsHandler(store, verifier))

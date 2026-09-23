@@ -48,25 +48,16 @@ single-node fallback, ownership coverage includes deterministic API tests plus
 an opt-in real Postgres integration test, and aggregate operational counters
 cover JWKS, Goodbot DNS budget, Redis circuit, origin, and client-IP errors.
 
-Phase 1 policy/rule enforcement is live in shadow mode. `backend/pkg/policy`
-(pure condition matcher, rule/policy structs, `Evaluate`, and `ValidateRule`
-with the UA-only-allow and deceive-floor-above-block guardrails) is wired
-into `core.Guard` via an optional `PolicyProvider`. `main.go` now attaches a
-real one whenever `-db-url` is set: `backend/pkg/policyprovider` resolves a
-request's already-validated tenant to its owning account (`TenantConfig.
-OwnerUserID`, loaded from `tenants.owner_user_id`), reads that account's
-`pkg/rules` rows through a bounded, TTL-cached lookup (30s positive / 10s
-negative, capped at 4096 accounts), and converts them to a `policy.Policy`
-via `rules.ToPolicy` (silently drops any row that no longer passes
-`ValidateRule`, so one stale rule can't take down the rest). A matched rule
-is recorded on `evidence.Evidence.Policy`; `signals.Decision` — computed
-earlier and unconditionally — remains the only thing that drives
-allow/challenge/block/deceive. Still open before this can enforce: rule
-ordering/versioning/rollback, behavior for the guard branches that return
-before policy evaluation (verified bots, solved challenges, honeypot trips),
-regex precompilation (currently compiled per match), and a shadow-period
-measurement of agreement/false-positive rates. See `docs/DECISIONS.md` and
-`docs/PHASE1_PRODUCTION_REVIEW.md`.
+Phase 1 tenant policy code now has versioned, ordered, owner-checked snapshots;
+safe conditions and endpoint classes; preview, shadow summary, activation, and
+rollback APIs; compiled regexes; and request evidence with baseline, proposed,
+and effective decisions. An activated revision can enforce allow, rate-limit,
+challenge, deceive, or block in `core.Guard`; account-wide legacy rules remain
+shadow-only. Policy loading is asynchronous and bounded. Activation requires
+100 evaluated requests over 30 minutes on the serving node. See
+`docs/PHASE1_POLICY.md` for the API, behavior, and rollout limits. Production
+activation still needs representative live traffic review and durable
+cross-node shadow telemetry; no such data is claimed here.
 
 ## Non-Negotiable Product Rules
 

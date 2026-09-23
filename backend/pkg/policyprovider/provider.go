@@ -1,12 +1,12 @@
 // Package policyprovider builds core.Guard's PolicyProvider from real
-// storage: it resolves a request's tenant to its owning account, reads
-// that account's mitigation rules and protection settings, and hands
-// back an evaluated pkg/policy.Policy — bounded and cached so a live
-// request never waits on a Postgres round trip.
+// storage: it prefers a versioned tenant revision, otherwise falls back to
+// the owner's legacy shadow rules. Production lookups refresh through a
+// bounded background loader, so a cold cache never waits on Postgres.
 package policyprovider
 
 import (
 	"context"
+	"net"
 	"sync"
 	"time"
 
@@ -14,6 +14,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/rules"
 	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenantpolicy"
 )
 
 // tenantLookup is the subset of *tenant.Store this package needs. An
@@ -62,13 +63,21 @@ type cacheEntry struct {
 // Provider resolves and caches each account's live policy. The zero
 // value is not usable; construct with New.
 type Provider struct {
-	tenants  tenantLookup
-	rules    ruleLister
-	settings settingsGetter
+	tenants        tenantLookup
+	rules          ruleLister
+	settings       settingsGetter
+	tenantPolicies interface {
+		LoadForTenant(context.Context, string) (*tenantpolicy.Revision, error)
+	}
 
-	mu    sync.Mutex
-	cache map[string]cacheEntry // keyed by ownerUserID
-	now   func() time.Time
+	mu          sync.Mutex
+	cache       map[string]cacheEntry // keyed by ownerUserID
+	tenantCache map[string]cacheEntry
+	now         func() time.Time
+	async       bool
+	loading     map[string]bool
+	loadSlots   chan struct{}
+	epoch       uint64
 }
 
 // New builds a Provider. store, ruleStore and settingsStore must be
@@ -78,12 +87,32 @@ type Provider struct {
 // is preferable to it crashing request handling.
 func New(store tenantLookup, ruleStore ruleLister, settingsStore settingsGetter) *Provider {
 	return &Provider{
-		tenants:  store,
-		rules:    ruleStore,
-		settings: settingsStore,
-		cache:    make(map[string]cacheEntry),
-		now:      time.Now,
+		tenants:     store,
+		rules:       ruleStore,
+		settings:    settingsStore,
+		cache:       make(map[string]cacheEntry),
+		tenantCache: make(map[string]cacheEntry),
+		now:         time.Now,
+		loading:     make(map[string]bool),
+		loadSlots:   make(chan struct{}, 32),
 	}
+}
+
+// WithTenantPolicies installs the versioned tenant store. An explicit tenant
+// revision takes precedence over legacy account-wide shadow rules.
+func (p *Provider) WithTenantPolicies(store interface {
+	LoadForTenant(context.Context, string) (*tenantpolicy.Revision, error)
+}) *Provider {
+	p.tenantPolicies = store
+	p.async = true
+	return p
+}
+
+func (p *Provider) InvalidateTenant(tenantID string) {
+	p.mu.Lock()
+	p.epoch++
+	delete(p.tenantCache, tenantID)
+	p.mu.Unlock()
 }
 
 // ForTenant is a core.PolicyProvider: it resolves tenantID to its owning
@@ -103,11 +132,127 @@ func (p *Provider) ForTenant(tenantID string) *policy.Policy {
 	if !ok || ownerUserID == "" {
 		return nil
 	}
+	if p.async {
+		return p.forTenantAsync(tenantID, ownerUserID)
+	}
+	if p.tenantPolicies != nil {
+		if pol, ok := p.cachedTenant(tenantID); ok && pol != nil {
+			return pol
+		}
+		if _, ok := p.cachedTenant(tenantID); ok {
+			goto legacy
+		}
+		if pol, found := p.loadTenant(tenantID, ownerUserID, p.currentEpoch()); found {
+			return pol
+		}
+	}
 
+legacy:
 	if pol, ok := p.cached(ownerUserID); ok {
 		return pol
 	}
 	return p.load(ownerUserID)
+}
+
+// Production mode never waits on a database cache miss. A bounded number of
+// background loaders refresh policy; until ready the existing scorer decides.
+func (p *Provider) forTenantAsync(tenantID, ownerID string) *policy.Policy {
+	if pol, ok := p.cachedTenant(tenantID); ok && pol != nil {
+		return pol
+	}
+	legacy, legacyOK := p.cached(ownerID)
+	_, tenantOK := p.cachedTenant(tenantID)
+	if !tenantOK || !legacyOK {
+		p.scheduleLoad(tenantID, ownerID)
+	}
+	if legacyOK {
+		return legacy
+	}
+	return nil
+}
+
+func (p *Provider) scheduleLoad(tenantID, ownerID string) {
+	p.mu.Lock()
+	if p.loading[tenantID] {
+		p.mu.Unlock()
+		return
+	}
+	epoch := p.epoch
+	select {
+	case p.loadSlots <- struct{}{}:
+		p.loading[tenantID] = true
+	default:
+		p.mu.Unlock()
+		return
+	}
+	p.mu.Unlock()
+	go func() {
+		defer func() { p.mu.Lock(); delete(p.loading, tenantID); p.mu.Unlock(); <-p.loadSlots }()
+		if _, found := p.loadTenant(tenantID, ownerID, epoch); !found {
+			p.load(ownerID)
+		}
+	}()
+}
+
+func (p *Provider) cachedTenant(tenantID string) (*policy.Policy, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	e, ok := p.tenantCache[tenantID]
+	if !ok || p.now().After(e.expiresAt) {
+		return nil, false
+	}
+	return e.policy, true
+}
+
+func (p *Provider) currentEpoch() uint64 { p.mu.Lock(); defer p.mu.Unlock(); return p.epoch }
+
+func (p *Provider) loadTenant(tenantID, ownerID string, epoch uint64) (*policy.Policy, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	r, err := p.tenantPolicies.LoadForTenant(ctx, tenantID)
+	if err != nil || r == nil || r.OwnerUserID != ownerID {
+		// Cache an absence briefly, then use legacy rules in shadow only.
+		p.storeTenant(tenantID, nil, negativeCacheTTL, epoch)
+		return nil, false
+	}
+	if err := r.Document.Validate(); err != nil {
+		p.storeTenant(tenantID, nil, negativeCacheTTL, epoch)
+		return nil, true
+	}
+	pol := &policy.Policy{TenantID: tenantID, OwnerUserID: ownerID, Version: r.Version, Mode: r.Document.Mode, Rules: r.Document.Rules, ChallengeTheme: r.Document.ChallengeTheme, BlockMessage: r.Document.BlockMessage}
+	for _, raw := range r.Document.Allowlist {
+		_, cidr, _ := net.ParseCIDR(raw)
+		pol.Allowlist = append(pol.Allowlist, cidr)
+	}
+	compiled, err := policy.Compile(pol)
+	if err != nil {
+		p.storeTenant(tenantID, nil, negativeCacheTTL, epoch)
+		return nil, true
+	}
+	p.storeTenant(tenantID, compiled, cacheTTL, epoch)
+	return compiled, true
+}
+
+func (p *Provider) storeTenant(id string, pol *policy.Policy, ttl time.Duration, epoch uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.epoch != epoch {
+		return
+	}
+	if _, ok := p.tenantCache[id]; !ok && len(p.tenantCache) >= maxCacheEntries {
+		for key, e := range p.tenantCache {
+			if p.now().After(e.expiresAt) {
+				delete(p.tenantCache, key)
+			}
+		}
+		if len(p.tenantCache) >= maxCacheEntries {
+			for key := range p.tenantCache {
+				delete(p.tenantCache, key)
+				break
+			}
+		}
+	}
+	p.tenantCache[id] = cacheEntry{policy: pol, expiresAt: p.now().Add(ttl)}
 }
 
 func (p *Provider) cached(ownerUserID string) (*policy.Policy, bool) {
@@ -124,7 +269,15 @@ func (p *Provider) load(ownerUserID string) *policy.Policy {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	rows, err := p.rules.List(ctx, ownerUserID)
+	var rows []rules.CustomRule
+	var err error
+	if bounded, ok := p.rules.(interface {
+		ListForPolicy(context.Context, string) ([]rules.CustomRule, error)
+	}); ok {
+		rows, err = bounded.ListForPolicy(ctx, ownerUserID)
+	} else {
+		rows, err = p.rules.List(ctx, ownerUserID)
+	}
 	if err != nil {
 		p.store(ownerUserID, nil, negativeCacheTTL)
 		return nil
@@ -141,6 +294,11 @@ func (p *Provider) load(ownerUserID string) *policy.Policy {
 	}
 
 	pol := rules.ToPolicy(ownerUserID, rows, blockThreshold)
+	pol, err = policy.Compile(pol)
+	if err != nil {
+		p.store(ownerUserID, nil, negativeCacheTTL)
+		return nil
+	}
 	p.store(ownerUserID, pol, cacheTTL)
 	return pol
 }

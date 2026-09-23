@@ -33,22 +33,30 @@ type Evidence struct {
 	// model earns the right to enforce, by being compared against the
 	// rules on real traffic first.
 	Model *ModelOpinion `json:"model,omitempty"`
-	// Policy is what the account's dashboard-authored mitigation rules
-	// (pkg/policy) would have decided, present only when a policy
-	// provider is attached. Like Model, it never affects Decision — see
-	// docs/BACKEND_IMPLEMENTATION_PLAN.md Phase 1: policy output only
-	// starts driving enforcement in a later, separately reviewed change.
+	// Policy records the matched tenant rule, proposed action, and whether
+	// an activated revision changed the actual decision. Legacy account
+	// rules remain shadow-only.
 	Policy *PolicyOpinion `json:"policy,omitempty"`
 }
 
-// PolicyOpinion is what one account's mitigation rules would have done
-// with a request, per pkg/policy.Evaluate. A nil RuleID means no rule
+// PolicyOpinion explains one request's policy evaluation. An empty RuleID means no rule
 // matched.
 type PolicyOpinion struct {
-	Matched  bool   `json:"matched"`
-	RuleID   string `json:"ruleId,omitempty"`
-	RuleName string `json:"ruleName,omitempty"`
-	Action   string `json:"action,omitempty"`
+	Matched           bool   `json:"matched"`
+	RuleID            string `json:"ruleId,omitempty"`
+	RuleName          string `json:"ruleName,omitempty"`
+	Action            string `json:"action,omitempty"`
+	Version           int    `json:"version,omitempty"`
+	Mode              string `json:"mode,omitempty"`
+	Class             string `json:"class,omitempty"`
+	Method            string `json:"method,omitempty"`
+	VerifiedAgent     string `json:"verifiedAgent,omitempty"`
+	Allowlisted       bool   `json:"allowlisted"`
+	BaselineDecision  string `json:"baselineDecision,omitempty"`
+	ProposedDecision  string `json:"proposedDecision,omitempty"`
+	EffectiveDecision string `json:"effectiveDecision,omitempty"`
+	Enforced          bool   `json:"enforced"`
+	SkippedReason     string `json:"skippedReason,omitempty"`
 }
 
 // ModelOpinion is the learned model's view of one request. It is a plain
@@ -105,6 +113,7 @@ func (t *Trail) Record(e Evidence) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	e = cloneEvidence(e)
 	e.Time = t.now()
 	t.buf[t.next] = e
 	t.next = (t.next + 1) % len(t.buf)
@@ -132,7 +141,21 @@ func (t *Trail) Recent(limit int) []Evidence {
 		if e.Time.Before(cutoff) {
 			break
 		}
-		out = append(out, e)
+		out = append(out, cloneEvidence(e))
 	}
 	return out
+}
+
+func cloneEvidence(e Evidence) Evidence {
+	e.Signals = append([]string(nil), e.Signals...)
+	if e.Policy != nil {
+		p := *e.Policy
+		e.Policy = &p
+	}
+	if e.Model != nil {
+		m := *e.Model
+		m.Reasons = append([]ModelReason(nil), m.Reasons...)
+		e.Model = &m
+	}
+	return e
 }

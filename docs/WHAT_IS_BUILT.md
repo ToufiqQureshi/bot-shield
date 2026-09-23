@@ -106,7 +106,8 @@ scoped per customer.
 ### The dashboard
 React + Vite. Sign-up, sign-in, password reset and email verification run on
 Supabase Auth. Domains, mitigation rules and protection settings are real pages
-against a real API with real tenant-scoped persistence.
+against a real API. The existing rules page stores account-wide legacy rules;
+the newer tenant policy API does not yet have a dashboard editor.
 
 ### Learned scoring (the new part)
 The nine checks have hand-picked weights (50, 25, 100…). Those were sensible
@@ -168,9 +169,12 @@ bolted on afterwards.
 
 Say these before someone finds them. It costs nothing when you say it first.
 
-**Custom rules and protection settings do not do anything yet.** The dashboard
-saves them, the database stores them, and live scoring ignores them. The pages
-are real; the effect is not. This is the largest single gap.
+**The existing dashboard rule and protection-setting pages do not control live
+traffic.** Their account-wide rules are evaluated only in shadow. The new
+versioned tenant policy API can change live decisions after explicit activation
+and a measured local shadow period, but no representative production traffic
+has been reviewed and the dashboard cannot edit those snapshots yet. See
+`PHASE1_POLICY.md`.
 
 **No billing.** No Stripe, no payments, no subscriptions. There was a fake
 billing UI that showed invented invoices and collected card numbers under a

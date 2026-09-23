@@ -1,9 +1,5 @@
-// Package rules stores each account's custom mitigation rules. It does
-// not enforce them — wiring a custom rule into the live scoring
-// decision in pkg/signals/score.go is a separate, larger integration
-// (see docs/PROGRESS.md) — this package only owns CRUD against the
-// mitigation_rules table plus the fixed catalogue of managed rules the
-// dashboard already advertises as always-on.
+// Package rules stores legacy account-wide mitigation rules. These remain
+// shadow-only; activated tenant revisions live in pkg/tenantpolicy.
 package rules
 
 import (
@@ -91,11 +87,23 @@ func newRuleID() (string, error) {
 
 // List returns every custom rule owned by ownerUserID, newest first.
 func (s *Store) List(ctx context.Context, ownerUserID string) ([]CustomRule, error) {
+	return s.list(ctx, ownerUserID, false)
+}
+
+// ListForPolicy bounds the rows materialized for request-path policy refresh.
+func (s *Store) ListForPolicy(ctx context.Context, ownerUserID string) ([]CustomRule, error) {
+	return s.list(ctx, ownerUserID, true)
+}
+
+func (s *Store) list(ctx context.Context, ownerUserID string, bounded bool) ([]CustomRule, error) {
 	if s.pool == nil {
 		return nil, errors.New("rules: database not configured")
 	}
-	const q = `SELECT id, name, conditions_json, action, enabled, created_at
-		FROM mitigation_rules WHERE owner_user_id = $1 ORDER BY created_at DESC`
+	q := `SELECT id, name, conditions_json, action, enabled, created_at
+		FROM mitigation_rules WHERE owner_user_id = $1 ORDER BY created_at DESC, id DESC`
+	if bounded {
+		q += ` LIMIT 200`
+	}
 	rows, err := s.pool.Query(ctx, q, ownerUserID)
 	if err != nil {
 		return nil, fmt.Errorf("rules: listing: %w", err)

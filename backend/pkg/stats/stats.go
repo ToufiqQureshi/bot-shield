@@ -17,11 +17,12 @@ type Stats struct {
 	// would have happened (docs/ROADMAP.md item 18).
 	Mode config.Mode
 
-	total      atomic.Int64
-	passed     atomic.Int64
-	challenged atomic.Int64
-	blocked    atomic.Int64
-	deceived   atomic.Int64
+	total       atomic.Int64
+	passed      atomic.Int64
+	challenged  atomic.Int64
+	blocked     atomic.Int64
+	deceived    atomic.Int64
+	rateLimited atomic.Int64
 }
 
 func (s *Stats) Record(d signals.Decision) {
@@ -33,13 +34,16 @@ func (s *Stats) Record(d signals.Decision) {
 		s.deceived.Add(1)
 	case signals.DecisionChallenge:
 		s.challenged.Add(1)
+	case signals.DecisionRateLimit:
+		s.rateLimited.Add(1)
 	default:
 		s.passed.Add(1)
 	}
 }
 
-func (s *Stats) Total() int64      { return s.total.Load() }
-func (s *Stats) Passed() int64     { return s.passed.Load() }
-func (s *Stats) Challenged() int64 { return s.challenged.Load() }
-func (s *Stats) Blocked() int64    { return s.blocked.Load() }
-func (s *Stats) Deceived() int64   { return s.deceived.Load() }
+func (s *Stats) Total() int64       { return s.total.Load() }
+func (s *Stats) Passed() int64      { return s.passed.Load() }
+func (s *Stats) Challenged() int64  { return s.challenged.Load() }
+func (s *Stats) Blocked() int64     { return s.blocked.Load() }
+func (s *Stats) Deceived() int64    { return s.deceived.Load() }
+func (s *Stats) RateLimited() int64 { return s.rateLimited.Load() }

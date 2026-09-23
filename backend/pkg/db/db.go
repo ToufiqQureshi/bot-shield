@@ -41,11 +41,13 @@ func Init(databaseURL string) error {
 		return fmt.Errorf("unable to ping database: %w", err)
 	}
 
+	if err:=InitSchema(ctx,pool); err!=nil { pool.Close(); return err }
 	DB = pool
-	return initSchema(ctx)
+	return nil
 }
 
-func initSchema(ctx context.Context) error {
+// InitSchema applies additive startup migrations to the selected database.
+func InitSchema(ctx context.Context,pool *pgxpool.Pool) error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS tenants (
 		id VARCHAR(255) PRIMARY KEY,
@@ -81,6 +83,17 @@ func initSchema(ctx context.Context) error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_rules_owner ON mitigation_rules(owner_user_id);
 
+	CREATE TABLE IF NOT EXISTS tenant_policy_revisions (
+		tenant_id VARCHAR(255) NOT NULL,
+		version INT NOT NULL CHECK (version > 0),
+		owner_user_id VARCHAR(255) NOT NULL,
+		actor_user_id VARCHAR(255) NOT NULL,
+		document_json JSONB NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		PRIMARY KEY (tenant_id, version)
+	);
+	CREATE INDEX IF NOT EXISTS idx_tenant_policy_owner ON tenant_policy_revisions(owner_user_id, tenant_id, version DESC);
+
 	-- Labelled traffic for the learned scorer (pkg/decide) to train on.
 	-- Deliberately holds no IP, user agent, path or body: a model trains
 	-- on which checks fired, and nothing else here is worth the storage
@@ -108,7 +121,7 @@ func initSchema(ctx context.Context) error {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	);
 	`
-	_, err := DB.Exec(ctx, schema)
+	_, err := pool.Exec(ctx, schema)
 	return err
 }
 

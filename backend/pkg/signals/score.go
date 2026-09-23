@@ -21,6 +21,7 @@ const (
 	DecisionChallenge
 	DecisionBlock
 	DecisionDeceive
+	DecisionRateLimit
 )
 
 func (d Decision) String() string {
@@ -33,6 +34,8 @@ func (d Decision) String() string {
 		return "block"
 	case DecisionDeceive:
 		return "deceive"
+	case DecisionRateLimit:
+		return "rate_limit"
 	default:
 		return "unknown"
 	}

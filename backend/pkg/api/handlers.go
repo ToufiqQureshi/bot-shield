@@ -19,6 +19,7 @@ type statsResponse struct {
 	Challenged    int64  `json:"challenged"`
 	Blocked       int64  `json:"blocked"`
 	Deceived      int64  `json:"deceived"`
+	RateLimited   int64  `json:"rateLimited"`
 	Mode          string `json:"mode"`
 	Enforcing     bool   `json:"enforcing"`
 }
@@ -68,6 +69,7 @@ func DashboardStatsHandler(store *tenant.Store, verifier *auth.Verifier) http.Ha
 			Challenged:    s.Challenged(),
 			Blocked:       s.Blocked(),
 			Deceived:      s.Deceived(),
+			RateLimited:   s.RateLimited(),
 			Mode:          s.Mode.String(),
 			Enforcing:     s.Mode == config.ModeEnforce,
 		}); err != nil {

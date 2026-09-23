@@ -3,6 +3,7 @@ package policyprovider
 import (
 	"context"
 	"errors"
+	"github.com/ToufiqQureshi/hakaishield/pkg/tenantpolicy"
 	"testing"
 	"time"
 
@@ -10,6 +11,52 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/rules"
 	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
 )
+
+type blockingTenantPolicies struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingTenantPolicies) LoadForTenant(_ context.Context, id string) (*tenantpolicy.Revision, error) {
+	select {
+	case b.started <- struct{}{}:
+	default:
+	}
+	<-b.release
+	return &tenantpolicy.Revision{TenantID: id, Version: 1, OwnerUserID: "owner-1", Document: tenantpolicy.Document{Mode: "shadow", Rules: []policy.Rule{{ID: "r1", Name: "block admin", Enabled: true, Action: policy.ActionBlock, Conditions: []policy.Condition{{Field: policy.FieldPath, Operator: policy.OpEquals, Value: "/admin"}}}}}}, nil
+}
+
+func TestProductionProviderCacheMissNeverWaitsForDatabase(t *testing.T) {
+	loader := &blockingTenantPolicies{started: make(chan struct{}, 1), release: make(chan struct{})}
+	p := New(fakeTenants{"t1": "owner-1"}, newFakeRules(), fakeSettings{}).WithTenantPolicies(loader)
+	start := time.Now()
+	if got := p.ForTenant("t1"); got != nil {
+		t.Fatalf("cold cache should use baseline, got %+v", got)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("request blocked on database for %s", elapsed)
+	}
+	select {
+	case <-loader.started:
+	case <-time.After(time.Second):
+		t.Fatal("load did not start")
+	}
+	close(loader.release)
+	deadline := time.Now().Add(time.Second)
+	for {
+		got := p.ForTenant("t1")
+		if got != nil {
+			if got.Version != 1 || policy.Evaluate(got, policy.Facts{Path: "/admin"}).RuleID != "r1" {
+				t.Fatalf("loaded policy=%+v", got)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("cache did not receive loaded policy")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
 
 // fakeTenants is a tenantLookup test double: a plain map from tenant ID
 // to owner ID, so tests can exercise ForTenant without a real DB-backed

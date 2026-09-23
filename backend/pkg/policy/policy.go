@@ -7,10 +7,8 @@
 // not-yet-supported rule can never itself become a source of blocked
 // traffic (CLAUDE.md Section 2: unknown is neutral, not malicious).
 //
-// This package only decides what a policy would do. Nothing here
-// enforces anything — wiring its answer into core.Guard's actual
-// allow/challenge/block decision is a separate, later change (see
-// docs/BACKEND_IMPLEMENTATION_PLAN.md Phase 1).
+// This package only matches conditions. core.Guard applies a selected
+// action only for an activated tenant revision in enforcement mode.
 package policy
 
 import (
@@ -28,13 +26,17 @@ import (
 type Field string
 
 const (
-	FieldJA4       Field = "JA4 Fingerprint"
-	FieldScore     Field = "Threat Score"
-	FieldIP        Field = "IP Address"
-	FieldUserAgent Field = "User-Agent"
-	FieldPath      Field = "Request Path"
-	FieldMethod    Field = "Request Method"
-	FieldCIDR      Field = "IP Range"
+	FieldJA4           Field = "JA4 Fingerprint"
+	FieldScore         Field = "Threat Score"
+	FieldIP            Field = "IP Address"
+	FieldUserAgent     Field = "User-Agent"
+	FieldPath          Field = "Request Path"
+	FieldMethod        Field = "Request Method"
+	FieldCIDR          Field = "IP Range"
+	FieldVerifiedAgent Field = "Verified Agent"
+	FieldSignal        Field = "Signal"
+	FieldRequestClass  Field = "Request Class"
+	FieldAllowlisted   Field = "Tenant Allowlist"
 )
 
 // notYetSupportedFields are recognised by the product (the dashboard
@@ -79,38 +81,62 @@ const (
 	ActionBlock     Action = "BLOCK"
 	ActionDeceive   Action = "DECEIVE"
 	ActionLog       Action = "LOG"
+	ActionRateLimit Action = "RATE_LIMIT"
 )
 
 var knownActions = map[Action]bool{
 	ActionAllow: true, ActionChallenge: true, ActionBlock: true,
 	ActionDeceive: true, ActionLog: true,
+	ActionRateLimit: true,
 }
 
 // Condition is one clause of a rule, e.g. {Request Path, CONTAINS, /admin}.
 type Condition struct {
-	Field    Field
-	Operator Operator
-	Value    string
+	Field    Field    `json:"field"`
+	Operator Operator `json:"operator"`
+	Value    string   `json:"value"`
+	compiled *regexp.Regexp
 }
 
-// Rule is one account-authored mitigation rule, already validated and
+// Rule is one operator-authored mitigation rule, already validated and
 // ordered. Conditions are ANDed together — a rule matches only when
 // every condition matches.
 type Rule struct {
-	ID         string
-	Name       string
-	Conditions []Condition
-	Action     Action
-	Enabled    bool
+	ID         string      `json:"id"`
+	Name       string      `json:"name"`
+	Conditions []Condition `json:"conditions"`
+	Action     Action      `json:"action"`
+	Enabled    bool        `json:"enabled"`
 }
 
-// Policy is one account's ordered rule set. The zero value (nil Rules)
+// Policy is one tenant's ordered rule set. The zero value (nil Rules)
 // is the safe default for a tenant that has never configured one: it
 // evaluates to no match, every time, for every request.
 type Policy struct {
-	OwnerUserID string
-	Version     int
-	Rules       []Rule
+	TenantID       string
+	OwnerUserID    string
+	Version        int
+	Mode           string // shadow or enforce; empty is shadow
+	Rules          []Rule
+	Allowlist      []*net.IPNet
+	ChallengeTheme string
+	BlockMessage   string
+}
+
+func (p *Policy) Allowlisted(ip string) bool {
+	if p == nil {
+		return false
+	}
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, cidr := range p.Allowlist {
+		if cidr.Contains(parsed) {
+			return true
+		}
+	}
+	return false
 }
 
 // Facts is the subset of a request Evaluate can see. It intentionally
@@ -126,17 +152,21 @@ type Facts struct {
 	// Score is the combined signal score for this request (see
 	// signals.Evaluate). Callers compute it first and pass it in, since
 	// only pkg/signals owns how it's derived.
-	Score int
+	Score         int
+	VerifiedAgent string
+	Signals       []string
+	Class         string
+	Allowlisted   bool
 }
 
 // MatchResult is what a policy would do about one request. Matched is
 // false when no rule fired, in which case RuleID/RuleName/Action are
 // zero values and the caller's existing decision is unaffected.
 type MatchResult struct {
-	Matched  bool
-	RuleID   string
-	RuleName string
-	Action   Action
+	Matched  bool   `json:"matched"`
+	RuleID   string `json:"ruleId,omitempty"`
+	RuleName string `json:"ruleName,omitempty"`
+	Action   Action `json:"action,omitempty"`
 }
 
 // Evaluate walks the policy's rules in order and returns the first one
@@ -185,25 +215,74 @@ func (c Condition) matches(f Facts) bool {
 	}
 	switch c.Field {
 	case FieldJA4:
-		return stringMatch(c.Operator, f.JA4, c.Value)
+		return c.stringMatch(f.JA4)
 	case FieldIP:
-		return stringMatch(c.Operator, f.IP, c.Value)
+		return c.stringMatch(f.IP)
 	case FieldCIDR:
 		if c.Operator != OpEquals {
 			return false
 		}
 		return cidrMatch(f.IP, c.Value)
 	case FieldUserAgent:
-		return stringMatch(c.Operator, f.UA, c.Value)
+		return c.stringMatch(f.UA)
 	case FieldPath:
-		return stringMatch(c.Operator, f.Path, c.Value)
+		return c.stringMatch(f.Path)
 	case FieldMethod:
-		return stringMatch(c.Operator, f.Method, c.Value)
+		return c.stringMatch(f.Method)
 	case FieldScore:
 		return numberMatch(c.Operator, f.Score, c.Value)
+	case FieldVerifiedAgent:
+		return c.Operator == OpEquals && f.VerifiedAgent != "" && strings.EqualFold(f.VerifiedAgent, c.Value)
+	case FieldSignal:
+		if c.Operator != OpEquals {
+			return false
+		}
+		for _, signal := range f.Signals {
+			if signal == c.Value {
+				return true
+			}
+		}
+		return false
+	case FieldRequestClass:
+		return c.Operator == OpEquals && f.Class == c.Value
+	case FieldAllowlisted:
+		return c.Operator == OpEquals && f.Allowlisted && c.Value == "true"
 	default:
 		return false
 	}
+}
+
+func (c Condition) stringMatch(actual string) bool {
+	if c.Operator == OpMatches && c.compiled != nil {
+		return c.compiled.MatchString(actual)
+	}
+	return stringMatch(c.Operator, actual, c.Value)
+}
+
+// Compile copies a validated policy and compiles regular expressions once.
+// The result is immutable and safe to share across concurrent requests.
+func Compile(p *Policy) (*Policy, error) {
+	if p == nil {
+		return nil, nil
+	}
+	copyPolicy := *p
+	copyPolicy.Rules = make([]Rule, len(p.Rules))
+	for i, rule := range p.Rules {
+		copyPolicy.Rules[i] = rule
+		copyPolicy.Rules[i].Conditions = make([]Condition, len(rule.Conditions))
+		copy(copyPolicy.Rules[i].Conditions, rule.Conditions)
+		for j := range copyPolicy.Rules[i].Conditions {
+			c := &copyPolicy.Rules[i].Conditions[j]
+			if c.Operator == OpMatches {
+				re, err := regexp.Compile(c.Value)
+				if err != nil {
+					return nil, err
+				}
+				c.compiled = re
+			}
+		}
+	}
+	return &copyPolicy, nil
 }
 
 func stringMatch(op Operator, actual, want string) bool {

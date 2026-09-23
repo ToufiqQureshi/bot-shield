@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 )
 
 // Validation errors are returned as-is (not wrapped in a request-facing
@@ -28,6 +30,7 @@ var (
 	ErrUAOnlyAllow              = errors.New("policy: a rule cannot allow traffic based only on User-Agent — it would skip scoring")
 	ErrUAOnlyBlock              = errors.New("policy: a rule cannot block traffic based only on User-Agent")
 	ErrDeceiveNotStricter       = errors.New("policy: a DECEIVE rule needs a Threat Score floor above the account's block threshold")
+	ErrInvalidRuleValue         = errors.New("policy: invalid condition value")
 )
 
 const (
@@ -42,13 +45,21 @@ const (
 // be accepted by Evaluate as a safe non-match, but ValidateRule rejects
 // it instead of letting the dashboard save a rule that can never fire.
 var allowedOperators = map[Field][]Operator{
-	FieldJA4:       {OpEquals, OpContains, OpMatches},
-	FieldIP:        {OpEquals, OpContains, OpMatches},
-	FieldUserAgent: {OpEquals, OpContains, OpMatches},
-	FieldPath:      {OpEquals, OpContains, OpMatches},
-	FieldMethod:    {OpEquals},
-	FieldScore:     {OpEquals, OpGT, OpLT, OpGTE, OpLTE},
-	FieldCIDR:      {OpEquals},
+	FieldJA4:           {OpEquals, OpContains, OpMatches},
+	FieldIP:            {OpEquals, OpContains, OpMatches},
+	FieldUserAgent:     {OpEquals, OpContains, OpMatches},
+	FieldPath:          {OpEquals, OpContains, OpMatches},
+	FieldMethod:        {OpEquals},
+	FieldScore:         {OpEquals, OpGT, OpLT, OpGTE, OpLTE},
+	FieldCIDR:          {OpEquals},
+	FieldVerifiedAgent: {OpEquals},
+	FieldSignal:        {OpEquals},
+	FieldRequestClass:  {OpEquals},
+	FieldAllowlisted:   {OpEquals},
+}
+
+func validSignal(name string) bool {
+	return slices.Contains(signals.FeatureNames(), name)
 }
 
 // ValidateRule is the single place a candidate rule is approved, called
@@ -126,6 +137,31 @@ func validateCondition(c Condition) error {
 	if c.Field == FieldCIDR {
 		if _, _, err := net.ParseCIDR(c.Value); err != nil {
 			return fmt.Errorf("%w: %v", ErrBadCIDR, err)
+		}
+	}
+	if c.Field == FieldRequestClass && !validClass(c.Value) {
+		return fmt.Errorf("%w: invalid request class", ErrInvalidRuleValue)
+	}
+	if c.Field == FieldAllowlisted && c.Value != "true" {
+		return fmt.Errorf("%w: allowlist value must be true", ErrInvalidRuleValue)
+	}
+	if c.Field == FieldVerifiedAgent && c.Value != "search" && c.Value != "monitor" {
+		return fmt.Errorf("%w: unknown verified agent", ErrInvalidRuleValue)
+	}
+	if c.Field == FieldSignal && !validSignal(c.Value) {
+		return fmt.Errorf("%w: unknown signal", ErrInvalidRuleValue)
+	}
+	if c.Field == FieldMethod {
+		switch c.Value {
+		case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS":
+		default:
+			return fmt.Errorf("%w: invalid request method", ErrInvalidRuleValue)
+		}
+	}
+	if c.Field == FieldPath && c.Operator == OpEquals {
+		normalized, ok := NormalizePath(c.Value)
+		if !ok || normalized != c.Value {
+			return fmt.Errorf("%w: path must be canonical", ErrInvalidRuleValue)
 		}
 	}
 	return nil

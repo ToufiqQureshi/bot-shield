@@ -39,11 +39,12 @@ type TenantConfig struct {
 // Tenant represents a single customer's isolated environment.
 // It holds its own proxy, stats, and evidence trail so data cannot leak across customers.
 type Tenant struct {
-	ID     string
-	Config TenantConfig
-	Stats  *stats.Stats
-	Trail  *evidence.Trail
-	Origin *httputil.ReverseProxy
+	ID           string
+	Config       TenantConfig
+	Stats        *stats.Stats
+	Trail        *evidence.Trail
+	PolicyShadow *evidence.ShadowStats
+	Origin       *httputil.ReverseProxy
 }
 
 // ProxyFactory is a callback to create origin proxies without creating import cycles.
@@ -94,11 +95,12 @@ func (s *Store) Add(id string, config TenantConfig, hosts []string, origin *http
 		canonicalHosts = append(canonicalHosts, host)
 	}
 	t := &Tenant{
-		ID:     id,
-		Config: config,
-		Stats:  &stats.Stats{Mode: config.Mode},
-		Trail:  evidence.NewTrail(),
-		Origin: origin,
+		ID:           id,
+		Config:       config,
+		Stats:        &stats.Stats{Mode: config.Mode},
+		Trail:        evidence.NewTrail(),
+		PolicyShadow: evidence.NewShadowStats(),
+		Origin:       origin,
 	}
 
 	s.mu.Lock()

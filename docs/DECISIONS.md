@@ -1646,3 +1646,29 @@ one is designed, obtain verified labels, correct selection bias, compare false
 positives with the rules on held-out data, and resolve whether models are
 tenant-specific or shared. The first honeypot hit now captures its own sample;
 no follow-up request is required.
+
+## Tenant policy revisions use append-only snapshots — 2026-09-23
+
+**Decision.** Keep existing account-wide `mitigation_rules` in shadow and add
+`tenant_policy_revisions` for a site's ordered policy. Each authenticated
+write checks tenant ownership and an expected version while holding the
+tenant row lock. Rollback appends a new shadow revision rather than mutating
+history. A saved revision cannot enforce until the operator activates it
+after measured shadow traffic. A cold policy cache falls back to the existing
+signal scorer while a bounded background loader reads Postgres.
+
+**Why.** The old owner-wide rules have no per-domain scope, version, priority,
+or rollback. Activating them in place would let an experimental rule for one
+site affect every site in the account. Immutable snapshots make the exact rule
+order and action that produced a decision auditable. The proxy cannot afford a
+Postgres lookup in the request path, and a missing policy must not turn a DB
+outage into origin downtime.
+
+**Limits.** The shadow activation gate currently reads node-local bounded
+per-version aggregates that survive the evidence ring wrapping. This is
+deliberately conservative after a restart or on a node
+that has not served traffic, but does not provide a fleet-wide production
+measurement. Durable aggregate telemetry and representative false-positive
+review are required before multi-node activation. Existing challenge-solved
+and honeypot branches keep their dedicated behavior; their policy skip reason
+is explicit in evidence and those requests do not satisfy the gate.

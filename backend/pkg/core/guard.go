@@ -2,6 +2,7 @@ package core
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
@@ -33,11 +34,9 @@ type Guard struct {
 	// nothing.
 	model *decide.Model
 	// policyProvider, when set, is asked for the requesting tenant's
-	// dashboard-authored mitigation policy so it can be evaluated
-	// alongside the rule scorer, the same shadow-only pattern as model.
-	// It never picks Decision (docs/BACKEND_IMPLEMENTATION_PLAN.md Phase
-	// 1 guardrail: policy output earns enforcement in a later, separate
-	// change). Nil is the normal state and costs nothing.
+	// dashboard-authored mitigation policy. Legacy account rules stay in
+	// shadow; an activated, versioned tenant revision may choose Decision.
+	// Nil is the normal state and costs nothing.
 	policyProvider PolicyProvider
 }
 
@@ -90,9 +89,8 @@ func (g *Guard) WithShadowModel(m *decide.Model) *Guard {
 	return g
 }
 
-// WithPolicyProvider attaches a lookup for each tenant's dashboard rules
-// so they can be evaluated in shadow mode. Passing nil turns it off,
-// which is the default.
+// WithPolicyProvider attaches a lookup for each tenant's policy. Passing
+// nil turns it off, which is the default.
 //
 // Call it during setup, before the guard serves traffic, for the same
 // reason as WithShadowModel: the field is read without locking on the
@@ -160,12 +158,17 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// bot in a loop evict this customer's real decision history.
 		if firstTrip := signals.RecordHoneypotTrip(tenant.ID, ip, ja4); firstTrip {
 			tenant.Stats.Record(signals.DecisionBlock)
+			skip := g.skippedPolicyOpinion(tenant.ID, "honeypot_trap")
 			tenant.Trail.Record(evidence.Evidence{
 				JA4:      ja4,
 				Signals:  []string{"honeypot_trap"},
 				Decision: signals.DecisionBlock.String(),
 				Enforced: enforced,
+				Policy:   skip,
 			})
+			if tenant.PolicyShadow != nil {
+				tenant.PolicyShadow.Observe(skip, time.Now())
+			}
 			if g.labels != nil {
 				// Capture the trap request itself. A crawler may leave after
 				// fetching this URL, so waiting for a later request loses it.
@@ -189,7 +192,8 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// SEO & Search Engine Crawler Protection:
 	// Genuine verified search engine bots (Googlebot, Bingbot, Applebot) with matching
 	// reverse-forward DNS are forwarded directly without friction or challenges.
-	if signals.IsVerifiedGoodBot(ip, r.UserAgent()) {
+	verifiedBot := signals.IsVerifiedGoodBot(ip, r.UserAgent())
+	if verifiedBot && g.policyProvider == nil {
 		tenant.Stats.Record(signals.DecisionAllow)
 		tenant.Trail.Record(evidence.Evidence{
 			JA4:      ja4,
@@ -201,7 +205,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if g.challenge.Passed(r) {
+	if !verifiedBot && g.challenge.Passed(r) {
 		// A solved challenge proves this client could run JS once; it
 		// says nothing about the volume of requests after that. Without
 		// this check, one solve buys unlimited-speed access to the
@@ -209,7 +213,11 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// bounded resource use, can't let a visitor exhaust the origin).
 		if signals.VelocityExceeded(ip, ja4, r.URL.Path) {
 			tenant.Stats.Record(signals.DecisionBlock)
-			tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"velocity_after_pass"}, Decision: signals.DecisionBlock.String(), Enforced: enforced})
+			skip := g.skippedPolicyOpinion(tenant.ID, "challenge_solved")
+			tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"velocity_after_pass"}, Decision: signals.DecisionBlock.String(), Enforced: enforced, Policy: skip})
+			if tenant.PolicyShadow != nil {
+				tenant.PolicyShadow.Observe(skip, time.Now())
+			}
 			if enforced {
 				http.Error(w, "too many requests", http.StatusTooManyRequests)
 				return
@@ -221,7 +229,11 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Recorded as its own reason, not as "scored zero", otherwise
 		// the trail would claim this visitor looked clean when really
 		// they had already proven themselves.
-		tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"challenge_solved"}, Decision: signals.DecisionAllow.String(), Enforced: enforced})
+		skip := g.skippedPolicyOpinion(tenant.ID, "challenge_solved")
+		tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"challenge_solved"}, Decision: signals.DecisionAllow.String(), Enforced: enforced, Policy: skip})
+		if tenant.PolicyShadow != nil {
+			tenant.PolicyShadow.Observe(skip, time.Now())
+		}
 		tenant.Origin.ServeHTTP(w, r)
 		return
 	}
@@ -237,8 +249,30 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	evaluation := signals.Evaluate(facts)
 	score := evaluation.Score
 	decision := signals.DecideWithPolicy(score, tenant.Config.Policy)
+	if verifiedBot {
+		decision = signals.DecisionAllow
+	}
 	if decision == signals.DecisionBlock && tenant.Config.Deception {
 		decision = signals.DecisionDeceive
+	}
+	baseline := decision
+	var opinion *evidence.PolicyOpinion
+	var activePolicy *policy.Policy
+	if g.policyProvider != nil {
+		activePolicy = g.policyProvider(tenant.ID)
+	}
+	if activePolicy != nil {
+		decision, opinion = evaluateTenantPolicy(activePolicy, facts, evaluation.Signals, score, strings.ToUpper(r.Method), verifiedBot, baseline, enforced)
+		if opinion.Matched {
+			if opinion.Enforced {
+				observability.Inc("policy_enforced_change_total")
+			} else if activePolicy.Mode != "enforce" {
+				observability.Inc("policy_shadow_match_total")
+				if opinion.ProposedDecision != opinion.BaselineDecision {
+					observability.Inc("policy_shadow_disagree_total")
+				}
+			}
+		}
 	}
 	tenant.Trail.Record(evidence.Evidence{
 		JA4:      ja4,
@@ -247,8 +281,11 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Decision: decision.String(),
 		Enforced: enforced,
 		Model:    g.shadowOpinion(evaluation.Fired, decision),
-		Policy:   g.shadowPolicyOpinion(tenant.ID, facts, score, r.Method),
+		Policy:   opinion,
 	})
+	if tenant.PolicyShadow != nil {
+		tenant.PolicyShadow.Observe(opinion, time.Now())
+	}
 
 	// The dashboard wants to know what would have happened, but the
 	// visitor is forwarded regardless. Nothing a client's real customer
@@ -262,7 +299,14 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tenant.Stats.Record(decision)
 	switch decision {
 	case signals.DecisionBlock:
-		http.Error(w, "forbidden", http.StatusForbidden)
+		message := "forbidden"
+		if opinion != nil && opinion.Enforced && activePolicy.BlockMessage != "" {
+			message = activePolicy.BlockMessage
+		}
+		http.Error(w, message, http.StatusForbidden)
+	case signals.DecisionRateLimit:
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
 	case signals.DecisionDeceive:
 		// ROADMAP Item 11a: Deception mode (decoy response).
 		// Forward the request with X-HakaiShield-Decision: deceive so the origin
@@ -273,12 +317,16 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Carry what this request looked like into the challenge, so a
 		// solve can label it human. Nothing about the challenge itself
 		// changes.
-		g.challenge.Serve(w, r.WithContext(labels.WithSample(r.Context(), labels.Sample{
+		challengeRequest := r.WithContext(labels.WithSample(r.Context(), labels.Sample{
 			TenantID:       tenant.ID,
 			Fired:          evaluation.Fired,
 			FeatureVersion: signals.FeatureVersion(),
 			Identity:       labelIdentity(tenant.ID, ip, ja4),
-		})))
+		}))
+		if activePolicy != nil && opinion != nil && opinion.Enforced {
+			challengeRequest = challengeRequest.WithContext(challenge.WithTheme(challengeRequest.Context(), activePolicy.ChallengeTheme))
+		}
+		g.challenge.Serve(w, challengeRequest)
 	default:
 		tenant.Origin.ServeHTTP(w, r)
 	}
@@ -329,7 +377,59 @@ func (g *Guard) shadowOpinion(fired uint32, ruleDecision signals.Decision) *evid
 // Like shadowOpinion, this never influences ruleDecision: pkg/policy is
 // evaluated purely for the evidence trail until a later, separately
 // reviewed change lets it drive enforcement.
-func (g *Guard) shadowPolicyOpinion(tenantID string, facts signals.RequestFacts, score int, method string) *evidence.PolicyOpinion {
+func evaluateTenantPolicy(p *policy.Policy, facts signals.RequestFacts, fired []string, score int, method string, verifiedBot bool, baseline signals.Decision, tenantEnforced bool) (signals.Decision, *evidence.PolicyOpinion) {
+	opinion := &evidence.PolicyOpinion{Version: p.Version, Mode: p.Mode, BaselineDecision: baseline.String(), ProposedDecision: baseline.String(), EffectiveDecision: baseline.String()}
+	path, ok := policy.NormalizePath(facts.Path)
+	if !ok {
+		opinion.SkippedReason = "ambiguous_path"
+		return baseline, opinion
+	}
+	class := policy.Classify(path, method)
+	opinion.Class = class
+	opinion.Method = method
+	allowlisted := p.Allowlisted(facts.IP)
+	agent := ""
+	if allowlisted {
+		agent = "monitor"
+	}
+	if verifiedBot {
+		agent = "search"
+	}
+	opinion.VerifiedAgent = agent
+	opinion.Allowlisted = allowlisted
+	match := policy.Evaluate(p, policy.Facts{IP: facts.IP, JA4: facts.JA4, UA: facts.UA, Path: path, Method: method, Score: score, Signals: fired, Class: class, VerifiedAgent: agent, Allowlisted: allowlisted})
+	opinion.Matched, opinion.RuleID, opinion.RuleName, opinion.Action = match.Matched, match.RuleID, match.RuleName, string(match.Action)
+	if !match.Matched {
+		return baseline, opinion
+	}
+	decision := baseline
+	switch match.Action {
+	case policy.ActionAllow:
+		// A configured path or UA cannot overrule strong malicious evidence.
+		if score < signals.HardBlockThreshold() || verifiedBot || allowlisted {
+			decision = signals.DecisionAllow
+		}
+	case policy.ActionChallenge:
+		decision = signals.DecisionChallenge
+	case policy.ActionBlock:
+		decision = signals.DecisionBlock
+	case policy.ActionRateLimit:
+		decision = signals.DecisionRateLimit
+	case policy.ActionDeceive:
+		if score > signals.HardBlockThreshold() {
+			decision = signals.DecisionDeceive
+		}
+	}
+	opinion.ProposedDecision = decision.String()
+	if p.Mode != "enforce" || !tenantEnforced {
+		return baseline, opinion
+	}
+	opinion.EffectiveDecision = decision.String()
+	opinion.Enforced = match.Action != policy.ActionLog && decision != baseline
+	return decision, opinion
+}
+
+func (g *Guard) skippedPolicyOpinion(tenantID, reason string) *evidence.PolicyOpinion {
 	if g.policyProvider == nil {
 		return nil
 	}
@@ -337,24 +437,7 @@ func (g *Guard) shadowPolicyOpinion(tenantID string, facts signals.RequestFacts,
 	if p == nil {
 		return nil
 	}
-
-	result := policy.Evaluate(p, policy.Facts{
-		IP:     facts.IP,
-		JA4:    facts.JA4,
-		UA:     facts.UA,
-		Path:   facts.Path,
-		Method: method,
-		Score:  score,
-	})
-	if result.Matched {
-		observability.Inc("policy_shadow_match_total")
-	}
-	return &evidence.PolicyOpinion{
-		Matched:  result.Matched,
-		RuleID:   result.RuleID,
-		RuleName: result.RuleName,
-		Action:   string(result.Action),
-	}
+	return &evidence.PolicyOpinion{Version: p.Version, Mode: p.Mode, SkippedReason: reason}
 }
 
 // honeypotBit is resolved once so the trap cannot teach the model its
