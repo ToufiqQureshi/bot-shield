@@ -37,8 +37,12 @@ const (
 	FieldCIDR      Field = "IP Range"
 )
 
-// knownFields is every field Validate accepts, independent of whether
-// Evaluate can currently match against it (see unsupportedFields below).
+// knownFields is every field ValidateRule accepts. The dashboard's rule
+// builder (dashboard/src/pages/MitigationRules.tsx) also lists ASN, Geo
+// and TLS Version, but nothing in RequestFacts computes those yet, so
+// they are deliberately left out here — ValidateRule rejects a rule
+// that uses one rather than silently saving a rule the dashboard would
+// then claim is active but that can never fire.
 var knownFields = map[Field]bool{
 	FieldJA4:       true,
 	FieldScore:     true,
@@ -47,37 +51,33 @@ var knownFields = map[Field]bool{
 	FieldPath:      true,
 	FieldMethod:    true,
 	FieldCIDR:      true,
-	// The dashboard's rule builder also offers ASN, Geo and TLS Version
-	// (dashboard/src/pages/MitigationRules.tsx). Nothing in RequestFacts
-	// computes those today, so they are accepted (a rule using them is
-	// not rejected as malformed) but Condition.matches always returns
-	// false for them — see unsupportedFields.
-	"ASN":         true,
-	"Geo":         true,
-	"TLS Version": true,
 }
 
-// unsupportedFields have no data source yet. A condition against one of
-// these can never match, which is the safe failure mode: the rule
-// silently does nothing instead of matching every request or panicking.
-var unsupportedFields = map[Field]bool{
+// notYetSupportedFields are recognised by the product (the dashboard
+// offers them) but have no data source in RequestFacts yet. Evaluate
+// treats a condition against one of these as defense-in-depth: it must
+// never match rather than panic or match everything, in case a rule
+// saved before ValidateRule rejected them is still stored somewhere.
+var notYetSupportedFields = map[Field]bool{
 	"ASN":         true,
 	"Geo":         true,
 	"TLS Version": true,
 }
 
 // Operator is the comparison a condition applies between the request's
-// field value and the rule's configured value.
+// field value and the rule's configured value. Values match the
+// dashboard's wire format exactly (dashboard/src/pages/MitigationRules.tsx
+// `operators`) so a rule round-trips without translation.
 type Operator string
 
 const (
 	OpEquals   Operator = "EQUALS"
 	OpContains Operator = "CONTAINS"
 	OpMatches  Operator = "MATCHES"
-	OpGT       Operator = "GT"
-	OpLT       Operator = "LT"
-	OpGTE      Operator = "GTE"
-	OpLTE      Operator = "LTE"
+	OpGT       Operator = ">"
+	OpLT       Operator = "<"
+	OpGTE      Operator = ">="
+	OpLTE      Operator = "<="
 )
 
 var knownOperators = map[Operator]bool{
@@ -193,7 +193,7 @@ func ruleMatches(r Rule, f Facts) bool {
 }
 
 func (c Condition) matches(f Facts) bool {
-	if unsupportedFields[c.Field] {
+	if notYetSupportedFields[c.Field] {
 		return false
 	}
 	switch c.Field {

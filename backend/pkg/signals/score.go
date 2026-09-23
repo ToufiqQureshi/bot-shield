@@ -203,6 +203,15 @@ func DecideWithPolicy(score int, policy config.PolicyMode) Decision {
 	return DecisionChallenge
 }
 
+// HardBlockThreshold is the score at which scoring blocks a request
+// outright, regardless of policy mode. Other packages that need to
+// reason about "stricter than a block" (e.g. pkg/policy's DECEIVE
+// guardrail) call this instead of hardcoding 100, so the two constants
+// can never silently drift apart.
+func HardBlockThreshold() int {
+	return blockThreshold
+}
+
 // FeatureVersion identifies the check list this build runs, as a short
 // stable hash of the names in FeatureNames order.
 //

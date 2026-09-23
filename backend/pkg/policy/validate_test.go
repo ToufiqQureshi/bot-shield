@@ -61,6 +61,16 @@ func TestValidateRule_NumericOperatorOnNonScoreField(t *testing.T) {
 	}
 }
 
+// The dashboard's rule builder offers ASN/Geo/TLS Version, but nothing
+// computes them yet — ValidateRule must reject a rule that uses one
+// rather than let the dashboard show a rule as active that can never fire.
+func TestValidateRule_NotYetSupportedFieldRejected(t *testing.T) {
+	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: "Geo", Operator: OpEquals, Value: "RU"}}}
+	if err := ValidateRule(r, 90); !errors.Is(err, ErrUnknownField) {
+		t.Fatalf("got %v, want ErrUnknownField for a not-yet-supported field", err)
+	}
+}
+
 func TestValidateRule_ValidRulePasses(t *testing.T) {
 	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldJA4, Operator: OpEquals, Value: "t13d..."}}}
 	if err := ValidateRule(r, 90); err != nil {
