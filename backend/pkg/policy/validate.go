@@ -3,7 +3,9 @@ package policy
 import (
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -12,16 +14,34 @@ import (
 // generic message) because pkg/rules' Create/Update handler is expected
 // to surface them to the dashboard operator who wrote the rule.
 var (
-	ErrNoConditions       = errors.New("policy: rule must have at least one condition")
-	ErrUnknownField       = errors.New("policy: unknown condition field")
-	ErrUnknownOperator    = errors.New("policy: unknown condition operator")
-	ErrUnknownAction      = errors.New("policy: unknown action")
-	ErrEmptyValue         = errors.New("policy: condition value must not be empty")
-	ErrBadRegex           = errors.New("policy: MATCHES value is not a valid regular expression")
-	ErrBadNumber          = errors.New("policy: numeric operator requires a numeric value")
-	ErrUAOnlyAllow        = errors.New("policy: a rule cannot allow traffic based only on User-Agent — it would skip scoring")
-	ErrDeceiveNotStricter = errors.New("policy: a DECEIVE rule needs a Threat Score floor above the account's block threshold")
+	ErrNoConditions             = errors.New("policy: rule must have at least one condition")
+	ErrUnknownField             = errors.New("policy: unknown condition field")
+	ErrUnknownOperator          = errors.New("policy: unknown condition operator")
+	ErrOperatorNotValidForField = errors.New("policy: operator is not valid for this field")
+	ErrUnknownAction            = errors.New("policy: unknown action")
+	ErrEmptyValue               = errors.New("policy: condition value must not be empty")
+	ErrBadRegex                 = errors.New("policy: MATCHES value is not a valid regular expression")
+	ErrBadNumber                = errors.New("policy: Threat Score condition requires a numeric value")
+	ErrBadCIDR                  = errors.New("policy: IP Range value is not a valid CIDR")
+	ErrUAOnlyAllow              = errors.New("policy: a rule cannot allow traffic based only on User-Agent — it would skip scoring")
+	ErrDeceiveNotStricter       = errors.New("policy: a DECEIVE rule needs a Threat Score floor above the account's block threshold")
 )
+
+// allowedOperators is the closed set of operators that mean something
+// for each field, matching exactly what Condition.matches actually does
+// in policy.go (FieldScore always numeric-compares, FieldCIDR always
+// CIDR-contains regardless of operator). Anything outside this set would
+// be accepted by Evaluate as a safe non-match, but ValidateRule rejects
+// it instead of letting the dashboard save a rule that can never fire.
+var allowedOperators = map[Field][]Operator{
+	FieldJA4:       {OpEquals, OpContains, OpMatches},
+	FieldIP:        {OpEquals, OpContains, OpMatches},
+	FieldUserAgent: {OpEquals, OpContains, OpMatches},
+	FieldPath:      {OpEquals, OpContains, OpMatches},
+	FieldMethod:    {OpEquals},
+	FieldScore:     {OpEquals, OpGT, OpLT, OpGTE, OpLTE},
+	FieldCIDR:      {OpEquals},
+}
 
 // ValidateRule is the single place a candidate rule is approved, called
 // both by the dashboard-facing Create/Update handler in pkg/rules and by
@@ -63,11 +83,15 @@ func ValidateRule(r Rule, blockThreshold int) error {
 }
 
 func validateCondition(c Condition) error {
-	if !knownFields[c.Field] {
+	allowed, ok := allowedOperators[c.Field]
+	if !ok {
 		return fmt.Errorf("%w: %q", ErrUnknownField, c.Field)
 	}
 	if !knownOperators[c.Operator] {
 		return fmt.Errorf("%w: %q", ErrUnknownOperator, c.Operator)
+	}
+	if !slices.Contains(allowed, c.Operator) {
+		return fmt.Errorf("%w: %q on %q", ErrOperatorNotValidForField, c.Operator, c.Field)
 	}
 	if strings.TrimSpace(c.Value) == "" {
 		return ErrEmptyValue
@@ -77,27 +101,17 @@ func validateCondition(c Condition) error {
 			return fmt.Errorf("%w: %v", ErrBadRegex, err)
 		}
 	}
-	if isNumericOperator(c.Operator) {
+	if c.Field == FieldScore {
 		if _, err := strconv.Atoi(strings.TrimSpace(c.Value)); err != nil {
 			return ErrBadNumber
 		}
-		if c.Field != FieldScore {
-			// A numeric comparison only means something against Threat
-			// Score today; reject it early rather than silently saving a
-			// rule that Evaluate will always report as not matching.
-			return fmt.Errorf("%w: operator %q is only valid for %q", ErrUnknownOperator, c.Operator, FieldScore)
+	}
+	if c.Field == FieldCIDR {
+		if _, _, err := net.ParseCIDR(c.Value); err != nil {
+			return fmt.Errorf("%w: %v", ErrBadCIDR, err)
 		}
 	}
 	return nil
-}
-
-func isNumericOperator(op Operator) bool {
-	switch op {
-	case OpGT, OpLT, OpGTE, OpLTE:
-		return true
-	default:
-		return false
-	}
 }
 
 // deceiveFloorAboveBlock reports whether the rule has a Threat Score

@@ -37,22 +37,6 @@ const (
 	FieldCIDR      Field = "IP Range"
 )
 
-// knownFields is every field ValidateRule accepts. The dashboard's rule
-// builder (dashboard/src/pages/MitigationRules.tsx) also lists ASN, Geo
-// and TLS Version, but nothing in RequestFacts computes those yet, so
-// they are deliberately left out here — ValidateRule rejects a rule
-// that uses one rather than silently saving a rule the dashboard would
-// then claim is active but that can never fire.
-var knownFields = map[Field]bool{
-	FieldJA4:       true,
-	FieldScore:     true,
-	FieldIP:        true,
-	FieldUserAgent: true,
-	FieldPath:      true,
-	FieldMethod:    true,
-	FieldCIDR:      true,
-}
-
 // notYetSupportedFields are recognised by the product (the dashboard
 // offers them) but have no data source in RequestFacts yet. Evaluate
 // treats a condition against one of these as defense-in-depth: it must

@@ -56,8 +56,43 @@ func TestValidateRule_NumericOperatorNonNumericValue(t *testing.T) {
 
 func TestValidateRule_NumericOperatorOnNonScoreField(t *testing.T) {
 	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldPath, Operator: OpGT, Value: "5"}}}
-	if err := ValidateRule(r, 90); err == nil {
-		t.Fatal("expected rejection of GT on a non-score field")
+	if err := ValidateRule(r, 90); !errors.Is(err, ErrOperatorNotValidForField) {
+		t.Fatalf("got %v, want ErrOperatorNotValidForField", err)
+	}
+}
+
+func TestValidateRule_ScoreWithContainsRejected(t *testing.T) {
+	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldScore, Operator: OpContains, Value: "50"}}}
+	if err := ValidateRule(r, 90); !errors.Is(err, ErrOperatorNotValidForField) {
+		t.Fatalf("got %v, want ErrOperatorNotValidForField", err)
+	}
+}
+
+func TestValidateRule_ScoreWithNonNumericEqualsRejected(t *testing.T) {
+	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldScore, Operator: OpEquals, Value: "high"}}}
+	if err := ValidateRule(r, 90); !errors.Is(err, ErrBadNumber) {
+		t.Fatalf("got %v, want ErrBadNumber", err)
+	}
+}
+
+func TestValidateRule_CIDRWithNonEqualsOperatorRejected(t *testing.T) {
+	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldCIDR, Operator: OpContains, Value: "203.0.113.0/24"}}}
+	if err := ValidateRule(r, 90); !errors.Is(err, ErrOperatorNotValidForField) {
+		t.Fatalf("got %v, want ErrOperatorNotValidForField", err)
+	}
+}
+
+func TestValidateRule_MalformedCIDRRejected(t *testing.T) {
+	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldCIDR, Operator: OpEquals, Value: "not-a-cidr"}}}
+	if err := ValidateRule(r, 90); !errors.Is(err, ErrBadCIDR) {
+		t.Fatalf("got %v, want ErrBadCIDR", err)
+	}
+}
+
+func TestValidateRule_ValidCIDRAccepted(t *testing.T) {
+	r := Rule{Action: ActionBlock, Conditions: []Condition{{Field: FieldCIDR, Operator: OpEquals, Value: "203.0.113.0/24"}}}
+	if err := ValidateRule(r, 90); err != nil {
+		t.Fatalf("valid CIDR rejected: %v", err)
 	}
 }
 
