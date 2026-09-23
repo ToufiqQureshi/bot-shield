@@ -40,8 +40,8 @@ func newTestAuth(t *testing.T) *testAuth {
 				"kid": ta.kid,
 				"kty": "EC",
 				"crv": "P-256",
-				"x":   base64.RawURLEncoding.EncodeToString(priv.PublicKey.X.Bytes()),
-				"y":   base64.RawURLEncoding.EncodeToString(priv.PublicKey.Y.Bytes()),
+				"x":   base64.RawURLEncoding.EncodeToString(priv.X.Bytes()),
+				"y":   base64.RawURLEncoding.EncodeToString(priv.Y.Bytes()),
 			}},
 		})
 	})

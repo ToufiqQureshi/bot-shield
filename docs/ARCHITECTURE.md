@@ -205,6 +205,7 @@ JS-challenge path, which only suspicious traffic sees).
 | JA4 fingerprint | ~2ms | **14.3µs** — 0.7% of budget |
 | Redis rate-limit check | ~2ms | built with 50ms cap and fail-open circuit; production p95/p99 not measured |
 | Scoring (rule-based) | ~1ms | built; production p95/p99 not measured |
+| Learned model (shadow, optional) | ~1ms | **14ns, 0 allocs** — off unless `-model` is set |
 | Proxy overhead | ~5ms | not measured |
 | Headroom | ~5ms | — |
 
@@ -215,6 +216,80 @@ Re-measure before assuming this still holds.
 
 If a layer can't hit its budget, it needs a timeout and a fail-open
 fallback, not a slower default.
+
+---
+
+## Learned scoring, shadow only — BUILT
+
+> New to this? `docs/SCORING_EXPLAINED.md` walks through it from zero with
+> worked numbers. This section is the summary.
+
+`pkg/signals` scores a request by adding fixed hand-chosen weights for each
+check that fired and comparing the total to a fixed threshold. That is a linear
+model whose coefficients nobody measured.
+
+`pkg/decide` answers the same question from the same evidence with weights
+fitted to labelled traffic. It is deliberately the smallest thing that can do
+that:
+
+```text
+request
+  ↓
+signals.Evaluate        →  Evaluation{Score, Signals, Fired}
+  ↓                          Fired is a bitmask: bit i = checks[i] fired
+  ├── rules: Score ≥ 100 → block                (this is what actually runs)
+  └── model: sigmoid(bias + Σ wᵢ·firedᵢ)        (recorded, never acted on)
+                ↓
+       Prediction{Decision, Probability, Confidence, Fired}
+       Explain() → per-check contribution in log-odds
+```
+
+The bitmask and the signal names come out of the same loop over the same
+`checks` list, so the model scores exactly the checks a customer is shown, and
+the two can never describe different requests.
+
+**Properties that are load-bearing, not incidental:**
+
+- **Typed output.** `Predict` returns a `signals.Decision` from the existing
+  enum. There is no string to parse, so an invalid decision cannot be produced.
+- **Explainable.** `Explain` returns each fired check's exact push on the
+  result in log-odds; the contributions plus the bias sum to the log-odds
+  behind the reported probability. This is what answers "why was I stopped?"
+- **In-process.** 14 ns and zero allocations per request — a dot product over
+  a bitmask. No network call, no external service, no per-request API cost.
+- **Stricter block bar than the rules.** The model will not return
+  `DecisionBlock` unless at least two checks fired, however certain it is
+  (`CLAUDE.md` Sections 10 and 14). A lone strong signal reaches
+  `DecisionChallenge`.
+- **Shadow only.** `-model <file>` loads a trained model. It scores alongside
+  the rules and its opinion is recorded in the evidence trail as
+  `Evidence.Model`; the decision the visitor experiences is always the rule
+  scorer's. Agreements and disagreements are counted
+  (`model_shadow_agree_total`, `model_shadow_disagree_total`) because the
+  evidence trail is a bounded ring buffer a busy tenant overwrites in minutes.
+- **A mismatched model is refused at startup.** Feature names and their order
+  are part of the model file, and the fired-check vector is positional, so a
+  model trained against a different check list would apply every weight to the
+  wrong signal. Loading one is fatal rather than ignored.
+
+`cmd/hakaishield-train` fits a model offline from labelled traffic, one JSON
+object per line in the shape the evidence trail already records:
+
+```text
+{"signals":["ua_mismatch","header_anomaly"],"automated":true}
+{"signals":[],"automated":false}
+```
+
+**Candidate observations are collected.** `-collect-labels` (with
+`-db-url`) records challenge solves and first honeypot hits with source,
+tenant and fired mask, but no IP, user agent, path or body. The bounded
+queue drops rather than blocking visitors, and an identity cap limits
+sample volume. Neither source is verified ground truth: client-provided
+challenge fields can be forged, and prefetch or accessibility tools can
+reach a trap. The trainer rejects database candidates by default; curated
+`-in` labels are the safe input path. `-allow-unverified-labels` permits
+shadow-only experiments. The model still never enforces; independent
+labels, bias correction and held-out comparison remain open (items 25/26).
 
 ---
 

@@ -585,3 +585,146 @@ Sources: [okasi/bot-signal](https://github.com/okasi/bot-signal),
 [Cap — open-source CAPTCHA comparison](https://github.com/tiagozip/cap),
 [Nepenthes](https://nepenthes.online/),
 [Pinggy — AI crawlers cost more CPU than real traffic](https://pinggy.io/blog/ai_crawlers_cost_more_cpu_than_real_traffic/).
+
+## 2026-09-22 — "System One" models (TypeSafe Jev) and what they mean for scoring
+
+TypeSafe AI launched **Jev** on 2026-09-15 ($40M seed, DCVC; founder Diogo
+Almeida, ex-OpenAI). It is not a language model. Instead of generating text
+token by token, it takes unstructured program state plus a typed question and
+returns a typed value with a probability and a confidence score in one parallel
+pass. Because the valid outputs are fixed by a schema up front, it cannot
+hallucinate or emit a type error. Reported latency is 70–500 ms at roughly
+$0.042 per million input tokens, pitched as 100–200x faster and cheaper than an
+LLM for decision and classification work. Target use cases are real-time loops:
+games, robots, simulations, and agent harnesses that need one judgement.
+
+Community ports appeared within a week, all aimed at local Apple Silicon
+inference and none official: `bnsd55/jevmlx` (Jev-style parallel constrained
+decisions over any MLX model), `daseinlabs/open-jev` (one prefill, KV cache
+expanded across an option batch, every option scored in one padded forward
+pass), `laya-mlx` (MLX port of the Laya checkpoints, ~13 ms median), and
+Core ML/ANE builds in Swift (`siren2345/jevlocal-mac`, `jev_apple_npu`,
+`GodModeAI2025/JevCoreML`).
+
+### Why none of this ships in hakaishield
+
+Calling a hosted System One model per request is the wrong shape for us on
+three counts, each a documented project rule:
+
+- **Cost and latency (Sections 15, 19).** 70–500 ms of network round trip per
+  request against a guard that currently spends ~36 µs end to end. It is also a
+  per-request external API charge on traffic that is already our hosting cost.
+- **Failure behaviour (Section 15).** An external dependency in the request
+  path needs a timeout and a fail-open path, which hands anyone who can make
+  the dependency slow a way to switch our scoring off.
+- **Explainability.** Our differentiator is request-level evidence a customer
+  can argue with. A hosted probability is not evidence we can defend.
+
+The MLX and Core ML ports are Apple Silicon local inference. The backend is Go
+on Linux. They do not apply.
+
+### What is worth taking
+
+The **shape**, not the model. The useful idea is that a decision system should
+return a typed value with a calibrated probability and a confidence, rather
+than a number a human has to interpret — and that the weights behind it should
+be measured rather than guessed.
+
+Our scorer already has that shape: `pkg/signals` turns a request into a small
+set of fired binary checks, adds fixed weights, and compares the total to a
+threshold. That is a linear model whose coefficients were chosen by hand. The
+honest version of "build our own Jev" is therefore not a transformer, an MLX
+port, or a hosted call. It is logistic regression over the checks we already
+run, trained on our own labelled traffic, inferring in-process in Go.
+
+That is what `pkg/decide` implements: 14 ns per request, zero allocations, no
+network, and a per-feature contribution breakdown that keeps the evidence trail
+intact. See `docs/DECISIONS.md`, "Learned decision weights are a linear model
+over existing signals".
+
+Sources: typesafe.ai/blog/introducing-system-one-models-and-jev;
+thenewstack.io/typesafe-jev-system-one; tomshardware.com (2026-09);
+datacamp.com/blog/system-one-models-jev; en.wikipedia.org/wiki/Jev_(AI_model).
+
+## 2026-09-22 — How the large vendors deploy, and what bandwidth actually costs
+
+Researched while deciding where to host. Full write-up and the deployment
+reasoning are in `docs/DEPLOYMENT.md`; this entry records the findings that
+affect detection design rather than hosting.
+
+### The architectural difference that matters most
+
+**DataDome and Akamai do not carry the response bytes.** DataDome deploys as a
+module — an Akamai EdgeWorker, a CloudFront Lambda@Edge function, a Fastly or
+nginx module — which makes a *sideband* call to the nearest DataDome endpoint
+with request metadata over a keep-alive connection, gets a verdict in about
+2ms, and then the CDN serves the content. DataDome's own infrastructure never
+sees the page body. Akamai's Bot Manager reaches the same outcome from the
+other side: detection runs on the hop that was already delivering the traffic.
+
+hakaishield is a full reverse proxy, so every byte of every response crosses
+our network interface and is billed as egress. At AWS's $0.09/GB that is about
+$81/month at 10M requests (100KB average response) and roughly $6,900/month at
+1B. Compute is a rounding error beside it.
+
+Two consequences worth holding onto:
+
+- **The proxy model is why our evidence is better.** We see the entire request
+  rather than the summary someone else chose to forward. That is not a cost to
+  eliminate; it is what the product sells.
+- **A sideband decision API is a real future option for high-volume
+  customers**, not a replacement for the proxy. Recorded as a roadmap item
+  rather than left to be discovered on a bill.
+
+### Cloudflare and Akamai scoring architecture
+
+Cloudflare assigns every request a bot score of 1–99 from layered engines:
+Heuristics (1 for high-confidence, 29 while confidence is still being assessed),
+Machine Learning (2–99, the majority of detections), JavaScript Detections for
+headless and automation fingerprints, and a deprecated Anomaly Detection engine.
+Alongside the score they expose Bot Score Source, Detection IDs and Bot Tags.
+Akamai scores 0–100 and groups responses into Cautious / Strict / Aggressive
+bands the customer tunes.
+
+This is the same shape as `pkg/signals` plus `pkg/decide`, which is
+reassuring — and the gap is still where we thought it was. They expose a
+*tag* ("detection ID 1234, `automated_browser`"). `decide.Explain` exposes each
+signal's contribution in log-odds with arithmetic a customer can check. That
+difference survives contact with what the category leaders actually ship.
+
+What is not worth copying: their scale of data. 40 billion bot requests a day
+(Akamai) and 5 trillion signals (DataDome) are not a target we can reach or
+should chase.
+
+### Bloom and cuckoo filters — if a large blocklist is ever built
+
+Relevant because a maintained fingerprint/IP intelligence set is the roadmap's
+stated moat (item 19), and membership checks are how it would be queried.
+
+**Cloudflare's "When Bloom filters don't bloom"**: a Bloom-filter deduplicator
+over ~1 billion IP records ran in 12 seconds where hashing alone took 2. The
+filter operations cost 10 seconds, and the cause was random memory access — a
+bit array larger than cache turns every probe into a cache miss. A Bloom filter
+sized past L2/L3 is far slower than its arithmetic predicts.
+
+**Cuckoo filters** (Fan et al., CoNEXT 2014) are the better modern default:
+deletion is supported, they are more space-efficient than Bloom below a 3%
+false-positive rate, and any lookup touches at most two cache lines, so cost is
+predictable for both hits and misses. A space-optimised Bloom filter at 1% FPR
+needs 7 probes, each a potential miss.
+
+**The rule that matters most here** is stated directly in the Perfect Cuckoo
+Filter paper (CoNEXT 2021): if a filter decides whether to *block* an IP, a
+false positive disables communication from a legitimate address, and the
+authors name this as a case where a plain Bloom filter cannot be used.
+
+That is `CLAUDE.md` §14 derived independently by network researchers. So if a
+large blocklist is built here:
+
+  - the filter is a fast **negative** — "definitely not in the list, stop"
+  - a positive is a **hint**, never a verdict; confirm against the real list
+  - size it to fit in cache, or measure and be disappointed
+
+It is the no-lone-signal rule in a different domain.
+
+Sources are listed at the end of `docs/DEPLOYMENT.md`.

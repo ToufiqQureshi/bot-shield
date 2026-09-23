@@ -1,0 +1,67 @@
+# systemd unit for running the binary directly, without Docker.
+#
+# Use this OR deploy/docker-compose.yml, not both. Docker already restarts
+# its containers; this is for a plain binary on the box.
+#
+#   sudo cp deploy/hakaishield.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now hakaishield
+#   sudo journalctl -u hakaishield -f
+
+[Unit]
+Description=hakaishield inline traffic guard
+Documentation=https://github.com/ToufiqQureshi/hakaishield
+After=network-online.target redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hakaishield
+Group=hakaishield
+WorkingDirectory=/opt/hakaishield
+EnvironmentFile=/opt/hakaishield/.env
+ExecStart=/opt/hakaishield/hakaishield \
+    -addr=:443 \
+    -target=${HAKAISHIELD_ORIGIN} \
+    -tls-cert=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN}/fullchain.pem \
+    -tls-key=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN}/privkey.pem \
+    -mode=${HAKAISHIELD_MODE} \
+    -evidence-token=${EVIDENCE_TOKEN} \
+    -redis-url=redis://localhost:6379 \
+    -db-url=${DATABASE_URL} \
+    -supabase-url=${SUPABASE_URL}
+
+# Restart on crash and keep restarting, but back off: a process that dies
+# instantly on a bad config would otherwise spin forever and fill the disk
+# with logs.
+Restart=always
+RestartSec=5s
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Bind :443 without running as root. This is the only elevated capability
+# the process gets.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Hardening. The process reads certificates, talks to the network, and
+# writes nothing to disk - so take everything else away.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadOnlyPaths=/etc/letsencrypt
+
+# A visitor flood must hit our own bounded limits, not the box's.
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

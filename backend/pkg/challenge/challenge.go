@@ -19,6 +19,8 @@ import (
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/labels"
 )
 
 // Challenge issues a JS-only puzzle to every visitor Guard does not
@@ -30,6 +32,10 @@ type Challenge struct {
 	secret     []byte
 	theme      string
 	nonceStore NonceStore
+	// labels, when set, remembers what a challenged request looked like
+	// so a solve can label it human. It never affects whether a
+	// challenge is issued or passed.
+	labels *labels.Recorder
 }
 
 // NonceStore consumes solved challenge nonces exactly once. Implementations
@@ -83,6 +89,15 @@ func newLocalNonceStore() *localNonceStore {
 
 // SetNonceStore replaces the default single-process replay guard. Passing nil
 // restores the local fallback used for development and single-node deployments.
+// SetLabelRecorder attaches label collection for the learned scorer
+// (pkg/decide). Passing nil turns it off, which is the default.
+//
+// Call it during setup, before serving traffic: the recorder is read
+// without locking on the request path.
+func (c *Challenge) SetLabelRecorder(r *labels.Recorder) {
+	c.labels = r
+}
+
 func (c *Challenge) SetNonceStore(store NonceStore) {
 	if store == nil {
 		store = newLocalNonceStore()
@@ -475,6 +490,15 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 	tok := c.token(nonce, redirectPath, host, time.Now())
 
+	// Remember what this request looked like, so solving the challenge
+	// can label it human later. The sample is parked server-side against
+	// the nonce and deliberately never put in the token: the token goes
+	// to the client, and a list of which checks a bot tripped tells it
+	// exactly what to fix.
+	if sample, ok := labels.SampleFrom(r.Context()); ok {
+		c.labels.ChallengeIssued(nonce, sample)
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = challengePage.Execute(w, challengeData{
@@ -528,6 +552,11 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "automation detected", http.StatusForbidden)
 		return
 	}
+
+	// Verification grants a passed cookie, but the canvas and automation
+	// values are client supplied. Record only a candidate human label;
+	// the trainer excludes these observations by default.
+	c.labels.ChallengeSolved(nonce)
 
 	c.setPassedCookie(w, r.Host)
 	http.Redirect(w, r, redirectPath, http.StatusSeeOther)

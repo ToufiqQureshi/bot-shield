@@ -3,9 +3,13 @@ package db
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/ToufiqQureshi/hakaishield/pkg/labels"
 )
 
 // Domain is one row of the tenants table as the dashboard cares about
@@ -76,6 +80,24 @@ func initSchema(ctx context.Context) error {
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	);
 	CREATE INDEX IF NOT EXISTS idx_rules_owner ON mitigation_rules(owner_user_id);
+
+	-- Labelled traffic for the learned scorer (pkg/decide) to train on.
+	-- Deliberately holds no IP, user agent, path or body: a model trains
+	-- on which checks fired, and nothing else here is worth the storage
+	-- or the retention argument. feature_version names the check list
+	-- that produced the mask, which is positional and uninterpretable
+	-- without it. See docs/LEARNED_SCORING.md.
+	CREATE TABLE IF NOT EXISTS training_samples (
+		id BIGSERIAL PRIMARY KEY,
+		tenant_id VARCHAR(255) NOT NULL,
+		fired BIGINT NOT NULL,
+		feature_version VARCHAR(32) NOT NULL,
+		automated BOOLEAN NOT NULL,
+		source VARCHAR(50) NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	);
+	CREATE INDEX IF NOT EXISTS idx_training_samples_tenant ON training_samples(tenant_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_training_samples_version ON training_samples(feature_version);
 
 	CREATE TABLE IF NOT EXISTS protection_settings (
 		owner_user_id VARCHAR(255) PRIMARY KEY,
@@ -159,4 +181,110 @@ func CreateDomain(ctx context.Context, id, ownerUserID, host, target, name strin
 		return nil, fmt.Errorf("creating domain: %w", err)
 	}
 	return &d, nil
+}
+
+// SampleStore writes and reads labelled traffic for pkg/decide. It is
+// the labels.Writer implementation; see docs/LEARNED_SCORING.md.
+type SampleStore struct{}
+
+// WriteSamples inserts a batch of labelled requests.
+//
+// fired is stored as BIGINT rather than INT because a uint32 does not
+// fit Postgres's signed 32-bit integer: the top bit would overflow once
+// the checks list grows past 31 entries.
+func (SampleStore) WriteSamples(ctx context.Context, samples []labels.Sample) error {
+	if DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, s := range samples {
+		batch.Queue(
+			`INSERT INTO training_samples (tenant_id, fired, feature_version, automated, source)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			s.TenantID, int64(s.Fired), s.FeatureVersion, s.Automated, s.Source,
+		)
+	}
+
+	results := DB.SendBatch(ctx, batch)
+	defer func() { _ = results.Close() }()
+	for range samples {
+		if _, err := results.Exec(); err != nil {
+			return fmt.Errorf("writing training samples: %w", err)
+		}
+	}
+	return nil
+}
+
+// ReadSamples returns labelled traffic for training, newest first.
+//
+// featureVersion is required and filtered on, not merely reported: the
+// fired mask is positional, so mixing rows captured against different
+// check lists would train the model on signals it was never shown.
+//
+// tenantID empty means every tenant. That is a deliberate choice for a
+// shared model and an explicit one - a per-tenant model passes the
+// tenant here instead (CLAUDE.md Section 16).
+func ReadSamples(ctx context.Context, tenantID, featureVersion string, limit int) ([]labels.Sample, error) {
+	if DB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if featureVersion == "" {
+		return nil, fmt.Errorf("feature version is required: a fired mask cannot be read without the check list that produced it")
+	}
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be positive")
+	}
+
+	query := `SELECT tenant_id, fired, feature_version, automated, source
+	          FROM training_samples
+	          WHERE feature_version = $1`
+	args := []any{featureVersion}
+	if tenantID != "" {
+		query += ` AND tenant_id = $2`
+		args = append(args, tenantID)
+	}
+	query += fmt.Sprintf(` ORDER BY created_at DESC LIMIT %d`, limit)
+
+	rows, err := DB.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("reading training samples: %w", err)
+	}
+	defer rows.Close()
+
+	var out []labels.Sample
+	for rows.Next() {
+		var s labels.Sample
+		var fired int64
+		if err := rows.Scan(&s.TenantID, &fired, &s.FeatureVersion, &s.Automated, &s.Source); err != nil {
+			return nil, fmt.Errorf("scanning training sample: %w", err)
+		}
+		// fired is stored as BIGINT and read back into a uint32 mask. A
+		// row outside that range did not come from this code, so it is
+		// refused rather than truncated: a silently narrowed mask is a
+		// sample that describes signals the request never fired.
+		if fired < 0 || fired > math.MaxUint32 {
+			return nil, fmt.Errorf("training sample has an out-of-range fired mask %d", fired)
+		}
+		s.Fired = uint32(fired)
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// DeleteSamplesBefore drops labelled traffic older than cutoff. Nothing
+// derived from traffic is kept forever (CLAUDE.md Section 15), and old
+// samples are also the least useful: traffic changes.
+func DeleteSamplesBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	if DB == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	tag, err := DB.Exec(ctx, `DELETE FROM training_samples WHERE created_at < $1`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("deleting old training samples: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

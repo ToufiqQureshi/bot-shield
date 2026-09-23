@@ -417,6 +417,134 @@ always the operator.
 
 ## P1 — makes it meaningfully harder to bypass
 
+- [~] **25. Learned scoring weights (`pkg/decide`)** — the scoring engine's
+      weights (item 5) are hand-chosen guesses. `pkg/decide` fits them to
+      labelled traffic instead: logistic regression over the same checks,
+      typed decision plus estimated probability, confidence, and a
+      per-feature contribution breakdown. Pure Go, in-process, 14 ns and zero
+      allocations per request, no new dependency.
+
+      **Status: pipeline done, enforcement deliberately not.** The model runs
+      in shadow only (`-model`), recording what it would have decided next to
+      what the rules actually did. `cmd/hakaishield-train` fits a model from
+      labelled traffic in the shape the evidence trail already records.
+
+      **Blocked on verified labels, not inference code.** Challenge solves are
+      forgeable human candidates; honeypot hits are automated candidates,
+      with possible prefetch/accessibility false positives. Operator-reviewed
+      labels are required before claiming model quality. Labelling from the
+      current rule score would only teach the model to repeat the guesses it
+      exists to improve on. The next step is item 26, not more model code.
+
+- [ ] **27. Sideband decision API for high-volume customers** — a mode where
+      the customer's own CDN or nginx calls hakaishield for a verdict instead of
+      routing their traffic through us.
+
+      **Why it will be needed, with the number.** As a full reverse proxy we
+      pay egress on every byte of every response. At AWS's $0.09/GB that is
+      about $81/month at 10M requests (100KB average response) and roughly
+      $6,900/month at 1B. This is exactly how DataDome and Akamai avoid the
+      problem: their modules make a sideband call with request metadata and the
+      CDN serves the content, so their infrastructure never touches the page
+      body.
+
+      **Not a replacement for the proxy.** The proxy model is why our evidence
+      is better — we see the whole request, not a summary someone else chose to
+      send. This is an option for customers whose volume makes proxying
+      uneconomic, and a deployment mode for customers who will not reroute DNS.
+
+      The threshold should be measured against a real traffic profile, not
+      guessed. See `docs/DEPLOYMENT.md` §4 and `docs/RESEARCH.md` (2026-09-22).
+
+- [~] **26. Label pipeline for learned scoring** — capture labelled traffic
+      that item 25 can actually train on. Persisting fired checks plus a
+      label, tenant-scoped and bounded, is the prerequisite for ever
+      enforcing a learned model.
+
+      **Read `docs/LEARNED_SCORING.md` before starting.** It works the
+      whole thing through, and two of its findings contradict the obvious
+      plan:
+
+      - A **solved JS challenge** is a human candidate, but the solve
+        arrives on a later request than the one that was scored, so the
+        fired vector has to be parked against the challenge nonce
+        (`pkg/challenge` already has a Redis `NonceStore`). It must not
+        ride in the token — that hands a bot a signed list of the checks
+        it tripped.
+      - A **verified good-bot lookup is not a usable label**, contrary to
+        what this item used to say. `guard.go` forwards verified crawlers
+        *before* `signals.Evaluate` runs, so no vector exists — and
+        training on it would teach the model to stop crawler-shaped
+        traffic, which is a false positive aimed at legitimate bots.
+      - A **honeypot trip** works, but `honeypot_trap` must be dropped
+        from the vector of any sample it labelled, or the model just
+        learns the label back.
+      - **Selection bias** is the real trap: under PolicyBalanced only
+        score>0 traffic is challenged, so every human candidate comes from
+        traffic that already looked suspicious. Pick a correction before
+        collecting, not after.
+
+      **Status: candidate collection built, verification and bias correction
+      not.** `pkg/labels` stores the two candidate sources behind
+      `-collect-labels` with tenant, mask and source, but no IP/UA/path.
+      The first honeypot request is captured once. The trainer refuses
+      automatic DB candidates unless `-allow-unverified-labels` is
+      explicitly set for shadow experiments; curated JSONL remains usable.
+      The bounded queue and per-identity cap limit request cost and volume.
+
+      **Still open:** the selection-bias correction (§3 of
+      `LEARNED_SCORING.md`) is an unmade product decision, and the parked
+      challenge samples are per-process, so behind several nodes a
+      visitor challenged on one and verified on another produces no
+      label. Retention (`db.DeleteSamplesBefore`) exists but nothing
+      calls it on a schedule yet.
+
+      Also see `docs/DECISIONS.md`, "Learned decision weights are a linear
+      model over existing signals".
+
+- [ ] **28. Make the canvas proof mean something** — `validCanvasProof`
+      (`pkg/challenge/challenge.go`) checks that the submitted canvas is a
+      string starting `data:image/png;base64,` and longer than 100 bytes.
+      It never decodes it. Combined with a sha256 proof-of-work any language
+      can compute, and `automation`/`headless` fields the *client* reports
+      about itself, a plain HTTP script can pass the whole verify handler
+      without running a line of JavaScript.
+
+      As a challenge that is an accepted trade-off (`DECISIONS.md`): the
+      point is to cost a scraper something, not to be unbeatable. **As the
+      training-label source for item 25/26 it is a poisoning vector**, and
+      that argument was never made when the limitation was accepted. One
+      forged `human` label costs one challenge token and one nonce. The
+      per-identity cap (5/hour) bounds the rate; rotating IPs defeats it.
+
+      **Fix:** decode the base64 PNG server-side and check the IHDR header,
+      the expected dimensions and pixel entropy, so the string has to come
+      from a real render. Bounded work on a request that already cost the
+      client a proof-of-work, and it only runs on verify, not on every
+      request.
+
+      **Until then:** no model trained on `challenge_solved` samples may
+      enforce anything — which is already the rule (item 25), for a
+      different reason. See `docs/LEARNED_SCORING.md` 2.1.
+
+- [ ] **29. Label the honeypot trip on the request that trips it** —
+      `Guard.ServeHTTP` answers `signals.HoneypotPath` with a 404 and
+      returns before `collectLabels` runs (`pkg/core/guard.go`). The
+      `honeypot_trap` check only fires on a *later* request from the same
+      `(tenant, IP, JA4)` within the 6h TTL, so a bot that trips the trap
+      and leaves is never labelled. Nothing measures how often that
+      happens.
+
+      The trap request itself carries a perfectly good feature vector —
+      its UA, headers and JA4 are real evidence, and the honeypot bit is
+      stripped from the sample anyway. Evaluate and record it in the
+      `firstTrip` branch, and add `label_honeypot_trip_total` so the yield
+      against `label_sample_queued_total` is visible instead of assumed.
+
+      **Owner decision, not a bug:** this changes which traffic the model
+      trains on, so it belongs with the selection-bias question in
+      `docs/LEARNED_SCORING.md` 3.
+
 - [ ] **19. Known-browser fingerprint database** — a maintained set of
       JA4 fingerprints for real browser builds, refreshed on a
       schedule, so `UAMismatch` can answer *"is this actually Chrome

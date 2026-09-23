@@ -1,0 +1,64 @@
+# Production compose for a single box (see docs/DEPLOYMENT.md).
+#
+# Reads from a .env file next to this one:
+#   HAKAISHIELD_DOMAIN=neurofiq.in
+#   HAKAISHIELD_ORIGIN=http://172.17.0.1:3000
+#   HAKAISHIELD_MODE=shadow
+#   EVIDENCE_TOKEN=<openssl rand -hex 32>
+#   DATABASE_URL=postgres://...
+#   SUPABASE_URL=https://xxxx.supabase.co
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # No published ports at all. Redis has no password by default, and an
+    # internet-reachable Redis is found and taken over within hours. Only
+    # the hakaishield container needs it, and it reaches it over the
+    # compose network by name.
+    command: redis-server --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  hakaishield:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      # 443 on the host, 8443 in the container: the process runs as a
+      # non-root user and cannot bind a privileged port itself.
+      - "443:8443"
+      # Port 80 is NOT published. certbot runs on the host and needs it
+      # free for the HTTP-01 challenge during renewal.
+    volumes:
+      # Certificates live on the host where certbot renews them. Read-only:
+      # the proxy never needs to write here.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    command:
+      - "-addr=:8443"
+      - "-target=${HAKAISHIELD_ORIGIN}"
+      - "-tls-cert=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN}/fullchain.pem"
+      - "-tls-key=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN}/privkey.pem"
+      - "-mode=${HAKAISHIELD_MODE:-shadow}"
+      - "-evidence-token=${EVIDENCE_TOKEN}"
+      - "-redis-url=redis://redis:6379"
+      - "-db-url=${DATABASE_URL}"
+      - "-supabase-url=${SUPABASE_URL}"
+      # -collect-labels is deliberately absent. While you are attacking your
+      # own site, every solved challenge and honeypot trip would become a
+      # training sample and the model would learn what YOUR bots look like.
+      # Add it only once real traffic arrives (docs/LEARNED_SCORING.md).
+    logging:
+      driver: json-file
+      options:
+        # Without this, logs grow until the disk is full and the box stops
+        # serving - a slow outage nobody is watching for.
+        max-size: "20m"
+        max-file: "5"

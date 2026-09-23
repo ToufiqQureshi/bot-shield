@@ -23,6 +23,8 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
 	"github.com/ToufiqQureshi/hakaishield/pkg/core"
 	"github.com/ToufiqQureshi/hakaishield/pkg/db"
+	"github.com/ToufiqQureshi/hakaishield/pkg/decide"
+	"github.com/ToufiqQureshi/hakaishield/pkg/labels"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/rules"
 	"github.com/ToufiqQureshi/hakaishield/pkg/settings"
@@ -40,11 +42,13 @@ import (
 // library .env parser and pulling in a dependency for ~15 lines of
 // "split on the first '=', trim quotes" isn't worth it.
 func loadDotEnv(path string) {
-	f, err := os.Open(path)
+	// The path is this program's own, not anything a request supplies.
+	f, err := os.Open(path) // #nosec G304 -- fixed .env path chosen by the operator
 	if err != nil {
 		return // no .env file; nothing to load, not an error
 	}
-	defer f.Close()
+	// Read-only, so a close error says nothing useful.
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -59,7 +63,10 @@ func loadDotEnv(path string) {
 		key = strings.TrimSpace(key)
 		value = strings.Trim(strings.TrimSpace(value), `"'`)
 		if _, alreadySet := os.LookupEnv(key); !alreadySet {
-			os.Setenv(key, value)
+			// Setenv only fails on a key the OS rejects, such as one
+			// containing "=". Skipping that line is the right outcome
+			// and there is nowhere useful to report it this early.
+			_ = os.Setenv(key, value)
 		}
 	}
 }
@@ -99,6 +106,8 @@ func main() {
 	trustedProxyCIDRs := flag.String("trusted-proxy-cidrs", "", "comma-separated proxy CIDRs allowed to supply X-Forwarded-For; leave empty to trust only direct peers")
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", os.Getenv("DATABASE_URL"), "PostgreSQL URL for the Supabase project's database (Project Settings > Database in the Supabase dashboard). Falls back to $DATABASE_URL (including from a local .env file) if unset.")
+	collectLabels := flag.Bool("collect-labels", false, "collect candidate observations from solved challenges and honeypot hits. Requires -db-url. Off by default; see docs/LEARNED_SCORING.md.")
+	modelPath := flag.String("model", "", "trained decision model (pkg/decide) to score alongside the rules in shadow; it never affects a decision. Unset leaves it off.")
 	supabaseURL := flag.String("supabase-url", os.Getenv("SUPABASE_URL"), "Supabase project URL (e.g. https://xxxx.supabase.co); used to verify dashboard session JWTs against the project's published JWKS. Required, with -db-url, to enable the domains/rules/settings API. Falls back to $SUPABASE_URL (including from a local .env file) if unset.")
 	flag.Parse()
 
@@ -204,6 +213,32 @@ func main() {
 	}
 	guard := core.NewGuardWithClientIPResolver(store, challengeHandler, clientIPResolver)
 
+	// Labelled traffic accumulates in the background so a model can be
+	// trained later. Collecting decides nothing and changes no response;
+	// it needs a database because the evidence trail is a small in-memory
+	// ring buffer, not a place to accumulate anything.
+	if *collectLabels {
+		if *dbURL == "" {
+			log.Fatal("hakaishield: -collect-labels needs -db-url: there is nowhere to put the samples")
+		}
+		recorder := labels.NewRecorder(db.SampleStore{})
+		guard.WithLabelRecorder(recorder)
+		defer recorder.Close()
+		log.Printf("hakaishield: collecting candidate labels (check list %s); it records traffic and decides nothing", signals.FeatureVersion())
+	}
+
+	// A model scores alongside the rules and is recorded, never acted on.
+	// A bad model file is fatal rather than ignored: starting anyway would
+	// look like the operator's model was running when it was not.
+	if *modelPath != "" {
+		model, err := loadShadowModel(*modelPath)
+		if err != nil {
+			log.Fatalf("hakaishield: -model: %v", err)
+		}
+		guard.WithShadowModel(model)
+		log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests); it records opinions and decides nothing", *modelPath, model.TrainedOn())
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/__hakaishield/challenge", challengeHandler.Handler())
 	mux.Handle("/__hakaishield/verify", challengeHandler.Handler())
@@ -306,4 +341,18 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("hakaishield: shutdown error: %v", err)
 	}
+}
+
+// loadShadowModel reads a trained model and checks it against the checks
+// this binary actually runs.
+func loadShadowModel(path string) (*decide.Model, error) {
+	// The path is an operator-supplied flag; pointing the process at a
+	// file is the whole feature, and nothing a visitor sends reaches it.
+	f, err := os.Open(path) // #nosec G304 -- operator-supplied -model flag
+	if err != nil {
+		return nil, err
+	}
+	// Nothing was written, so a close error says nothing useful.
+	defer func() { _ = f.Close() }()
+	return decide.Load(f, signals.FeatureNames())
 }

@@ -6,7 +6,9 @@ import (
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/challenge"
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
+	"github.com/ToufiqQureshi/hakaishield/pkg/decide"
 	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
+	"github.com/ToufiqQureshi/hakaishield/pkg/labels"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
@@ -20,6 +22,15 @@ type Guard struct {
 	store     *tenant.Store
 	challenge *challenge.Challenge
 	clientIP  *ClientIPResolver
+	// labels, when set, collects labelled traffic for the learned scorer
+	// to train on. Like model, it observes and never decides.
+	labels *labels.Recorder
+	// model, when set, scores every request alongside the rule scorer and
+	// records what it would have done. It never decides anything: a model
+	// is allowed to enforce only after its recorded disagreements have
+	// been looked at on real traffic. Nil is the normal state and costs
+	// nothing.
+	model *decide.Model
 }
 
 // NewGuard combines the tenant store with a challenge.Challenge instance
@@ -36,6 +47,32 @@ func NewGuardWithClientIPResolver(store *tenant.Store, challenge *challenge.Chal
 		clientIP = &ClientIPResolver{}
 	}
 	return &Guard{store: store, challenge: challenge, clientIP: clientIP}
+}
+
+// WithLabelRecorder attaches label collection for the learned scorer
+// (pkg/decide). Passing nil turns it off, which is the default.
+//
+// Call it during setup, before the guard serves traffic: the recorder is
+// read without locking on the request path.
+func (g *Guard) WithLabelRecorder(r *labels.Recorder) *Guard {
+	g.labels = r
+	if g.challenge != nil {
+		// The solve lands on the challenge handler, not here, so it
+		// needs the same recorder to pair the nonce with the sample.
+		g.challenge.SetLabelRecorder(r)
+	}
+	return g
+}
+
+// WithShadowModel attaches a trained model that scores alongside the rule
+// scorer without affecting any decision. Passing nil turns it off again.
+//
+// Call it during setup, before the guard serves traffic. The model is
+// read-only once attached, so requests share it without locking, but
+// swapping it on a guard that is already serving would be a data race.
+func (g *Guard) WithShadowModel(m *decide.Model) *Guard {
+	g.model = m
+	return g
 }
 
 // ServeHTTP decides per request. A visitor who already solved a
@@ -102,6 +139,19 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Decision: signals.DecisionBlock.String(),
 				Enforced: enforced,
 			})
+			if g.labels != nil {
+				// Capture the trap request itself. A crawler may leave after
+				// fetching this URL, so waiting for a later request loses it.
+				fired := signals.Evaluate(signals.RequestFacts{
+					IP: ip, JA4: ja4, UA: r.UserAgent(), Header: r.Header,
+					Path: r.URL.Path, Tenant: tenant.ID,
+				}).Fired
+				g.labels.HoneypotTripped(labels.Sample{
+					TenantID: tenant.ID, Fired: fired &^ honeypotBit,
+					FeatureVersion: signals.FeatureVersion(),
+					Identity:       labelIdentity(tenant.ID, ip, ja4),
+				})
+			}
 		}
 		// A 404 gives the crawler nothing back: no hint the path was
 		// special, and no body worth fetching again.
@@ -169,6 +219,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Score:    score,
 		Decision: decision.String(),
 		Enforced: enforced,
+		Model:    g.shadowOpinion(evaluation.Fired, decision),
 	})
 
 	// The dashboard wants to know what would have happened, but the
@@ -191,8 +242,66 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx := WithDecision(r.Context(), signals.DecisionDeceive.String(), score)
 		tenant.Origin.ServeHTTP(w, r.WithContext(ctx))
 	case signals.DecisionChallenge:
-		g.challenge.Serve(w, r)
+		// Carry what this request looked like into the challenge, so a
+		// solve can label it human. Nothing about the challenge itself
+		// changes.
+		g.challenge.Serve(w, r.WithContext(labels.WithSample(r.Context(), labels.Sample{
+			TenantID:       tenant.ID,
+			Fired:          evaluation.Fired,
+			FeatureVersion: signals.FeatureVersion(),
+			Identity:       labelIdentity(tenant.ID, ip, ja4),
+		})))
 	default:
 		tenant.Origin.ServeHTTP(w, r)
 	}
+}
+
+// shadowOpinion scores a request with the learned model, if one is
+// loaded, and returns what it would have decided. It returns nil when no
+// model is configured, which is the normal case and the reason this costs
+// nothing by default.
+//
+// Disagreements are counted, not just recorded: the trail is a bounded
+// ring buffer that a busy tenant overwrites within minutes, so a counter
+// is the only thing that survives long enough to answer "how often does
+// the model differ from the rules?" — which is the question that decides
+// whether a model may ever enforce.
+func (g *Guard) shadowOpinion(fired uint32, ruleDecision signals.Decision) *evidence.ModelOpinion {
+	if g.model == nil {
+		return nil
+	}
+
+	p := g.model.Predict(fired)
+	if p.Decision == ruleDecision {
+		observability.Inc("model_shadow_agree_total")
+	} else {
+		observability.Inc("model_shadow_disagree_total")
+	}
+
+	contributions := g.model.Explain(fired)
+	reasons := make([]evidence.ModelReason, len(contributions))
+	for i, c := range contributions {
+		reasons[i] = evidence.ModelReason{Feature: c.Feature, Weight: c.Weight}
+	}
+
+	return &evidence.ModelOpinion{
+		Decision:    p.Decision.String(),
+		Probability: p.Probability,
+		Confidence:  p.Confidence,
+		Reasons:     reasons,
+	}
+}
+
+// honeypotBit is resolved once so the trap cannot teach the model its
+// own label. A zero bit is safe: the trap cannot appear in a sample.
+var honeypotBit = func() uint32 {
+	bit, _ := signals.FeatureBit(signals.FeatureHoneypotTrap)
+	return bit
+}()
+
+// labelIdentity is the key the per-identity sample cap counts against.
+// It is never stored with the sample: it exists to stop one client
+// filling the training set, not to identify a visitor afterwards.
+func labelIdentity(tenantID, ip, ja4 string) string {
+	return tenantID + "|" + ip + "|" + ja4
 }

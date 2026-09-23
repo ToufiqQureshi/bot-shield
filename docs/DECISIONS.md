@@ -1473,3 +1473,72 @@ legitimate edge); trust by proxy hostname (rejected: DNS is not an
 operator-controlled network trust boundary in the request path).
 **Revisit when:** deployments require RFC 7239 `Forwarded` support or another
 provider-specific, authenticated client-identity mechanism.
+
+## Learned decision weights are a linear model over existing signals, not a new model — 2026-09-22
+
+**Context.** "System One" decision models (TypeSafe Jev, 2026-09-15) return a
+typed value with a probability and a confidence instead of text, and the
+question came up of building our own for hakaishield. See `docs/RESEARCH.md`,
+"System One models (TypeSafe Jev) and what they mean for scoring".
+
+**Decision.** Add `pkg/decide`: logistic regression over the binary checks
+`pkg/signals` already runs, trained offline from our own labelled traffic,
+inferring in-process in Go. No transformer, no hosted inference call, no new
+dependency.
+
+**Why this and not the alternatives.**
+
+- *A hosted System One API per request* — 70–500 ms added to a ~36 µs guard, a
+  per-request external charge on traffic that is already our hosting cost, and
+  a request-path dependency whose failure mode is fail-open (Sections 15, 19).
+- *An MLX or Core ML port* — those target local Apple Silicon inference. The
+  backend is Go on Linux.
+- *A larger model of our own* — with around ten binary inputs, a linear model
+  is the honest amount of capacity. More would fit noise, and would stop
+  producing a per-feature contribution we can show a customer.
+
+The existing scorer is already a linear model; its coefficients were just
+chosen by hand. Learning them changes where the numbers come from, not the
+architecture.
+
+**Consequences and the limits accepted.**
+
+- The model never decides anything today. It scores alongside the rules and its
+  opinion is recorded next to the real decision (`-model`, shadow only). A
+  model earns the right to enforce by being compared against the rules on real
+  traffic first, not by passing tests.
+- Its block bar is deliberately stricter than the rule scorer's: it will not
+  return `DecisionBlock` unless at least two checks fired, however certain it
+  is. The rule scorer permits a single-signal block for two verified-decisive
+  checks (`ja4_blocklist`, `scripting_tool`); the model has no equivalent
+  verification behind any one weight, so it gets the stricter rule
+  (Sections 10, 14).
+- **The blocker is verified labels, not inference code.** Challenge solves and
+  honeypot hits are candidates, not ground truth; see the correction below.
+  An independently reviewed customer report can supply a stronger label.
+  Labelling with the
+  current rule score would only teach the model to repeat the guesses it exists
+  to improve on, and it would then score excellently against the very data that
+  misled it. Until that labelling exists, `pkg/decide` is a working pipeline
+  with nothing trustworthy to train on.
+- Feature order is part of the model file. A model whose feature names or order
+  do not match the running build is refused at load, because the fired-check
+  vector is positional and a stale model would apply every weight to the wrong
+  signal.
+
+## Automatically collected labels are candidates, not ground truth — 2026-09-23
+
+**Correction to the 2026-09-22 decision above.** A challenge solve does not
+prove a human used a browser: proof-of-work is computable by any client, and
+the canvas and automation fields are client supplied. A honeypot hit is strong
+automation evidence but can also come from prefetch or accessibility software.
+The per-identity cap limits volume; it does not authenticate either label.
+
+**Decision.** Keep collecting source-tagged candidates for investigation, but
+make `hakaishield-train -db-url` refuse them by default. An operator can use
+`-allow-unverified-labels` for a shadow-only experiment, or supply independently
+reviewed JSONL through `-in`. The proxy has no learned enforcement mode. Before
+one is designed, obtain verified labels, correct selection bias, compare false
+positives with the rules on held-out data, and resolve whether models are
+tenant-specific or shared. The first honeypot hit now captures its own sample;
+no follow-up request is required.

@@ -1,10 +1,14 @@
+# Local development only. Ports are bound to 127.0.0.1 deliberately: this
+# file has a hardcoded Postgres password and Redis has no auth at all, so
+# published on 0.0.0.0 a single `docker compose up` on a public box would
+# hand both to the internet. For a server, use deploy/docker-compose.yml.
 version: '3.8'
 
 services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     command: redis-server --save "" --appendonly no
 
   postgres:
@@ -14,4 +18,4 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_DB: hakaishield
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"

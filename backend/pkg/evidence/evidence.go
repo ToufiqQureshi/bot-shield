@@ -27,6 +27,33 @@ type Evidence struct {
 	// on (shadow mode). Without it a reader cannot tell a real block
 	// from one that never happened.
 	Enforced bool `json:"enforced"`
+	// Model is what the learned model (pkg/decide) would have decided,
+	// present only when one is loaded. It never affects Decision: the
+	// rule scorer above is what actually ran. Recording both is how a
+	// model earns the right to enforce, by being compared against the
+	// rules on real traffic first.
+	Model *ModelOpinion `json:"model,omitempty"`
+}
+
+// ModelOpinion is the learned model's view of one request. It is a plain
+// record rather than the decide.Prediction itself so the evidence trail
+// stays a description of what happened and does not depend on the
+// scoring package.
+type ModelOpinion struct {
+	Decision    string  `json:"decision"`
+	Probability float64 `json:"probability"`
+	Confidence  float64 `json:"confidence"`
+	// Reasons is each fired check's push on the decision, strongest
+	// first. This is what answers "why" for a model decision, the same
+	// way Signals does for the rule score.
+	Reasons []ModelReason `json:"reasons,omitempty"`
+}
+
+// ModelReason is one check's contribution to a model decision, in
+// log-odds. Positive argued the request was automated.
+type ModelReason struct {
+	Feature string  `json:"feature"`
+	Weight  float64 `json:"weight"`
 }
 
 // Trail holds the most recent decisions in a fixed-size ring buffer,

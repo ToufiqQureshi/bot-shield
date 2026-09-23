@@ -14,6 +14,15 @@ Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or A
 - **Evidence-Based Decisions:** Transparent live stats and an evidence endpoint (`/api/v1/dashboard/evidence`) tell you exactly which signals triggered a block.
 - **Enterprise Ready:** Available as a hosted CNAME solution (zero installation) or deployed within your own infrastructure to meet strict data-residency regulations.
 
+> **Deploying it?** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — hakaishield
+> terminates TLS itself to read the ClientHello, so any platform that
+> terminates TLS first silently degrades detection. That document says which
+> ones those are, and what bandwidth costs as traffic grows.
+>
+> **New here, or need to explain this to someone?**
+> [`docs/WHAT_IS_BUILT.md`](docs/WHAT_IS_BUILT.md) is a plain-language inventory of
+> what actually works today, what does not, and the numbers you can quote.
+
 ## Why this exists
 
 Bot protection today comes in two shapes, and neither fits a mid-size
@@ -76,6 +85,8 @@ cd backend && go build -o hakaishield .
 | `-tls-cert`, `-tls-key` | Your certificate and key. **Fingerprinting only works with these** — hakaishield has to terminate TLS to see the handshake. |
 | `-evidence-token` | Bearer token for the per-request evidence endpoint. Leave it unset and that endpoint does not exist at all. |
 | `-mode` | `enforce` (default) acts on scores. `shadow` scores and records everything but blocks nothing — see below. Any other value refuses to start. |
+| `-collect-labels` | Collect candidate labels from solved challenges and honeypot hits for later review. Needs `-db-url`. Records only which checks fired — no IP, user agent, path or body. Off by default. |
+| `-model` | A trained decision model (see below) to score alongside the rules. It records what it would have decided and never affects a decision. Unset leaves it off. A model that does not match this build's checks refuses to start. |
 | `-db-url` | PostgreSQL URL for your Supabase project's database (Project Settings → Database in the Supabase dashboard). Required, along with `-supabase-url`, for the dashboard's domains/rules/settings API. |
 | `-supabase-url` | Your Supabase project URL (e.g. `https://xxxx.supabase.co`). Used to verify dashboard session JWTs against that project's published JWKS — no shared secret needed. Required, along with `-db-url`, for that same API. |
 
@@ -103,6 +114,82 @@ Two read-only endpoints are served alongside your traffic:
 |---|---|
 | `GET /api/v1/dashboard/stats` | Running totals: requests seen, passed, challenged, blocked, plus `mode` and `enforcing` so the counts can't be read out of context. No per-visitor data, so it needs no token. |
 | `GET /api/v1/dashboard/evidence` | The last 1000 decisions (24h max), newest first: timestamp, JA4, which signals fired, score, decision, and whether it was `enforced`. Accepts `?limit=N`. **Requires `Authorization: Bearer <-evidence-token>`.** |
+
+### Learned scoring (shadow only)
+
+> Working on this? [`docs/SCORING_EXPLAINED.md`](docs/SCORING_EXPLAINED.md)
+> explains how scoring and the model work from zero, with worked numbers and
+> no machine-learning background assumed.
+
+hakaishield's scoring weights are chosen by hand: a fragmented handshake
+is worth 50, a header anomaly 25, and so on. Those are reasonable
+guesses, but they are guesses.
+
+`-model` loads a model that answers the same question from the same
+signals with weights fitted to operator-reviewed labelled traffic. It returns a
+typed decision, an estimated probability, a confidence, and a breakdown
+of exactly what each signal contributed — so it stays as explainable as
+the rules it sits beside.
+
+It costs 14 nanoseconds and zero allocations per request: it is a dot
+product over the checks that already ran, in-process, with no network
+call and no per-request API charge.
+
+**It never decides anything.** It scores alongside the rule engine and
+its opinion is recorded in the evidence trail under `model`, next to the
+decision your visitor actually got. That is how a model earns the right
+to enforce — by being compared against the rules on your real traffic
+first. It also will not block on a single signal, however certain it is.
+
+**Collecting candidate data.** `-collect-labels` accumulates it from
+your own traffic, with no work on your part:
+
+```bash
+./hakaishield -target https://example.com -db-url "$DATABASE_URL" -collect-labels
+```
+
+A solved challenge is a human *candidate*: its canvas and automation fields
+are client supplied and can be forged. A honeypot hit is an automated
+candidate; prefetch and accessibility tools can also hit the trap. Only which
+checks fired is stored: no IP, user agent, path or body. An identity is capped
+at five samples per hour, which limits volume but does not verify a label.
+
+Collecting costs about 100 nanoseconds per labelled request and never
+blocks a visitor: samples go onto a bounded queue and are dropped, and
+counted, rather than making someone wait on a database.
+
+**Training** requires a curated JSONL file with independently checked labels:
+
+```bash
+go run ./cmd/hakaishield-train -in verified-labels.jsonl -out model.json
+./hakaishield -target https://example.com -model model.json
+```
+
+Use one JSON object per line in the shape the evidence trail records:
+
+```bash
+# {"signals":["ua_mismatch","header_anomaly"],"automated":true}
+# {"signals":[],"automated":false}
+go run ./cmd/hakaishield-train -in labelled.jsonl -out model.json
+```
+
+The trainer holds back a fifth of the data and reports how the model did
+on traffic it was *not* trained on, along with false positives and false
+negatives separately — a model that does well on the data it was fitted
+to and poorly on the rest has memorised your sample, not learned your
+traffic.
+
+The hard part is the `automated` label, not the training. It has to come
+from something that actually knows, independently of hakaishield's own
+score — labelling from that score would only teach the model to repeat
+the guesses it exists to improve on.
+
+The database candidates can be used for shadow-only experiments with
+`-allow-unverified-labels`; the trainer refuses them by default. A verified
+good-bot lookup is not a usable training label either. The collection
+pipeline and the bar a model has
+to clear before it may decide anything are in
+[`docs/LEARNED_SCORING.md`](docs/LEARNED_SCORING.md).
 
 The evidence endpoint is off unless you set a token, and it never gets
 wildcard CORS — it returns visitor fingerprints, and left open it would

@@ -179,12 +179,17 @@ contains the answer.
 
 | Document | Purpose |
 |---|---|
+| `WHAT_IS_BUILT.md` | Plain-language inventory of what actually works today and what does not — for explaining the product to someone |
+| `DEPLOYMENT.md` | Where hakaishield is hosted and why, which platforms are ruled out by the TLS-termination constraint, what bandwidth costs as traffic grows, and what the large vendors do architecturally |
 | `AGENT.md` | Product purpose and engineering standard |
 | `ARCHITECTURE.md` | Current architecture and system behavior |
 | `ROADMAP.md` | What should be built and current status |
 | `DECISIONS.md` | Why important choices were made |
 | `RESEARCH.md` | Threats, techniques, vendors, libraries, research |
-| `PROGRESS.md` | What actually happened in previous work |
+| `PROGRESS.md` | An **index** of past work: commit id + one or two lines + a gotcha when there is one. Not a journal — the detail lives in the commit message |
+| `PROGRESS_ARCHIVE.md` | Long-form session records from before that split. Read only when a commit message and the topic docs do not answer the question |
+| `SCORING_EXPLAINED.md` | How scoring and the learned model work, from zero — the onboarding read for anyone touching either |
+| `LEARNED_SCORING.md` | How the learned scoring model gets its data, and what must be true before it may decide anything |
 | `CLAUDE.md` | How engineering work must be performed |
 
 If documentation conflicts, do not silently invent an answer. Identify the
@@ -199,8 +204,8 @@ For meaningful work:
 - update `DECISIONS.md` for meaningful technical/product decisions
 - update `RESEARCH.md` for new threat/technique/tool research
 - update `ARCHITECTURE.md` or `README.md` when behavior/API/architecture changes
-- append to `PROGRESS.md` with what changed, why, files affected, tests,
-  meaningful mutation checks, security/performance verification, and remaining gaps
+- commit the work, then append **one entry** to `PROGRESS.md`: the commit id,
+  one or two lines, and a gotcha line only when there is one (see §22)
 - check that documentation does not contradict the implementation
 
 A future session starts from these files with zero memory of this conversation.
@@ -863,6 +868,16 @@ Update `RESEARCH.md` when:
 - an important library/vendor/tool is evaluated
 - new security knowledge affects implementation
 
+Update `DEPLOYMENT.md` when:
+
+- a hosting, platform or region decision is made or reconsidered
+- anything changes what a request costs in bandwidth, compute or external calls
+- a platform is evaluated and rejected (record the reason, not just the choice)
+
+Before proposing any managed platform, CDN or load balancer, read its §1: the
+product terminates TLS itself to read the ClientHello, and anything that
+terminates TLS first silently degrades detection rather than failing.
+
 Update `ARCHITECTURE.md` or `README.md` when:
 
 - externally visible behavior changes
@@ -871,23 +886,47 @@ Update `ARCHITECTURE.md` or `README.md` when:
 - deployment behavior changes
 - customer-visible configuration changes
 
-Update `PROGRESS.md` for every meaningful work session with:
+## Commit, then index it
 
-- what changed
-- why
-- affected files/components
-- tests executed
-- meaningful mutation checks
-- security/performance verification
-- known remaining gaps
+Every meaningful task ends in a commit. The commit message carries the full
+record — what changed, why, what was tried and rejected, what was verified,
+which mutation checks were run, what is still incomplete. Write it long. It is
+the permanent artefact and it costs a future session nothing until they ask
+for it.
 
-Never write only:
+`PROGRESS.md` then gets **one short entry**:
 
 ```text
-Tests pass.
+### 2026-09-22 — label collection
+`14cc08c` — pkg/labels collects human labels from solved challenges and
+automated ones from honeypot trips, behind -collect-labels.
+Gotcha: honeypot_trap must be cleared from the vector of any sample it
+labelled, or the model just learns the label back.
 ```
 
-Write what was actually verified.
+The gotcha line is the only part that is not already in git, so it is the part
+that matters. Include it only when there is one — something that would bite the
+next person and that reading the diff would not reveal. Most entries have none.
+
+**Do not** restate the diff, list every file, or copy verification output into
+`PROGRESS.md`. That is what made the archive 3,700 lines, which every session
+then read instead of the code.
+
+Anything that stays true beyond this change belongs in a topic document, not in
+`PROGRESS.md`: a decision in `DECISIONS.md`, a threat or vendor finding in
+`RESEARCH.md`, how something works in its own doc.
+
+### Committing and pushing
+
+- **Commit and push on a feature branch freely, without asking.** Both are
+  reversible, and the session runs in a container that is reclaimed after
+  inactivity — work that is only committed locally is work that can be lost.
+  The repository's stop hook checks for unpushed commits for this reason.
+- **Ask the owner before merging to the default branch, force-pushing, or
+  deleting anything.** Those are the operations that are genuinely hard to
+  undo.
+- Opening a **draft** PR needs no permission; marking one ready for review
+  does, since that asks people for their time.
 
 ---
 
@@ -1181,6 +1220,42 @@ Reason:
 ```
 
 Never hide incomplete work behind "done".
+
+---
+
+# 30b. Talking to the Owner
+
+Docs and commit messages are long on purpose. **Chat replies are not.**
+
+**Cut words, not information.** The owner wants the same facts, the same
+caveats and the same trade-offs — in a fraction of the space. A short reply
+that drops the catch, the number, or the risk is worse than a long one, not
+better. Density is the goal, not thinness.
+
+What goes:
+
+- Preamble, recap of the question, "great question", restating the task
+- Headers, tables and bullets when two lines of prose would do
+- How it was done — the commit message has that
+- Anything already said in this conversation
+- A status update bolted onto the answer to a question
+
+What stays, always:
+
+- The answer itself, first line
+- Numbers, names, exact flags and file paths
+- The catch, the risk, the thing that will bite them
+- What is NOT done, when that is part of the truth
+
+Default **5 lines or fewer**. One line is a good answer. Hinglish, plain
+words.
+
+Longer is allowed when the owner asks for detail, or when a real trade-off
+needs stating before they decide — and then still as short as it can honestly
+be.
+
+The §31 report format below applies to **finished feature work**, not to
+every reply.
 
 ---
 
