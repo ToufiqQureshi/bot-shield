@@ -88,6 +88,8 @@ Gotcha: Hetzner has **no India datacenter**. Singapore is closest, so Indian
 visitors pay 60–150 ms that AWS Mumbai would not charge — accepted because
 bandwidth decides this product's economics and latency does not. Revisit if
 that stops being true.
+**Superseded by `46168a7`:** the bandwidth figures in this entry are Hetzner
+EU pricing and do not apply to Singapore. Read that entry, not this one.
 
 ### 2026-09-23 — external review of PR #13: two fixes, two roadmap items
 `3d06c1a` — `Collector.Record` could panic ("send on closed channel") when it
@@ -100,7 +102,7 @@ channel safe — it still panics. The non-blocking send read as if it did, which
 is exactly why nobody caught it.
 
 ### 2026-09-23 — DEPLOYMENT.md §3 corrected: the Hetzner numbers were EU-only
-`8b2d41f` — the "20 TB included, €1/TB" figures that decided the hosting choice
+`46168a7` — the "20 TB included, €1/TB" figures that decided the hosting choice
 are Hetzner **EU** pricing. Singapore includes 0.5 TB and charges €7.40/TB.
 CX22 does not exist in Singapore at all (CX is EU-only; it has CPX/CCX).
 Decision still holds — 11× cheaper per GB than AWS Mumbai, not 90×.
