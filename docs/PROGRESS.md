@@ -88,3 +88,13 @@ Gotcha: Hetzner has **no India datacenter**. Singapore is closest, so Indian
 visitors pay 60–150 ms that AWS Mumbai would not charge — accepted because
 bandwidth decides this product's economics and latency does not. Revisit if
 that stops being true.
+
+### 2026-09-23 — external review of PR #13: two fixes, two roadmap items
+`3d06c1a` — `Collector.Record` could panic ("send on closed channel") when it
+raced `Close`; guarded with an RWMutex and a closed flag. Corrected the comments
+that claimed a solved challenge proves a browser ran JavaScript. Opened ROADMAP
+28 (decode the canvas PNG) and 29 (label the honeypot trip on the request that
+trips it).
+Gotcha: a `select` with a `default` case does **not** make a send on a closed
+channel safe — it still panics. The non-blocking send read as if it did, which
+is exactly why nobody caught it.
