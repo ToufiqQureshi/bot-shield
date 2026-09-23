@@ -131,6 +131,15 @@ running service until `TenantConfig.OwnerUserID` is plumbed through
 (column exists, loader doesn't select it) and a cached rules→policy
 adapter is built. See `DECISIONS.md` for the full reasoning.
 
+### 2026-09-23 — Phase 1 policy production review and rule validation
+`31053427` — Codex validated dashboard rule creation against the shared
+policy matcher, bounded rule input, hardened malformed-policy matching,
+repaired the two-tenant shadow test, and passed Go tests/vet/build plus an
+isolated real-Postgres rule/ownership check. Full findings:
+`docs/PHASE1_PRODUCTION_REVIEW.md`.
+Gotcha: `main.go` still attaches no policy provider; stored rules do not yet
+produce live shadow opinions or enforce traffic.
+
 ### 2026-09-23 — PR #13 label and trainer safety
 `56433255` — Honeypot trips now emit a candidate label on the trip request;
 the trainer refuses auto-collected database labels unless explicitly opted in.
