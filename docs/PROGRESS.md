@@ -182,3 +182,10 @@ test helpers must read the difficulty from the served page, never hardcode
 by accident. The branch also carries Codex's `5ae489b9` (scripting UA
 blocklist) because we share one working tree; merge both together or
 cherry-pick accordingly.
+
+### 2026-09-23 — Phase 2 verification hardening
+`47da7c51` — bounded PNG decoding and nonblank canvas validation, server-
+enforced attempt-cookie expiry, retry/no-JavaScript guidance, and FIFO local
+nonce eviction. Blank PNG, expired cookie and nonce-cap mutation checks went red.
+Gotcha: a scripted client can still forge a valid PNG; challenge solves remain
+candidate observations, never verified human labels.
