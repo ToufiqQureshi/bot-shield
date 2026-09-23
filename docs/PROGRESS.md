@@ -140,6 +140,17 @@ isolated real-Postgres rule/ownership check. Full findings:
 Gotcha: `main.go` still attaches no policy provider; stored rules do not yet
 produce live shadow opinions or enforce traffic.
 
+### 2026-09-23 — real DB-backed PolicyProvider (Phase 1 gate #1)
+`5f1ebd9` — `pkg/policyprovider`: resolves a request's tenant to its
+owning account (new `tenant.Store.OwnerUserID`, new `owner_user_id`
+select in `db.GetTenant`/`GetTenantByID`), reads that account's rules
+through a bounded/TTL-cached lookup, converts via new `rules.ToPolicy`.
+`main.go` wires it whenever `-db-url` is set. Still shadow-only.
+Gotcha: cache is keyed by **owner**, not tenant — two domains under one
+account must share one cache entry/query. Mutation-tested: keying by
+tenant instead made `TestForTenant_TwoDomainsSameOwnerShareRules` fail
+as expected.
+
 ### 2026-09-23 — PR #13 label and trainer safety
 `56433255` — Honeypot trips now emit a candidate label on the trip request;
 the trainer refuses auto-collected database labels unless explicitly opted in.
