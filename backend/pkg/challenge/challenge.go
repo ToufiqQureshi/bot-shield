@@ -1,6 +1,7 @@
 package challenge
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -10,6 +11,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"image"
+	"image/draw"
+	"image/png"
 	"net"
 	"net/http"
 	"strconv"
@@ -55,8 +59,15 @@ type NonceStore interface {
 }
 
 type localNonceStore struct {
-	mu   sync.Mutex
-	used map[string]time.Time
+	mu      sync.Mutex
+	used    map[string]time.Time
+	ordered []nonceUse
+	head    int
+}
+
+type nonceUse struct {
+	nonce string
+	at    time.Time
 }
 
 // challengeMaxAge bounds how long an issued puzzle stays solvable —
@@ -219,31 +230,33 @@ func (s *localNonceStore) Consume(_ context.Context, nonce string, now time.Time
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for key, usedAt := range s.used {
-		if now.Sub(usedAt) >= ttl {
-			delete(s.used, key)
-		}
+	// Issuance is chronological on the request path, so expired entries
+	// leave from the front. Work is proportional to entries actually evicted.
+	for s.head < len(s.ordered) && now.Sub(s.ordered[s.head].at) >= ttl {
+		s.popOldest()
 	}
 	if _, exists := s.used[nonce]; exists {
 		return false
 	}
 	if len(s.used) >= maxUsedChallenges {
-		// Keep verification available under a burst of successful solves while
-		// preserving the hard memory ceiling. The oldest nonce has the least
-		// remaining replay value and is safe to evict.
-		var oldestKey string
-		var oldestAt time.Time
-		for key, usedAt := range s.used {
-			if oldestKey == "" || usedAt.Before(oldestAt) {
-				oldestKey, oldestAt = key, usedAt
-			}
-		}
-		if oldestKey != "" {
-			delete(s.used, oldestKey)
-		}
+		// The oldest consumed nonce has the least replay life left.
+		s.popOldest()
 	}
 	s.used[nonce] = now
+	s.ordered = append(s.ordered, nonceUse{nonce: nonce, at: now})
+	if s.head > 1024 && s.head*2 >= len(s.ordered) {
+		copy(s.ordered, s.ordered[s.head:])
+		s.ordered = s.ordered[:len(s.ordered)-s.head]
+		s.head = 0
+	}
 	return true
+}
+
+func (s *localNonceStore) popOldest() {
+	oldest := s.ordered[s.head]
+	delete(s.used, oldest.nonce)
+	s.ordered[s.head] = nonceUse{}
+	s.head++
 }
 
 // RedisNonceStore shares replay protection across nodes. On Redis failure it
@@ -315,18 +328,48 @@ func validPoW(nonce, answer string, difficulty int) bool {
 	return strings.HasPrefix(hashHex, strings.Repeat("0", difficulty))
 }
 
-// canvasDataPrefix / minCanvasProofLen: a genuine canvas.toDataURL()
-// render is a base64 PNG of at least a few hundred bytes. This is a
-// shape check, not a render check — it's a client-reported string, so
-// a bot that specifically studies hakaishield can fake a value that
-// passes it without ever rendering anything. Documented as a known,
-// accepted limitation (see docs/DECISIONS.md): validating the actual
-// pixel content server-side is a project of its own, out of MVP scope.
+// Canvas data is untrusted. Keep both compressed and decoded work bounded
+// before inspecting pixels; a valid PNG by itself does not prove a browser ran.
 const canvasDataPrefix = "data:image/png;base64,"
-const minCanvasProofLen = 100
+const maxCanvasProofLen = 48 * 1024
+const canvasWidth, canvasHeight = 300, 150
 
 func validCanvasProof(proof string) bool {
-	return strings.HasPrefix(proof, canvasDataPrefix) && len(proof) > minCanvasProofLen
+	if !strings.HasPrefix(proof, canvasDataPrefix) || len(proof) > maxCanvasProofLen {
+		return false
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(proof, canvasDataPrefix))
+	if err != nil {
+		return false
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width != canvasWidth || config.Height != canvasHeight {
+		return false
+	}
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		return false
+	}
+	var pixels []byte
+	switch decoded := img.(type) {
+	case *image.NRGBA:
+		pixels = decoded.Pix
+	case *image.RGBA:
+		pixels = decoded.Pix
+	default:
+		canvas := image.NewNRGBA(image.Rect(0, 0, canvasWidth, canvasHeight))
+		draw.Draw(canvas, canvas.Bounds(), img, image.Point{}, draw.Src)
+		pixels = canvas.Pix
+	}
+	background := pixels[:4]
+	changed := 0
+	for i := 4; i < len(pixels); i += 4 {
+		pixel := pixels[i : i+4]
+		if pixel[0] != background[0] || pixel[1] != background[1] || pixel[2] != background[2] || pixel[3] != background[3] {
+			changed++
+		}
+	}
+	return changed >= 32 && changed < canvasWidth*canvasHeight/2
 }
 
 type challengeData struct {
@@ -370,12 +413,23 @@ h2 { font-weight: normal; font-size: 1.2rem; }
 {{if eq .Theme "ghost"}}
 <!-- Invisible ghost mode -->
 {{else if eq .Theme "branded"}}
-<h2>Securing your connection...</h2><div class="loader"></div>
+<h2>Securing your connection...</h2><div class="loader" aria-hidden="true"></div>
 {{else}}
 <p>Checking your browser before continuing&hellip;</p>
 {{end}}
+<noscript><p>JavaScript is required to verify this browser. Enable it and reload this page, or contact the site owner for access.</p></noscript>
 <script>
 (async function () {
+  function showRecovery() {
+    document.body.textContent = "Browser verification could not complete. ";
+    var retry = document.createElement("a");
+    retry.href = "{{.RedirectPath}}";
+    retry.textContent = "Try again";
+    var notice = document.createElement("p");
+    notice.setAttribute("role", "alert");
+    notice.appendChild(retry);
+    document.body.appendChild(notice);
+  }
   try {
     var start = Date.now();
     
@@ -510,10 +564,10 @@ h2 { font-weight: normal; font-size: 1.2rem; }
     if (res.redirected || res.ok) {
       window.location = res.url || "{{.RedirectPath}}";
     } else {
-      document.body.textContent = "Verification failed.";
+      showRecovery();
     }
   } catch (e) {
-    document.body.textContent = "Verification failed.";
+    showRecovery();
   }
 })();
 </script>

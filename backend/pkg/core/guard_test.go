@@ -1,9 +1,14 @@
 package core_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,6 +26,20 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
+
+func testCanvasProof() string {
+	img := image.NewNRGBA(image.Rect(0, 0, 300, 150))
+	for y := 10; y < 28; y++ {
+		for x := 10; x < 50; x++ {
+			img.Set(x, y, color.NRGBA{A: 255})
+		}
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		panic(err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
+}
 
 // TestGuardChallengesCleanTrafficStrict: under PolicyStrict, a scoreless first request
 // from a clean visitor is served the challenge page in place of the origin.
@@ -255,7 +274,7 @@ func solveChallenge(t *testing.T, c *challenge.Challenge, host string) *http.Coo
 	form := url.Values{}
 	form.Set("token", tm[1])
 	form.Set("answer", answer)
-	form.Set("canvas", "data:image/png;base64,"+strings.Repeat("A", 150))
+	form.Set("canvas", testCanvasProof())
 	postReq := httptest.NewRequest(http.MethodPost, "/__hakaishield/verify", strings.NewReader(form.Encode()))
 	postReq.Host = host
 	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")

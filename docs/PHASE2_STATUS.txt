@@ -1,117 +1,40 @@
-PHASE 2 (Challenge and Continuous Trust) — STATUS NOTE
-Updated: 2026-09-23, by Buffy. Supersedes the earlier half-done note.
+PHASE 2 (Challenge and Continuous Trust) - CURRENT STATUS
+Updated: 2026-09-23
 
-===============================================================================
-0. ANSWER FIRST: is the code done?
-===============================================================================
-YES for the Phase 2 scope agreed in the plan: adaptive difficulty,
-progressive escalation, trust decay, bounded telemetry, guard wiring,
-tests, mutation checks, and docs are all done and verified.
+Branch: phase2-challenge-trust
+Buffy's implementation: 959ab46d (code), a14c344f (docs), both pushed.
 
-Branch: phase2-challenge-trust (created from main at 1059e406 after Codex
-committed its Phase 1 work, so the earlier "mixed shared tree" hazard is
-gone; the collision warning in the previous note no longer applies).
+Built:
+- Guard passes its computed risk score into challenge difficulty selection.
+- Signed tokens bind the challenge to a nonce, host, redirect and difficulty.
+- Signed failed-attempt cookies escalate difficulty; signed passed cookies
+  grant 30/15/5 minute trust according to the solved difficulty.
+- Bounded challenge telemetry and browser-class outcome counters.
+- Recovery text and retry link when browser verification fails; no-JavaScript
+  explanation for visitors who cannot run the puzzle.
+- Follow-up hardening: the attempt-cookie issue time is signed and checked by
+  the server for a 15-minute expiry. Verify decodes a bounded PNG, checks
+  300x150 dimensions and nonblank pixels. Prefix-plus-filler is rejected.
+- The local nonce fallback evicts expired/oldest entries in FIFO order instead
+  of scanning up to 50,000 entries on every verification.
 
-===============================================================================
-1. WHAT SHIPPED (this branch, uncommitted at time of writing)
-===============================================================================
+Verification:
+- Full backend go test ./..., go vet ./..., go build ./... pass.
+- Canvas blank-image and attempt-cookie-expiry tests went red on deliberate
+  regressions and green after restoring the fix.
+- PNG verification benchmark: about 0.56 ms and 230 KB allocated per verify
+  on this Windows i7-9750H machine. It runs only on suspicious traffic's
+  verify path, not on every request.
+- Local nonce verification at its 50,000-entry cap: about 0.46 microseconds
+  per consume on the same machine.
+- Race detector unavailable here: CGO_ENABLED=0 and no working gcc toolchain.
 
-NEW  backend/pkg/challenge/adaptive.go
-     - WithRisk/RiskFromContext: score plumbing from Guard via context.
-     - minDifficulty=1, maxDifficulty=3 (16/256/4096 expected hashes).
-     - difficultyForScore: <=0 -> 1, <50 -> 2, >=50 -> 3.
-     - difficultyFor: +1 step per 2 failed solves, clamped to [1,3].
-     - passedTrustWindow: diff 3 -> 5 min, 2 -> 15 min, 1 -> 30 min.
+Security limits:
+- A scripted client can still create a valid PNG and solve the PoW. The
+  challenge increases cost but does not prove a human or a real browser.
+- Client-reported automation/headless/elapsed fields remain untrusted.
+- Challenge-solved labels are candidates only; the trainer excludes them by
+  default and no model trained from them may enforce traffic decisions.
 
-NEW  backend/pkg/challenge/auth.go
-     - Signed, host-bound attempt cookie X-HakaiShield-Attempt
-       (max 6 attempts, 15 min). Drop = lose own escalation; cannot forge.
-     - setPassedCookie: MaxAge = passedTrustWindow(difficulty).
-
-NEW  backend/pkg/challenge/telemetry.go
-     - parseTelemetry: booleans exactly "true"/"false"; elapsed plain int
-       in [0, 600000]; anything else malformed.
-     - browserClass: mobile/desktop/unknown (3 labels only).
-     - fastSolveMillis=25: MEASURED, never enforced.
-     - Ten challenge_* counters, code-owned names only.
-
-MOD  backend/pkg/challenge/challenge.go
-     - FIX: Serve() now actually renders .Difficulty into the page — the
-       previous draft computed it but never passed it to the template, so
-       every browser was silently solving difficulty 0/undefined.
-     - Difficulty rides only inside the signed token (clamped 1..3 on
-       parse); handleVerify validates telemetry first (400 on malformed),
-       then nonce, then PoW/canvas/automation via failSolve().
-     - page JS: var difficulty = N + prefix loop; cap 200000 (~49 sigma).
-
-MOD  backend/pkg/core/guard.go  (one hunk)
-     - DecisionChallenge branch: challenge.WithRisk(r.Context(), score)
-       wraps labels.WithSample so the challenge sees the request's score.
-       Without this the whole adaptive feature was inert.
-
-===============================================================================
-2. TESTS
-===============================================================================
-NEW  backend/pkg/challenge/adaptive_test.go (13 tests)
-     Bands via served page; clamp both ends; escalation after 2 failures
-     (driven by REAL server-set cookies, not hand-forged); cap at 6;
-     forged attempt cookie ignored; trust-window decay (30/15/5 via
-     cookie MaxAge); passed-cookie difficulty tamper rejected; token
-     difficulty lowered by client -> 403; 8 malformed-telemetry cases ->
-     400; fast solve passes; solve clears escalation; attempt cookie
-     bounded (15 min).
-
-NEW  backend/pkg/core/guard_phase2_test.go (3 tests)
-     End-to-end through the guard: header_anomaly (25) -> difficulty 2;
-     ua_mismatch (50) -> difficulty 3; strict-mode clean traffic -> 1.
-
-MOD  challenge_test.go / guard_test.go / labels_test.go helpers
-     solvePoW(nonce, zeros) + pageDifficulty(): they now extract
-     `var difficulty = N` from the served page and solve for that many
-     zeros. Also fixed a latent flake: wrongPoW used to hardcode "00",
-     which is sometimes a VALID difficulty-1 answer.
-
-Note: html/template's JS escaper pads values (`var difficulty =  1 ;`),
-so the regex is `var difficulty =\s*(\d+)` — the strict one matched
-nothing and briefly failed every adaptive test.
-
-===============================================================================
-3. VERIFICATION
-===============================================================================
-- go build ./...          OK
-- go vet ./...            OK
-- go test ./...           OK (whole repo; only pkg/db has no test files)
-- go test -race           NOT RUN: this Windows box has no gcc/cgo, the
-                          race detector cannot build. Environment limit,
-                          not a code issue — noted in the plan doc.
-
-MUTATION CHECKS (CLAUDE.md §12) — each broke the behaviour on purpose,
-watched the matching test go RED, restored, watched it go GREEN:
-1. removed difficultyFor's max-clamp        -> cap test red
-2. removed guard's WithRisk(score) wiring   -> both guard e2e tests red
-3. removed recordAttempt from failSolve     -> escalation test red
-4. removed telemetry validation gate        -> malformed-telemetry test red
-5. flattened trust window to passedMaxAge   -> decay test red
-
-===============================================================================
-4. DOCS
-===============================================================================
-- docs/BACKEND_IMPLEMENTATION_PLAN.md  Phase 2 "Current status" snapshot.
-- docs/ROADMAP.md                      Phase 2 status paragraph (P1 area).
-- docs/DECISIONS.md                    2026-09-23 adaptive-difficulty
-                                       decision + rejected alternatives.
-- docs/RESEARCH.md                     Anubis/FCaptcha PoW cost model and
-                                       why the cap stays at difficulty 3.
-- docs/PROGRESS.md                     one entry after the commit.
-- this file                            replaced.
-
-===============================================================================
-5. HONEST LIMITS (not hidden)
-===============================================================================
-- Canvas proof is still a shape check (ROADMAP item 28). Until it is
-  decoded server-side, a plain HTTP script can still pass verify; the
-  adaptive ladder raises its cost but does not close that hole.
-- Telemetry booleans are computed by the client; they are bounded and
-  measured, never trusted (documented in DECISIONS.md).
-- -race could not run in this environment (no cgo toolchain).
-- Codex's WithTheme hunks in challenge.go were left untouched, as agreed.
+See BACKEND_IMPLEMENTATION_PLAN.md, ROADMAP.md item 28, DECISIONS.md and the
+commits for detailed design and verification history.

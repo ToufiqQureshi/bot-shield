@@ -135,8 +135,13 @@ Verified: `go build ./...`, `go vet ./...`, full `go test ./...` green, 13
 new challenge tests + 3 new guard end-to-end tests, 5 mutation checks (clamp
 removal, WithRisk removal, recordAttempt removal, telemetry gate removal,
 trust-window flattening — each went red, then restored green). Known limits:
-canvas proof is still a shape check (ROADMAP item 28), and `-race` could not
-run in the build environment (no gcc/cgo); the suite ran without it.
+`-race` could not run in the build environment (no gcc/cgo); the suite ran
+without it. A Phase 2 hardening follow-up decodes bounded PNG proofs,
+checks 300x150 dimensions and nonblank pixels, enforces signed attempt-cookie
+expiry on the server, and gives failed/JavaScript-disabled visitors recovery
+instructions. The local nonce fallback uses bounded FIFO eviction, avoiding
+a full 50,000-entry map scan on every verify. A forged PNG remains possible:
+challenge solves are candidate labels only and cannot authorize model enforcement.
 
 | Feature | What will be implemented | Why it matters |
 |---|---|---|

@@ -41,8 +41,16 @@ func (c *Challenge) attempts(r *http.Request) int {
 	if err != nil {
 		return 0
 	}
-	fields := strings.SplitN(string(raw), "|", 2)
-	if len(fields) != 2 || fields[1] != canonicalHost(r.Host) {
+	fields := strings.SplitN(string(raw), "|", 3)
+	if len(fields) != 3 || fields[1] != canonicalHost(r.Host) {
+		return 0
+	}
+	issued, err := strconv.ParseInt(fields[2], 10, 64)
+	if err != nil {
+		return 0
+	}
+	age := time.Since(time.Unix(issued, 0))
+	if age < 0 || age > attemptMaxAge {
 		return 0
 	}
 	n, err := strconv.Atoi(fields[0])
@@ -59,7 +67,7 @@ func (c *Challenge) recordAttempt(w http.ResponseWriter, r *http.Request) {
 	if next > maxAttempts {
 		next = maxAttempts
 	}
-	payload := base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(next) + "|" + canonicalHost(r.Host)))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(next) + "|" + canonicalHost(r.Host) + "|" + strconv.FormatInt(time.Now().Unix(), 10)))
 	http.SetCookie(w, &http.Cookie{
 		Name:     attemptCookie,
 		Value:    payload + "." + c.sign(payload),

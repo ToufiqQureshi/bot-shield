@@ -64,6 +64,11 @@ default 800×600 viewport, a Chromium-without-Chrome client-hints brand,
 SwiftShader/llvmpipe headless renderers. The property names it looks for are
 obfuscated in the page so a bot cannot simply grep for them.
 
+Verification now decodes a bounded 300x150 PNG and rejects malformed or blank
+images. Failed solves show a retry link; visitors without JavaScript see an
+explanation. A scripted client can still forge the PNG and browser telemetry,
+so a solve remains an unverified human candidate.
+
 A real person solves it in about a second and mostly does not notice.
 
 ### Deception mode

@@ -10,6 +10,20 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Phase 2 verification hardening: bounded PNG and server-enforced attempt expiry - 2026-09-23
+
+**Decision:** Decode the browser's submitted PNG only on the challenge
+verification path, cap its encoded size, require the canvas's fixed 300x150
+dimensions and visible nonuniform pixels, and reject malformed/blank images.
+The signed failed-attempt cookie now contains its issue time, checked by the
+server against the 15-minute window; browser cookie MaxAge alone is not a
+security boundary. Failed or JavaScript-disabled visitors get recovery text.
+
+**Limit:** A script can generate a valid PNG and solve the PoW without a
+browser. These checks do not promote challenge solves from candidate labels
+to verified human labels. Rejecting all unusual but valid renderings would
+increase false positives, so image validation stays deliberately coarse.
+
 ## Adaptive challenge difficulty: server-chosen, cookie-tracked, mobile-capped - 2026-09-23
 
 **Decision:** Phase 2's challenge difficulty is chosen by the server from

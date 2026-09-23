@@ -237,7 +237,7 @@ func solveFromPage(t *testing.T, c *challenge.Challenge, body, host string) {
 	form := url.Values{}
 	form.Set("token", tm[1])
 	form.Set("answer", solvePoW(nm[1], difficulty))
-	form.Set("canvas", "data:image/png;base64,"+strings.Repeat("A", 150))
+	form.Set("canvas", testCanvasProof())
 
 	post := httptest.NewRequest(http.MethodPost, "/__hakaishield/verify", strings.NewReader(form.Encode()))
 	post.Host = host

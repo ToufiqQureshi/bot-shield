@@ -1,10 +1,13 @@
 package challenge_test
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -394,5 +397,32 @@ func TestAttemptCookieExpires(t *testing.T) {
 	}
 	if cookies[0].MaxAge <= 0 || cookies[0].MaxAge > int((15*time.Minute).Seconds()) {
 		t.Errorf("attempt cookie MaxAge = %d, want in (0, 900]", cookies[0].MaxAge)
+	}
+}
+
+func TestAttemptCookieExpiryIsEnforcedByServer(t *testing.T) {
+	const secret = "test-secret-1234567890123456789012"
+	for _, tc := range []struct {
+		name string
+		age  time.Duration
+		want int
+	}{
+		{"fresh", time.Minute, 3},
+		{"expired", 16 * time.Minute, 1},
+		{"future", -time.Minute, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := base64.RawURLEncoding.EncodeToString([]byte("4|example.com|" + strconv.FormatInt(time.Now().Add(-tc.age).Unix(), 10)))
+			mac := hmac.New(sha256.New, []byte(secret))
+			_, _ = mac.Write([]byte(payload))
+			cookie := &http.Cookie{Name: "X-HakaiShield-Attempt", Value: payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))}
+			req := httptest.NewRequest(http.MethodGet, "http://example.com"+challengePath, nil)
+			req.AddCookie(cookie)
+			rec := httptest.NewRecorder()
+			newChallenge(t).Handler().ServeHTTP(rec, req)
+			if got := pageDifficulty(t, rec.Body.String()); got != tc.want {
+				t.Fatalf("difficulty = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }

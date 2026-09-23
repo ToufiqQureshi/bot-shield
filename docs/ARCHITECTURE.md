@@ -101,6 +101,12 @@ Internet (every visitor, hostile until scored)
              Solved challenge nonces are consumed through Redis when available,
              which rejects replay across nodes, and fall back to a bounded
              in-process store if Redis is unavailable.
+             The in-process store evicts expired/oldest nonces in FIFO order
+             without a full scan on each verify.
+             Failed-attempt cookies carry a signed issue time with a server-
+             enforced 15-minute expiry. Verify decodes a bounded 300x150 PNG
+             and checks for nonblank pixels. It is still client-generated
+             evidence, not proof of a human visitor.
 
 [Observability] BUILT  aggregate operational counters for JWKS refresh/failure,
              unknown-kid rejection, Goodbot DNS budget rejection, Redis circuit

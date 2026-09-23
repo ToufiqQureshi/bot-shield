@@ -1,9 +1,13 @@
 package challenge_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -88,7 +92,53 @@ func pageDifficulty(t *testing.T, body string) int {
 }
 
 func validCanvas() string {
-	return "data:image/png;base64," + strings.Repeat("A", 150)
+	img := image.NewNRGBA(image.Rect(0, 0, 300, 150))
+	for y := 10; y < 28; y++ {
+		for x := 10; x < 50; x++ {
+			img.Set(x, y, color.NRGBA{A: 255})
+		}
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		panic(err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
+}
+
+func TestCanvasProofRejectsFakeAndBlankImages(t *testing.T) {
+	for name, proof := range map[string]string{
+		"base64 garbage": "data:image/png;base64," + strings.Repeat("A", 150),
+		"wrong dimensions": func() string {
+			var out bytes.Buffer
+			_ = png.Encode(&out, image.NewNRGBA(image.Rect(0, 0, 1, 1)))
+			return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
+		}(),
+		"blank image": func() string {
+			var out bytes.Buffer
+			_ = png.Encode(&out, image.NewNRGBA(image.Rect(0, 0, 300, 150)))
+			return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := newChallenge(t)
+			token, nonce, difficulty := fetchPage(t, c.Handler(), challengePath)
+			if got := postVerify(c.Handler(), token, solvePoW(nonce, difficulty), proof, "false").Code; got != http.StatusForbidden {
+				t.Fatalf("invalid canvas status = %d, want 403", got)
+			}
+		})
+	}
+}
+
+func TestChallengePageOffersRecovery(t *testing.T) {
+	c := newChallenge(t)
+	rec := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, challengePath, nil))
+	page := rec.Body.String()
+	for _, want := range []string{"<noscript>", "showRecovery();", "Try again", `role", "alert"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("challenge page missing recovery element %q", want)
+		}
+	}
 }
 
 // fetchPage performs GET and extracts token + nonce + the difficulty the

@@ -423,9 +423,9 @@ via a signed attempt cookie (never per-IP), trust decay on the passed cookie
 (30/15/5 min by difficulty solved), and bounded client telemetry with
 browser-class counters are built in `pkg/challenge` and wired from
 `core.Guard`'s score. Difficulty lives only inside the signed token, so it
-cannot be lowered by a client. The canvas proof is still a shape check
-(item 28); the telemetry envelope's remaining gap (real server-side canvas
-validation) is that same item.
+cannot be lowered by a client. The canvas proof is decoded and checked for
+dimensions and nonblank pixels (item 28 follow-up). A scripted client can
+still forge a PNG, so solves remain unverified candidate observations.
 
 **Phase 1 backend policy status (2026-09-23):** versioned tenant snapshots,
 ordered rules, preview, rollback, shadow evidence/summary, and gated
@@ -520,13 +520,11 @@ production self-service feature. See `PHASE1_POLICY.md` and
       Also see `docs/DECISIONS.md`, "Learned decision weights are a linear
       model over existing signals".
 
-- [ ] **28. Make the canvas proof mean something** — `validCanvasProof`
-      (`pkg/challenge/challenge.go`) checks that the submitted canvas is a
-      string starting `data:image/png;base64,` and longer than 100 bytes.
-      It never decodes it. Combined with a sha256 proof-of-work any language
-      can compute, and `automation`/`headless` fields the *client* reports
-      about itself, a plain HTTP script can pass the whole verify handler
-      without running a line of JavaScript.
+- [x] **28. Validate the submitted canvas PNG** — `validCanvasProof`
+      (`pkg/challenge/challenge.go`) decodes a bounded PNG and checks expected
+      dimensions and nonblank pixels. Prefix plus filler no longer passes.
+      A script can still generate its own PNG and PoW answer, so this does
+      not establish that JavaScript ran or that a visitor is human.
 
       As a challenge that is an accepted trade-off (`DECISIONS.md`): the
       point is to cost a scraper something, not to be unbeatable. **As the
@@ -535,13 +533,11 @@ production self-service feature. See `PHASE1_POLICY.md` and
       forged `human` label costs one challenge token and one nonce. The
       per-identity cap (5/hour) bounds the rate; rotating IPs defeats it.
 
-      **Fix:** decode the base64 PNG server-side and check the IHDR header,
-      the expected dimensions and pixel entropy, so the string has to come
-      from a real render. Bounded work on a request that already cost the
-      client a proof-of-work, and it only runs on verify, not on every
-      request.
+      **Implemented:** bounded PNG decoding, expected 300x150 dimensions,
+      and nonblank pixels on the verify path. Pixel checks raise the cost of
+      a fake form value but cannot prove a real render.
 
-      **Until then:** no model trained on `challenge_solved` samples may
+      **Still required:** no model trained on `challenge_solved` samples may
       enforce anything — which is already the rule (item 25), for a
       different reason. See `docs/LEARNED_SCORING.md` 2.1.
 
