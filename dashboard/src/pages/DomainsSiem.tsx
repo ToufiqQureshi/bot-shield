@@ -1,138 +1,63 @@
-import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Globe, Webhook, Plus, AlertCircle, X } from 'lucide-react';
-import { addDomain, ApiError } from '../lib/api';
+import { AlertCircle, Globe } from 'lucide-react';
+import { domainState } from '../lib/domainStatus';
 import type { LayoutContext } from '../components/Layout';
 
 export default function DomainsSiem() {
-  const { domains, domainsLoading, onDomainAdded } = useOutletContext<LayoutContext>();
-  const [showAdd, setShowAdd] = useState(false);
-  const [newDomain, setNewDomain] = useState('');
-  const [newOrigin, setNewOrigin] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      const created = await addDomain(newDomain.trim(), newOrigin.trim());
-      onDomainAdded(created);
-      setShowAdd(false);
-      setNewDomain('');
-      setNewOrigin('');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add domain.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const { domains, domainsLoading } = useOutletContext<LayoutContext>();
 
   return (
     <div className="space-y-6 animate-in">
-      {/* Header */}
       <div>
-        <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Domains & SIEM</h1>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Manage protected domains and data export integrations</p>
+        <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Pilot domains</h1>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>See which sites have completed setup.</p>
       </div>
 
-      {/* Protected Domains */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-primary)' }}>
-          <div className="flex items-center gap-2">
-            <Globe size={16} style={{ color: 'var(--text-muted)' }} />
-            <div>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Protected Domains</h2>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Sites routed through HakaiShield edge</p>
-            </div>
-          </div>
-          <button onClick={() => setShowAdd(true)} className="btn-primary text-xs flex items-center gap-1.5">
-            <Plus size={12} /> Add Domain
-          </button>
+      <div className="card p-5 flex items-start gap-3">
+        <AlertCircle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
+        <div className="space-y-2">
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Domain setup is managed during the pilot</p>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            Contact the pilot operator with your domain and origin URL. We verify ownership, configure DNS and TLS,
+            and test routing before marking it protected. A domain shown as pending is not protected yet.
+          </p>
+          <a href="/contact" className="text-xs underline" style={{ color: 'var(--accent-blue)' }}>Request domain setup</a>
         </div>
+      </div>
 
-        {showAdd && (
-          <form onSubmit={handleAdd} className="px-5 py-4 border-b space-y-3" style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-secondary)' }}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>Add a domain</p>
-              <button type="button" onClick={() => setShowAdd(false)} style={{ color: 'var(--text-muted)' }}><X size={14} /></button>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <input
-                required
-                placeholder="app.example.com"
-                value={newDomain}
-                onChange={(e) => setNewDomain(e.target.value)}
-                className="px-3 py-2 rounded text-xs"
-                style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
-              />
-              <input
-                required
-                placeholder="origin, e.g. 10.0.1.50:8080"
-                value={newOrigin}
-                onChange={(e) => setNewOrigin(e.target.value)}
-                className="px-3 py-2 rounded text-xs"
-                style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
-              />
-            </div>
-            {error && <p className="text-xs" style={{ color: 'var(--accent-red, #ef4444)' }}>{error}</p>}
-            <button type="submit" disabled={submitting} className="btn-primary text-xs px-4 py-2 disabled:opacity-60">
-              {submitting ? 'Adding…' : 'Add domain'}
-            </button>
-          </form>
-        )}
-
-        <div className="overflow-x-auto">
-          {domainsLoading ? (
-            <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>Loading domains…</p>
-          ) : domains.length === 0 ? (
-            <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>No domains yet — add one to start routing traffic through hakaishield.</p>
-          ) : (
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: 'var(--border-primary)' }}>
+          <Globe size={16} style={{ color: 'var(--text-muted)' }} />
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Your domains</h2>
+        </div>
+        {domainsLoading ? (
+          <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>Loading domains…</p>
+        ) : domains.length === 0 ? (
+          <p className="px-5 py-6 text-xs" style={{ color: 'var(--text-muted)' }}>
+            No domain is connected to this account. Request pilot setup to get started.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
             <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Domain</th>
-                  <th>Origin</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Domain</th><th>Origin</th><th>Status</th></tr></thead>
               <tbody>
-                {domains.map(domain => (
-                  <tr key={domain.id}>
-                    <td>
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{domain.domain}</span>
-                    </td>
-                    <td className="font-mono text-xs">{domain.origin}</td>
-                    <td>
-                      <span className={`badge ${domain.status === 'active' ? 'badge-green' : 'badge-yellow'}`}>
-                        {domain.status === 'pending_verification' ? 'pending' : domain.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {domains.map((domain) => {
+                  const state = domainState(domain.status);
+                  return (
+                    <tr key={domain.id}>
+                      <td className="text-sm font-medium">{domain.domain}</td>
+                      <td className="font-mono text-xs">{domain.origin}</td>
+                      <td>
+                        <span className={`badge ${state.protected ? 'badge-green' : 'badge-yellow'}`}>{state.label}</span>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{state.detail}</p>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          )}
-        </div>
-      </div>
-
-      {/* SIEM Integrations — not built yet */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Webhook size={16} style={{ color: 'var(--text-muted)' }} />
-          <div>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>SIEM Integrations</h2>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Export logs and events to your security stack</p>
           </div>
-        </div>
-        <div className="card p-4 flex items-center gap-3">
-          <AlertCircle size={16} className="text-yellow-400 shrink-0" />
-          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            SIEM export (Datadog, Splunk, S3, webhooks) isn't built yet — this section is a placeholder until a real
-            integration ships, rather than a working toggle that would connect to nothing.
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );

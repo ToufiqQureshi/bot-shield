@@ -334,13 +334,18 @@ func TestGuardVelocityLimitsPassedSession(t *testing.T) {
 		}
 	}
 
-	// Flood past the velocity threshold from the same passed session.
-	var lastCode int
-	for i := 0; i < 25; i++ {
-		lastCode = makeReq().Code
+	// The limiter uses one-second fixed windows. A small burst can straddle
+	// a boundary, so keep sending until one window crosses its threshold.
+	// Stop at the first 429: a later window can legitimately return 200 again.
+	limited := false
+	for i := 0; i < 100; i++ {
+		if makeReq().Code == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
 	}
-	if lastCode != http.StatusTooManyRequests {
-		t.Fatalf("want 429 after flooding a passed session, got %d", lastCode)
+	if !limited {
+		t.Fatal("want 429 after flooding a passed session")
 	}
 }
 

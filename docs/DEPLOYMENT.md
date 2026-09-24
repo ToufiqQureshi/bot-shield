@@ -161,7 +161,7 @@ silently (§1, §2). Not a cost question.
 ### Migration is cheap, which is why this was not worth agonising over
 
 `deploy/` is Docker + compose + systemd + `setup.sh`. Moving providers is:
-provision a box, run `setup.sh`, change DNS. Nothing in the application is
+provision a box, point DNS at it, then run `setup.sh`. Nothing in the application is
 provider-specific. The cost of picking wrong is an afternoon, not a rewrite
 — so the decision above is firm without being irreversible.
 

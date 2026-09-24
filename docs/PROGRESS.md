@@ -212,3 +212,28 @@ new shadow-signal tests were red before implementation.
 Gotcha: this adds bounded Redis checks after a solve; live latency and false
 positive measurement remain pilot gates. Browser-hint observations do not
 enforce.
+
+### 2026-09-24 — production-test packaging and velocity test gate
+
+`f4e3b6ab` — Production Compose image built locally and its packaged binary
+started. The passed-session velocity test now tolerates a one-second fixed-window
+boundary; full Go suite, repeated focused test, and vet passed.
+Gotcha: the image check does not replace live TLS, origin, browser, and load
+tests on the pilot host.
+
+### 2026-09-24 — managed pilot onboarding and dashboard hardening
+
+`2094da41` — Dashboard was reduced to real pilot capabilities: no fake signup,
+contact submission, billing, legal, domain activation or live-policy controls.
+Pending domains are never shown as protected; operator-managed setup is explicit.
+The API rejects customer-created unverified domains, Compose requires database,
+Supabase and exact dashboard-origin settings, and dashboard/Go regression tests
+plus CI gates were added.
+Gotcha: self-service DNS ownership, ACME certificates, billing and legal terms
+remain launch blockers for a hosted SaaS; this release is a managed pilot.
+
+### 2026-09-24 - session handoff report
+
+`docs/SESSION_HANDOFF_2026-09-24.md` records this session's changes, verification
+evidence, deployment and client-traffic gates, known limitations, and pre-existing
+workspace changes for the next agent. Documentation-only; no tests rerun.

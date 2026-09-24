@@ -10,6 +10,23 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Managed first-client onboarding — 2026-09-24
+
+**Decision.** The first client uses one operator-provisioned domain, origin,
+certificate and shadow rollout. Authenticated dashboard users may list their
+domains, but public domain creation is unavailable until DNS ownership proof,
+automatic certificate issuance and a safe activation lifecycle exist. A
+pending domain is never displayed as protected. Dashboard billing, contact
+submissions and policy controls must not imply an effect they cannot deliver.
+
+**Why.** The old add-domain endpoint accepted any host into a unique database
+row before ownership proof; an account could reserve somebody else's domain.
+The contact form logged personal data and displayed success without sending
+anything. The first pilot can be delivered with explicit operator checks while
+the full self-service control plane is built and tested separately.
+
+---
+
 ## Passed-cookie detection continuity — 2026-09-24
 
 **Decision.** A passed cookie suppresses repeating a low-risk challenge, but

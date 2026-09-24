@@ -17,6 +17,8 @@ export default function Overview() {
       return;
     }
     setLoading(true);
+    setStats(null);
+    setOffenders([]);
     setError(null);
     Promise.all([getStats(selectedDomain.id), getTopOffenders()])
       .then(([s, o]) => {
@@ -32,7 +34,7 @@ export default function Overview() {
       <div className="card p-6 flex items-center gap-3">
         <AlertCircle size={18} className="text-yellow-400 shrink-0" />
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          No protected domain yet. Add one under <a href="/domains-siem" className="underline">Domains</a> to see live stats.
+          No protected domain yet. <a href="/domains-siem" className="underline">View pilot setup</a> to get started.
         </p>
       </div>
     );
@@ -86,20 +88,6 @@ export default function Overview() {
           ))}
         </div>
       )}
-
-      {/* Traffic chart placeholder — no time-series store exists yet */}
-      <div className="card p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>// traffic over time</p>
-        </div>
-        <div className="flex items-center gap-3 py-6">
-          <AlertCircle size={16} className="text-yellow-400 shrink-0" />
-          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            A time-bucketed traffic chart isn't available yet — the backend only tracks running totals, not a
-            history. The metrics above are real, live counts; this chart will show real data once that store exists.
-          </p>
-        </div>
-      </div>
 
       {/* Top Offenders */}
       <div className="card overflow-hidden">

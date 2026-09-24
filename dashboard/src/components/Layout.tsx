@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { listDomains, type Domain } from '../lib/api';
+import { domainState } from '../lib/domainStatus';
 import { supabase } from '../lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
 
@@ -21,7 +22,6 @@ export interface LayoutContext {
   domains: Domain[];
   selectedDomain: Domain | null;
   domainsLoading: boolean;
-  onDomainAdded: (domain: Domain) => void;
 }
 
 export default function Layout() {
@@ -40,7 +40,7 @@ export default function Layout() {
       .then((d) => {
         if (cancelled) return;
         setDomains(d);
-        setSelectedDomain(d[0] ?? null);
+        setSelectedDomain(d.find((domain) => domainState(domain.status).protected) ?? null);
       })
       .catch(() => {
         // Domain load failure isn't fatal to the rest of the
@@ -55,13 +55,6 @@ export default function Layout() {
     };
   }, []);
 
-  // DomainsSiem calls this after a successful add so the header's domain
-  // switcher reflects it immediately, instead of only after a reload.
-  const handleDomainAdded = (domain: Domain) => {
-    setDomains((prev) => [domain, ...prev]);
-    setSelectedDomain((prev) => prev ?? domain);
-  };
-
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate('/sign-in');
@@ -71,6 +64,7 @@ export default function Layout() {
   const initials = displayName
     ? displayName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
     : '..';
+  const activeDomains = domains.filter((domain) => domainState(domain.status).protected);
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
@@ -88,18 +82,18 @@ export default function Layout() {
                 className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors"
                 style={{ border: '1px solid var(--border-secondary)', color: 'var(--text-secondary)' }}
               >
-                <span>{domainsLoading ? 'Loading…' : selectedDomain?.domain ?? 'No domains yet'}</span>
+                <span>{domainsLoading ? 'Loading…' : selectedDomain?.domain ?? 'No protected domain'}</span>
                 <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />
               </button>
               {tenantOpen && (
                 <div className="absolute top-full left-0 mt-1 w-56 rounded-lg py-1 z-50" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-secondary)' }}>
-                  {domains.length === 0 && (
+                  {activeDomains.length === 0 && (
                     <div className="px-3 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      No domains added yet.{' '}
-                      <NavLink to="/domains-siem" className="underline" onClick={() => setTenantOpen(false)}>Add one</NavLink>
+                      No domain is active yet.{' '}
+                      <NavLink to="/domains-siem" className="underline" onClick={() => setTenantOpen(false)}>View setup</NavLink>
                     </div>
                   )}
-                  {domains.map((d) => (
+                  {activeDomains.map((d) => (
                     <button
                       key={d.id}
                       onClick={() => { setSelectedDomain(d); setTenantOpen(false); }}
@@ -107,9 +101,7 @@ export default function Layout() {
                       style={{ color: d.id === selectedDomain?.id ? 'var(--text-primary)' : 'var(--text-secondary)' }}
                     >
                       <span>{d.domain}</span>
-                      <span className={`badge ${d.status === 'active' ? 'badge-green' : 'badge-yellow'}`}>
-                        {d.status}
-                      </span>
+                      <span className="badge badge-green">Protected</span>
                     </button>
                   ))}
                 </div>
@@ -185,7 +177,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-4 py-6">
-        <Outlet context={{ domains, selectedDomain, domainsLoading, onDomainAdded: handleDomainAdded } satisfies LayoutContext} />
+        <Outlet context={{ domains, selectedDomain, domainsLoading } satisfies LayoutContext} />
       </main>
     </div>
   );
