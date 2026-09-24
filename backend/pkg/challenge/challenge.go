@@ -40,6 +40,9 @@ type Challenge struct {
 	// so a solve can label it human. It never affects whether a
 	// challenge is issued or passed.
 	labels *labels.Recorder
+	// shadowRecorder receives only validated, completed challenge solves.
+	// Install it before serving requests; nil disables per-tenant evidence.
+	shadowRecorder func(host string, signals []string)
 }
 
 type themeContextKey struct{}
@@ -114,6 +117,12 @@ func newLocalNonceStore() *localNonceStore {
 // without locking on the request path.
 func (c *Challenge) SetLabelRecorder(r *labels.Recorder) {
 	c.labels = r
+}
+
+// SetShadowRecorder connects observational challenge signals to tenant evidence.
+// The host comes from a signed challenge token checked before this is called.
+func (c *Challenge) SetShadowRecorder(record func(host string, signals []string)) {
+	c.shadowRecorder = record
 }
 
 func (c *Challenge) SetNonceStore(store NonceStore) {
@@ -431,6 +440,11 @@ h2 { font-weight: normal; font-size: 1.2rem; }
   }
   try {
     var start = Date.now();
+    var hadPointerActivity = false;
+    var markActivity = function () { hadPointerActivity = true; };
+    document.addEventListener("mousemove", markActivity, {passive: true});
+    document.addEventListener("touchmove", markActivity, {passive: true});
+    document.addEventListener("pointermove", markActivity, {passive: true});
     
     // Proof-of-Work: find a counter where SHA-256(nonce + counter) starts
     // with the server's required number of leading hex zeros. The server
@@ -462,6 +476,7 @@ h2 { font-weight: normal; font-size: 1.2rem; }
     }
 
     var canvasProof = "";
+    var canvasProof2 = "";
     try {
       var c = document.createElement("canvas");
       var ctx = c.getContext("2d");
@@ -469,18 +484,40 @@ h2 { font-weight: normal; font-size: 1.2rem; }
       ctx.font = "16px Arial";
       ctx.fillText("hakaishield", 2, 2);
       canvasProof = c.toDataURL();
+      ctx.fillRect(0, 0, 32, 32);
+      canvasProof2 = c.toDataURL();
     } catch (e) {}
 
     // _d decodes the base64-encoded automation-tell property names
     function _d(s) { return atob(s); }
 
     var automation = false;
+    var legacyAutomation = false;
     try {
       if (navigator.webdriver) automation = true;
       if (window[_d("Y2FsbFBoYW50b20=")] || window[_d("X3BoYW50b20=")] || window[_d("X19uaWdodG1hcmU=")]) automation = true;
       if (document[_d("X19zZWxlbml1bV91bndyYXBwZWQ=")] || document[_d("X193ZWJkcml2ZXJfZXZhbHVhdGU=")] || document[_d("X19kcml2ZXJfZXZhbHVhdGU=")]) automation = true;
       if (window[_d("Y2RjX2Fkb1Fwb2FzbmZhNzZwZmNaTG1jZmxf")] || window[_d("Y2RjX2Fkb1Fwb2FzbmZhNzZwZmNaTG1jZmxfQXJyYXk=")]) automation = true;
       if (window[_d("X19wbGF5d3JpZ2h0")] || window[_d("X19wdXBwZXRlZXI=")]) automation = true;
+
+      // Older automation frameworks leave browser globals. Record these
+      // only as candidates because some embedded browsers use the same keys.
+      var legacyKeys = [
+        "X1NlbGVuaXVtX0lERV9SZWNvcmRlcg==", "X3NlbGVuaXVt", "Y2FsbGVkU2VsZW5pdW0=", "X193ZWJkcml2ZXJGdW5j",
+        "X19sYXN0V2F0aXJBbGVydA==", "X19sYXN0V2F0aXJDb25maXJt", "X19sYXN0V2F0aXJQcm9tcHQ=",
+        "Q2hyb21lRHJpdmVydw==", "YXdlc29taXVt", "UnVuUGVyZlRlc3Q=", "Q2VmU2hhcnA=", "Zm1nZXRfdGFyZ2V0cw==", "Z2Vi",
+        "X19waGFudG9tYXM=", "d2Rpb0VsZWN0cm9u", "d2ViZHJpdmVyLWV2YWx1YXRl", "d2ViZHJpdmVyQ29tbWFuZA==",
+        "d2ViZHJpdmVyLWV2YWx1YXRlLXJlc3BvbnNl", "c2VsZW5pdW0tZXZhbHVhdGU=", "X19zZWxlbml1bV9ldmFsdWF0ZQ==",
+        "X193ZWJkcml2ZXJfc2NyaXB0X2Zu", "X193ZWJkcml2ZXJfc2NyaXB0X2Z1bmM=", "X193ZWJkcml2ZXJfc2NyaXB0X2Z1bmN0aW9u",
+        "X19meGRyaXZlcl9ldmFsdWF0ZQ==", "X19kcml2ZXJfdW53cmFwcGVk", "X193ZWJkcml2ZXJfdW53cmFwcGVk",
+        "X19meGRyaXZlcl91bndyYXBwZWQ=", "X18kd2ViZHJpdmVyQXN5bmNFeGVjdXRvcg=="
+      ];
+      for (var k = 0; k < legacyKeys.length; k++) {
+        try {
+          var key = _d(legacyKeys[k]);
+          if (window[key] || document[key]) legacyAutomation = true;
+        } catch (e) {}
+      }
 
       // Stealth evasion artifact: property descriptor on navigator.webdriver
       var desc = Object.getOwnPropertyDescriptor(navigator, "webdriver");
@@ -543,6 +580,36 @@ h2 { font-weight: normal; font-size: 1.2rem; }
           if (/SwiftShader|llvmpipe|VirtualBox|Mesa OffScreen/i.test(rend)) {
             headless = true;
           }
+          // A renderer string only exists on one platform's real graphics
+          // stack. A scraper that forges navigator.userAgent to claim a
+          // different OS cannot also forge the GPU driver underneath it,
+          // because that string comes from the actual machine, not from
+          // anything JS sets. Only fires when both sides are legible, so a
+          // stripped or unusual navigator.platform stays neutral rather than
+          // false-flagging.
+          var claimedOS = navigator.platform + " " + navigator.userAgent;
+          if (/Direct3D|\bD3D(?:9|11|12)\b/i.test(rend) && !/Win/i.test(claimedOS)) {
+            headless = true;
+          } else if (/Metal Renderer|Apple GPU|Apple M[0-9]/i.test(rend) && !/Mac|iPhone|iPad|iPod/i.test(claimedOS)) {
+            headless = true;
+          } else if (/Adreno|Mali-|PowerVR Rogue/i.test(rend) && !/Android/i.test(claimedOS)) {
+            headless = true;
+          }
+        }
+      }
+    } catch (e) {}
+
+    var shaderF16Unsupported = false;
+    try {
+      var chromiumVersion = navigator.userAgent.match(/\b(?:Chrome|Edg)\/(\d+)/);
+      if (chromiumVersion && Number(chromiumVersion[1]) >= 120 && navigator.gpu) {
+        // GPU discovery is best effort; never hold a challenge on a driver.
+        var adapter = await Promise.race([
+          navigator.gpu.requestAdapter(),
+          new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 100); })
+        ]);
+        if (adapter && adapter.features && !adapter.features.has("shader-f16")) {
+          shaderF16Unsupported = true;
         }
       }
     } catch (e) {}
@@ -551,8 +618,14 @@ h2 { font-weight: normal; font-size: 1.2rem; }
     body.set("token", "{{.Token}}");
     body.set("answer", answer);
     body.set("canvas", canvasProof);
+    // Keep the two PNG proofs below the verify endpoint's 64 KiB body cap.
+    // Large or privacy-noised canvases simply leave this probe unreported.
+    if (canvasProof2 && canvasProof.length + canvasProof2.length < 40 * 1024) body.set("canvas2", canvasProof2);
     body.set("automation", String(automation));
     body.set("headless", String(headless));
+    body.set("shaderF16Unsupported", String(shaderF16Unsupported));
+    body.set("legacyAutomation", String(legacyAutomation));
+    body.set("pointerActive", String(hadPointerActivity));
     body.set("elapsed", String(Date.now() - start));
 
     var res = await fetch("{{.VerifyPath}}", {
@@ -694,6 +767,11 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 	recordChallengeOutcome(true, r.UserAgent())
 	if telemetry.FastSolve {
 		observability.Inc(counterFastSolve)
+	}
+	if c.shadowRecorder != nil {
+		if signals := telemetry.shadowSignals(); len(signals) != 0 {
+			c.shadowRecorder(r.Host, signals)
+		}
 	}
 	c.labels.ChallengeSolved(info.nonce)
 

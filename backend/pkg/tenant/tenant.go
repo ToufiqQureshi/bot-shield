@@ -157,6 +157,20 @@ func (s *Store) GetByHost(host string) (*Tenant, error) {
 	return nil, ErrTenantNotFound
 }
 
+// GetCachedByHost returns an exact, already loaded tenant without database
+// access. Challenge shadow evidence uses it on the verify path so an attacker
+// cannot turn optional telemetry into a database lookup for arbitrary hosts.
+func (s *Store) GetCachedByHost(host string) *Tenant {
+	host = canonicalHost(host)
+	if host == "" {
+		return nil
+	}
+	s.mu.RLock()
+	t := s.byHost[host]
+	s.mu.RUnlock()
+	return t
+}
+
 func (s *Store) negativeHostFresh(host string, now time.Time) bool {
 	s.mu.RLock()
 	expires, ok := s.negativeHost[host]

@@ -511,6 +511,13 @@ Checked 2026-09-22. Prices and vendor behaviour change — re-verify.
 
 ## Related
 
+The challenge's four new browser probes make no external network call and
+add no server-side image decode. WebGPU adapter discovery is bounded to
+100 ms on the client; the second canvas proof is only sent when both encoded
+proofs total under 40 KiB. Shadow evidence uses the existing 1,000-entry
+per-tenant ring and an exact cached host lookup, with no database lookup in
+the verify path. Measure browser solve time and payload size on pilot traffic.
+
 - `docs/WHAT_IS_BUILT.md` — what actually works today
 - `docs/ARCHITECTURE.md` — the request path this deploys
 - `docs/LEARNED_SCORING.md` — why `-collect-labels` stays off during testing

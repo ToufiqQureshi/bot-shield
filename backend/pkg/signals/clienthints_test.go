@@ -34,6 +34,36 @@ func TestShadowSignalsClientHintVersionMismatch(t *testing.T) {
 	}
 }
 
+func TestShadowSignalsGreaseBrandMissing(t *testing.T) {
+	const chromeUA = "Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36"
+	cases := []struct {
+		name string
+		ua   string
+		hint string
+		want bool
+	}{
+		{"real chrome with grease", chromeUA, `"Not/A)Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"`, false},
+		{"grease alternate spelling", chromeUA, `"Not;A=Brand";v="24", "Chromium";v="120"`, false},
+		{"grease dot spelling", chromeUA, `"Not.A/Brand";v="99", "Chromium";v="120"`, false},
+		{"fabricated header no grease", chromeUA, `"Chromium";v="120", "Google Chrome";v="120"`, true},
+		{"single brand no grease", chromeUA, `"Chromium";v="120"`, true},
+		{"missing hint entirely", chromeUA, "", false},
+		{"firefox exempt", "Mozilla/5.0 Firefox/120.0", `"Chromium";v="120"`, false},
+		{"crawler exempt", "Googlebot Chrome/120.0", `"Chromium";v="120"`, false},
+		{"grease only, no real brand", chromeUA, `"Not/A)Brand";v="8"`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := make(http.Header)
+			h.Set("Sec-CH-UA", tc.hint)
+			fired := slices.Contains(ShadowSignals(RequestFacts{UA: tc.ua, Header: h}), "client_hint_missing_grease_brand")
+			if fired != tc.want {
+				t.Fatalf("grease-missing = %v, want %v", fired, tc.want)
+			}
+		})
+	}
+}
+
 func TestShadowSignalsPlatformAndMobileConsistency(t *testing.T) {
 	cases := []struct {
 		name, ua, platform, mobile string

@@ -70,10 +70,37 @@ func containsAny(s string, subs ...string) bool {
 // reported. Anything malformed makes parseTelemetry report false, so the
 // caller treats it as a failed solve rather than guessing a default.
 type solveTelemetry struct {
-	Automation bool
-	Headless   bool
-	ElapsedMS  int
-	FastSolve  bool
+	Automation           bool
+	Headless             bool
+	ElapsedMS            int
+	FastSolve            bool
+	ShaderF16Unsupported bool
+	LegacyAutomation     bool
+	PointerActive        bool
+	PointerReported      bool
+	CanvasDuplicate      bool
+}
+
+// A pointer absence is only worth counting after a full second of solve time.
+// Shorter solves leave little opportunity for a person to interact. This is
+// still observational: a real user can leave the pointer motionless for longer.
+const pointerObservationMillis = 1000
+
+func (t solveTelemetry) shadowSignals() []string {
+	var signals []string
+	if t.ShaderF16Unsupported {
+		signals = append(signals, "challenge_shader_f16_unsupported")
+	}
+	if t.CanvasDuplicate {
+		signals = append(signals, "challenge_canvas_duplicate")
+	}
+	if t.PointerReported && !t.PointerActive && t.ElapsedMS >= pointerObservationMillis {
+		signals = append(signals, "challenge_pointer_activity_absent")
+	}
+	if t.LegacyAutomation {
+		signals = append(signals, "challenge_legacy_automation_key")
+	}
+	return signals
 }
 
 // parseTelemetry validates the client's form fields. Booleans must be the
@@ -105,7 +132,34 @@ func parseTelemetry(form url.Values) (solveTelemetry, bool) {
 		t.ElapsedMS = ms
 	}
 	t.FastSolve = elapsed != "" && t.ElapsedMS < fastSolveMillis
+	if t.ShaderF16Unsupported, _, ok = optionalBool(form, "shaderF16Unsupported"); !ok {
+		return solveTelemetry{}, false
+	}
+	if t.LegacyAutomation, _, ok = optionalBool(form, "legacyAutomation"); !ok {
+		return solveTelemetry{}, false
+	}
+	if t.PointerActive, t.PointerReported, ok = optionalBool(form, "pointerActive"); !ok {
+		return solveTelemetry{}, false
+	}
+	if second, exists := form["canvas2"]; exists {
+		if len(second) != 1 || !strings.HasPrefix(second[0], "data:image/png;base64,") || len(second[0]) > maxCanvasProofLen {
+			return solveTelemetry{}, false
+		}
+		t.CanvasDuplicate = second[0] == form.Get("canvas")
+	}
 	return t, true
+}
+
+func optionalBool(form url.Values, field string) (value, reported, valid bool) {
+	values, exists := form[field]
+	if !exists {
+		return false, false, true
+	}
+	if len(values) != 1 || values[0] == "" {
+		return false, true, false
+	}
+	value, valid = parseBoolField(values[0])
+	return value, true, valid
 }
 
 func parseBoolField(v string) (bool, bool) {

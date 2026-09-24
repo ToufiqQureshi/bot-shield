@@ -427,6 +427,31 @@ func TestChallengePageDetectsAdvancedAutomation(t *testing.T) {
 	}
 }
 
+// TestChallengePageDetectsGPUPlatformMismatch: the WebGL renderer-vs-OS
+// cross-check is computed entirely in JS the Go tests never execute — the
+// same blind spot TestChallengePageDetectsAdvancedAutomation exists for.
+// This is the only thing that would catch a future edit silently deleting
+// it from the served page.
+func TestChallengePageDetectsGPUPlatformMismatch(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, challengePath, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	for _, marker := range []string{
+		`Direct3D|\bD3D(?:9|11|12)\b`,
+		`Metal Renderer|Apple GPU|Apple M[0-9]`,
+		`Adreno|Mali-|PowerVR Rogue`,
+	} {
+		if !strings.Contains(body, marker) {
+			t.Errorf("challenge page missing GPU-platform mismatch check %q", marker)
+		}
+	}
+}
+
 // TestChallengePageObfuscatesAutomationTells: the classic tell property
 // names (cdc_..., __playwright, __puppeteer, __selenium_unwrapped, ...)
 // must not appear in the served page as plain text — a scraper author's
@@ -453,6 +478,14 @@ func TestChallengePageObfuscatesAutomationTells(t *testing.T) {
 		"callPhantom",
 		"_phantom",
 		"__nightmare",
+		"_Selenium_IDE_Recorder", "_selenium", "calledSelenium", "__webdriverFunc",
+		"__lastWatirAlert", "__lastWatirConfirm", "__lastWatirPrompt",
+		"ChromeDriverw", "awesomium", "RunPerfTest", "CefSharp", "fmget_targets", "geb",
+		"__phantomas", "wdioElectron", "webdriver-evaluate", "webdriverCommand",
+		"webdriver-evaluate-response", "selenium-evaluate", "__selenium_evaluate",
+		"__webdriver_script_fn", "__webdriver_script_func", "__webdriver_script_function",
+		"__fxdriver_evaluate", "__driver_unwrapped", "__webdriver_unwrapped",
+		"__fxdriver_unwrapped", "__$webdriverAsyncExecutor",
 	}
 	for _, tell := range plaintextTells {
 		if strings.Contains(body, tell) {
@@ -462,5 +495,139 @@ func TestChallengePageObfuscatesAutomationTells(t *testing.T) {
 		if !strings.Contains(body, encoded) {
 			t.Errorf("challenge page missing encoded form of %q (want %q)", tell, encoded)
 		}
+	}
+}
+
+func TestChallengePageIncludesShadowDetectionProbes(t *testing.T) {
+	c := newChallenge(t)
+	rec := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, challengePath, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("challenge page status = %d", rec.Code)
+	}
+	page := rec.Body.String()
+	for _, marker := range []string{
+		`adapter.features.has("shader-f16")`,
+		`body.set("shaderF16Unsupported", String(shaderF16Unsupported))`,
+		`body.set("canvas2", canvasProof2)`,
+		`document.addEventListener("pointermove", markActivity`,
+		`body.set("pointerActive", String(hadPointerActivity))`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Errorf("challenge page missing detection probe %q", marker)
+		}
+	}
+}
+
+func TestChallengeShadowSignalsAreRecordedWithoutRejecting(t *testing.T) {
+	for _, tc := range []struct {
+		name, field, value, signal string
+	}{
+		{"webgpu", "shaderF16Unsupported", "true", "challenge_shader_f16_unsupported"},
+		{"canvas stub", "canvas2", validCanvas(), "challenge_canvas_duplicate"},
+		{"pointer absent", "pointerActive", "false", "challenge_pointer_activity_absent"},
+		{"legacy automation", "legacyAutomation", "true", "challenge_legacy_automation_key"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newChallenge(t)
+			var gotHost string
+			var gotSignals []string
+			c.SetShadowRecorder(func(host string, signals []string) {
+				gotHost, gotSignals = host, append([]string(nil), signals...)
+			})
+			h := c.Handler()
+			token, nonce, difficulty := fetchPage(t, h, challengePath)
+			form := url.Values{
+				"token": {token}, "answer": {solvePoW(nonce, difficulty)},
+				"canvas": {validCanvas()}, "automation": {"false"},
+				"headless": {"false"}, "elapsed": {"1500"},
+			}
+			form.Set(tc.field, tc.value)
+			req := httptest.NewRequest(http.MethodPost, verifyPath, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusSeeOther {
+				t.Fatalf("shadow signal blocked valid solve: status %d, body %s", rec.Code, rec.Body.String())
+			}
+			if gotHost != req.Host || len(gotSignals) != 1 || gotSignals[0] != tc.signal {
+				t.Fatalf("shadow evidence: host=%q signals=%q, want %q", gotHost, gotSignals, tc.signal)
+			}
+		})
+	}
+}
+
+func TestChallengeMalformedShadowTelemetryIsRejected(t *testing.T) {
+	for _, field := range []string{"shaderF16Unsupported", "pointerActive", "legacyAutomation"} {
+		t.Run(field, func(t *testing.T) {
+			c := newChallenge(t)
+			h := c.Handler()
+			token, nonce, difficulty := fetchPage(t, h, challengePath)
+			form := url.Values{
+				"token": {token}, "answer": {solvePoW(nonce, difficulty)},
+				"canvas": {validCanvas()}, "automation": {"false"}, "headless": {"false"},
+			}
+			form.Set(field, "yes")
+			req := httptest.NewRequest(http.MethodPost, verifyPath, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("malformed %s status=%d, want 400", field, rec.Code)
+			}
+		})
+	}
+}
+
+func TestChallengeShadowEvidenceNeedsValidCompletedSolve(t *testing.T) {
+	c := newChallenge(t)
+	called := false
+	c.SetShadowRecorder(func(string, []string) { called = true })
+	h := c.Handler()
+	token, nonce, difficulty := fetchPage(t, h, challengePath)
+	form := url.Values{
+		"token": {token}, "answer": {wrongPoW(nonce, difficulty)},
+		"canvas": {validCanvas()}, "automation": {"false"},
+		"shaderF16Unsupported": {"true"},
+	}
+	req := httptest.NewRequest(http.MethodPost, verifyPath, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || called {
+		t.Fatalf("bad solve: status=%d shadow callback=%v", rec.Code, called)
+	}
+}
+
+func TestChallengePointerAbsenceNeedsReportedLongSolve(t *testing.T) {
+	for _, tc := range []struct {
+		name, elapsed, pointer string
+	}{
+		{"short", "999", "false"},
+		{"active", "1500", "true"},
+		{"old cached page", "1500", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newChallenge(t)
+			called := false
+			c.SetShadowRecorder(func(string, []string) { called = true })
+			h := c.Handler()
+			token, nonce, difficulty := fetchPage(t, h, challengePath)
+			form := url.Values{
+				"token": {token}, "answer": {solvePoW(nonce, difficulty)},
+				"canvas": {validCanvas()}, "automation": {"false"},
+				"headless": {"false"}, "elapsed": {tc.elapsed},
+			}
+			if tc.pointer != "" {
+				form.Set("pointerActive", tc.pointer)
+			}
+			req := httptest.NewRequest(http.MethodPost, verifyPath, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusSeeOther || called {
+				t.Fatalf("neutral pointer case: status=%d shadow callback=%v", rec.Code, called)
+			}
+		})
 	}
 }

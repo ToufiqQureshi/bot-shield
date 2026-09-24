@@ -232,8 +232,38 @@ plus CI gates were added.
 Gotcha: self-service DNS ownership, ACME certificates, billing and legal terms
 remain launch blockers for a hosted SaaS; this release is a managed pilot.
 
+### 2026-09-24 — GREASE-brand client-hint shadow signal
+
+`3f64e5c3` — `client_hint_missing_grease_brand` added to the client-hint
+shadow signals: a Sec-CH-UA header naming only real brands, missing
+Chromium's mandatory randomized GREASE brand, is evidence of a forged
+header. Shadow-only, same as the other client-hint candidates.
+Gotcha: none — pure header parse, no new state, mutation-checked.
+
+### 2026-09-24 — WebGL renderer-vs-OS mismatch check
+
+`0f5478b7` — Challenge page's WebGL renderer check now also flags a
+renderer naming an OS-exclusive backend (Direct3D/Metal/Adreno) that
+disagrees with the claimed platform, alongside the existing SwiftShader/
+llvmpipe headless-VM check. Same `headless` flag, same rejection path.
+Gotcha: JS-only logic, so it's tested by asserting the regex markers
+survive in the served page (mutation-verified), not by executing it.
+
 ### 2026-09-24 - session handoff report
 
 `docs/SESSION_HANDOFF_2026-09-24.md` records this session's changes, verification
 evidence, deployment and client-traffic gates, known limitations, and pre-existing
 workspace changes for the next agent. Documentation-only; no tests rerun.
+
+### 2026-09-24 — challenge browser shadow candidates
+
+`0e4b3674` — Valid challenge solves now record bounded tenant shadow evidence
+for WebGPU f16 absence, duplicate canvas output, pointer inactivity, and
+legacy automation keys; decisions remain unchanged. Tests, mutation checks,
+vet, build, lint, and a JavaScript runtime smoke check passed.
+Gotcha: exact-host evidence is skipped on a cold node until its tenant is loaded.
+
+### 2026-09-24 — DNSBL pilot scope
+
+`12115dae` — Defer DNSBL/IP reputation for the low-cost managed pilot;
+revisit after labelled client traffic shows a specific coverage gap.
