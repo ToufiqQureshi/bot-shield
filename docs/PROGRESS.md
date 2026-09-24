@@ -273,3 +273,9 @@ revisit after labelled client traffic shows a specific coverage gap.
 `5f773e98` — Scope dashboard evidence to the selected owned domain, show
 observed signals separately, and provide the non-root container a restricted
 certificate copy that the renewal hook refreshes.
+
+### 2026-09-24 — current status and documentation cleanup
+
+`c44b83d6` — Consolidate completed work, behavioural detection gaps and
+client launch gates in `CURRENT_STATUS.md`; remove obsolete snapshots and
+correct stale product and architecture claims.
