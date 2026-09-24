@@ -64,12 +64,15 @@ were also tested red before implementation and pass now. The full Go suite,
 vet, build and lint passed again after these changes.
 
 1. Obtain the actual domain, origin URL, and a server close to the origin.
-   Point the domain to the server and issue a valid TLS certificate. Keep the
+   Point the domain to the server **before** running `deploy/setup.sh`, because
+   Certbot's HTTP-01 check must reach that server. Issue a valid TLS certificate. Keep the
    origin restricted to the proxy where possible; otherwise direct-origin
    access bypasses all decisions.
 2. Fill `deploy/.env` from the example, generate each token with
    `openssl rand -hex 32`, and keep the file out of Git. Run
-   `docker compose -f deploy/docker-compose.yml config --quiet` before `up`.
+   `docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet`
+   before `up`. The Compose pilot requires PostgreSQL and Supabase URL so the
+   client dashboard cannot silently start with its API disabled.
 3. Start in `HAKAISHIELD_MODE=shadow`. Confirm TLS/JA4 varies by client,
    correct Host routes, real browser/origin functionality, health endpoint,
    Redis health, evidence authentication, restart recovery, and cert renewal.
@@ -81,6 +84,42 @@ vet, build and lint passed again after these changes.
    shadow sample supports the policy. Keep the previous Compose mode and
    image/commit available for quick rollback. Monitor 403/challenge rates,
    origin errors, Redis errors, latency and challenge solve failures.
+
+## Managed pilot domain and dashboard onboarding
+
+Self-service domain creation is intentionally disabled in the pilot. A user
+could otherwise reserve any unverified host in the unique `tenants.host` column,
+and neither ownership verification nor automatic per-domain TLS exists yet.
+The dashboard states this clearly. The operator provisions one domain using
+the host-bound `deploy/.env` configuration and the certificate issued by
+`deploy/setup.sh`.
+
+After the operator verifies ownership, DNS, TLS, origin routing and shadow
+traffic, create the client's Supabase Auth account and obtain its Auth user ID.
+On a **fresh single-client pilot database**, bind that account to the already
+running default tenant in the Supabase SQL editor:
+
+```sql
+INSERT INTO public.tenants
+    (id, host, target, mode, owner_user_id, name, status)
+VALUES
+    ('default', 'customer.example', 'https://origin.example', 'shadow',
+     '<Supabase Auth user ID>', 'customer.example', 'active');
+```
+
+Replace every example value. An existing `default` row or host conflict means
+stop and inspect the current owner; do not overwrite it. The `active` row is
+for dashboard ownership/status. Live routing still comes from the running
+proxy's `HAKAISHIELD_DOMAIN`, `HAKAISHIELD_ORIGIN` and `HAKAISHIELD_MODE`.
+Check authenticated `GET /api/v1/domains`, dashboard stats/evidence, and the
+real browser before handing credentials to the client. Configure the dashboard
+build variables and Auth redirects as described in `../dashboard/README.md`.
+
+Before routing client traffic, the operator must provide the actual pilot
+agreement, privacy notice, retention terms and working contact address for
+client review. The previous public draft pages contained unimplemented Stripe,
+refund, retention and SLA promises; the dashboard no longer presents them as
+binding documents. Public signup is invitation-only until reviewed terms exist.
 
 ## Known limits before client handoff
 

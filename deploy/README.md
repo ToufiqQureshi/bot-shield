@@ -35,7 +35,8 @@ monitor that volume; see `../docs/CLIENT_PILOT_RELEASE.md` for outage limits.
 ## First time
 
 ```bash
-# On a fresh box, as root
+# Point the domain's DNS A record at this box before requesting a certificate.
+# On a fresh box, as root:
 git clone <repo> /opt/hakaishield
 cd /opt/hakaishield
 bash deploy/setup.sh customer.example you@example.com
@@ -50,12 +51,20 @@ Then:
 ```bash
 cp deploy/.env.example deploy/.env
 $EDITOR deploy/.env                 # Set domain/origin and generate both tokens with openssl rand -hex 32
-docker compose -f deploy/docker-compose.yml config --quiet
-docker compose -f deploy/docker-compose.yml up -d --build
-docker compose -f deploy/docker-compose.yml logs -f
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs -f
 ```
 
-Point the domain's A record at the box. Keep `HAKAISHIELD_CHALLENGE_SECRET`
+Set `DATABASE_URL` and `SUPABASE_URL` as well: the client dashboard API is part
+of this pilot and Compose fails if either is missing. After TLS/origin checks,
+bind the client's Supabase Auth ID to the default tenant using the exact SQL in
+[`../docs/CLIENT_PILOT_RELEASE.md`](../docs/CLIENT_PILOT_RELEASE.md).
+Set `HAKAISHIELD_DASHBOARD_ORIGIN` to the exact HTTPS origin serving the static
+dashboard (for example `https://dashboard.example.com`, without a trailing
+slash); the API rejects arbitrary browser origins in the deployed stack.
+
+Keep the domain's A record pointed at the box. Keep `HAKAISHIELD_CHALLENGE_SECRET`
 stable across restarts; changing it invalidates active challenges and cookies.
 
 ---
@@ -73,7 +82,7 @@ curl -s -H "Authorization: Bearer $EVIDENCE_TOKEN" \
 ```
 
 Switch to `HAKAISHIELD_MODE=enforce` only once nothing legitimate is being
-caught. Then `docker compose ... up -d` again.
+caught. Then `docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d` again.
 
 ---
 
@@ -133,7 +142,7 @@ That last one is the only way to know the restart configuration is real.
 ## When something is wrong
 
 ```bash
-docker compose -f deploy/docker-compose.yml logs --tail=100 hakaishield
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs --tail=100 hakaishield
 curl -sk https://localhost/__hakaishield/healthz     # from the box itself
 openssl s_client -connect customer.example:443 -servername customer.example </dev/null 2>&1 | head -20
 ```

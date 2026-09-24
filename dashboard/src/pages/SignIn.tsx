@@ -100,7 +100,7 @@ export default function SignIn() {
           <div className="mt-6 pt-6 border-t text-center" style={{ borderColor: 'var(--border-primary)' }}>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               Don't have an account?{' '}
-              <a href="/sign-up" className="font-medium" style={{ color: 'var(--accent-blue)' }}>Sign up</a>
+              <a href="/contact" className="font-medium" style={{ color: 'var(--accent-blue)' }}>Request pilot access</a>
             </p>
           </div>
         </div>

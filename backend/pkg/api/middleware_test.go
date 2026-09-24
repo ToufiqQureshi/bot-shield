@@ -178,3 +178,18 @@ func TestRequireAuth_OptionsPassesWithoutToken(t *testing.T) {
 		t.Fatal("OPTIONS response missing CORS headers")
 	}
 }
+
+func TestRequireAuth_UsesConfiguredDashboardOrigin(t *testing.T) {
+	t.Setenv("HAKAISHIELD_DASHBOARD_ORIGIN", "https://dashboard.example")
+	v := newTestAuth(t).verifier(t)
+	h := RequireAuth(v, func(w http.ResponseWriter, r *http.Request) {})
+	req := httptest.NewRequest(http.MethodOptions, "/anything", nil)
+	rec := httptest.NewRecorder()
+	h(rec, req)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://dashboard.example" {
+		t.Fatalf("allow origin = %q, want configured dashboard origin", got)
+	}
+	if got := rec.Header().Get("Vary"); got != "Origin" {
+		t.Fatalf("vary = %q, want Origin", got)
+	}
+}

@@ -11,7 +11,12 @@
 
 import { supabase } from './supabaseClient';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || (
+  import.meta.env.DEV ? 'http://localhost:8080/api/v1' : ''
+);
+if (!BASE_URL) {
+  throw new Error('VITE_API_BASE_URL must be set for production dashboard builds.');
+}
 
 export class ApiError extends Error {
   status: number;
@@ -82,13 +87,6 @@ export async function listDomains() {
   return request<Domain[]>('/domains');
 }
 
-export async function addDomain(domain: string, origin: string) {
-  return request<Domain>('/domains', {
-    method: 'POST',
-    body: JSON.stringify({ domain, origin }),
-  });
-}
-
 // ---- Mitigation Rules ----
 
 export interface ManagedRule {
@@ -121,40 +119,6 @@ export interface RulesResponse {
 
 export async function listRules() {
   return request<RulesResponse>('/rules');
-}
-
-export async function createRule(name: string, conditions: RuleCondition[], action: string) {
-  return request<CustomRule>('/rules/custom', {
-    method: 'POST',
-    body: JSON.stringify({ name, conditions, action }),
-  });
-}
-
-export async function toggleRule(id: string, enabled: boolean) {
-  return request<string>(`/rules/${id}/toggle`, {
-    method: 'PUT',
-    body: JSON.stringify({ enabled }),
-  });
-}
-
-// ---- Protection Settings ----
-
-export interface ProtectionSettings {
-  blockThreshold: number;
-  challengeThreshold: number;
-  challengeType: string;
-  honeypotEnabled: boolean;
-}
-
-export async function getProtectionSettings() {
-  return request<ProtectionSettings>('/settings/protection');
-}
-
-export async function updateProtectionSettings(settings: ProtectionSettings) {
-  return request<string>('/settings/protection', {
-    method: 'PUT',
-    body: JSON.stringify(settings),
-  });
 }
 
 // ---- Dashboard ----

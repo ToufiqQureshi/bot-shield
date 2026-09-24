@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/auth"
@@ -18,7 +19,16 @@ type ctxKeyUserID struct{}
 // function answers before the wrapped handler ever runs.
 func RequireAuth(verifier *auth.Verifier, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := os.Getenv("HAKAISHIELD_DASHBOARD_ORIGIN")
+		if origin == "" {
+			// Local tests and same-process development do not have a separate
+			// dashboard origin. Production Compose requires this variable.
+			origin = "*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		if origin != "*" {
+			w.Header().Set("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		if r.Method == http.MethodOptions {

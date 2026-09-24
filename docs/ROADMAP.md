@@ -7,6 +7,10 @@ counter isolation and challenge replay/deployment hardening are in the pilot
 branch. Real traffic precision/recall, live server/domain/TLS, durable evidence,
 and multi-node resilience remain open. See `CLIENT_PILOT_RELEASE.md`; do not
 advertise a 70–80% catch rate without a measured, labelled traffic sample.
+The pilot dashboard now exposes managed setup only: unverified self-service
+domain creation, misleading live-policy controls, and unimplemented billing
+claims are not available to customers. Automated ownership proof, certificate
+issuance and customer activation remain item 21 below.
 
 What's built, what's next, and why — in that order. Not a wishlist:
 every item targets a real evasion technique seen in the field

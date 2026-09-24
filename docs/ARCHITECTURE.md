@@ -10,6 +10,10 @@ cookie skips repeat low-risk puzzles while subsequent requests are rescored.
 Hosted global availability, automated tenant certificate
 issuance and durable evidence are planned architecture, not current pilot
 capabilities. See `CLIENT_PILOT_RELEASE.md`.
+The client dashboard is a separate static app with Supabase Auth and an
+authenticated Go API. The first-client domain is operator-provisioned;
+unverified customer-created routing rows and automated certificate issuance
+are not part of the pilot.
 
 This document covers the current proxy architecture and planned hosted design. Throughput and latency for a real client have not yet been measured. See `docs/ROADMAP.md` for upcoming features, `docs/DECISIONS.md` for design reasoning, and `CLAUDE.md` for engineering rules.
 

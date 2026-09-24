@@ -175,30 +175,6 @@ func ListDomains(ctx context.Context, ownerUserID string) ([]Domain, error) {
 	return out, rows.Err()
 }
 
-// CreateDomain provisions a new protected origin for ownerUserID. It
-// only writes the routing row (host, target, mode) — actually taking
-// live traffic for this host also requires tenant.Store to pick it up,
-// which happens lazily on the first request via Store.fetchFromDB, or
-// immediately if the process is restarted with this row already
-// present. There is currently no in-process "add tenant now, no
-// restart needed" path; see docs/PROGRESS.md.
-func CreateDomain(ctx context.Context, id, ownerUserID, host, target, name string) (*Domain, error) {
-	if DB == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-	const q = `INSERT INTO tenants (id, host, target, mode, owner_user_id, name, status)
-		VALUES ($1, $2, $3, 'enforce', $4, $5, 'pending_verification')
-		RETURNING id, host, target, name, status, created_at`
-	var d Domain
-	err := DB.QueryRow(ctx, q, id, host, target, ownerUserID, name).Scan(
-		&d.ID, &d.Host, &d.Target, &d.Name, &d.Status, &d.CreatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating domain: %w", err)
-	}
-	return &d, nil
-}
-
 // SampleStore writes and reads labelled traffic for pkg/decide. It is
 // the labels.Writer implementation; see docs/LEARNED_SCORING.md.
 type SampleStore struct{}
