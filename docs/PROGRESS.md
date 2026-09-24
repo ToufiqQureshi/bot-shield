@@ -254,3 +254,11 @@ survive in the served page (mutation-verified), not by executing it.
 `docs/SESSION_HANDOFF_2026-09-24.md` records this session's changes, verification
 evidence, deployment and client-traffic gates, known limitations, and pre-existing
 workspace changes for the next agent. Documentation-only; no tests rerun.
+
+### 2026-09-24 — challenge browser shadow candidates
+
+`0e4b3674` — Valid challenge solves now record bounded tenant shadow evidence
+for WebGPU f16 absence, duplicate canvas output, pointer inactivity, and
+legacy automation keys; decisions remain unchanged. Tests, mutation checks,
+vet, build, lint, and a JavaScript runtime smoke check passed.
+Gotcha: exact-host evidence is skipped on a cold node until its tenant is loaded.
