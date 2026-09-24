@@ -3,8 +3,8 @@
 **Snapshot:** 2026-09-24, branch `release/client-pilot-hardening` at
 `fdd28614` before this documentation cleanup. Read this file first for the
 handoff; `CLIENT_PILOT_RELEASE.md` is the operational release checklist,
-`SIGNAL_COVERAGE.md` is the signal inventory, and `BACKEND_IMPLEMENTATION_PLAN.md`
-is the longer-term implementation plan. Code and tests remain the final source
+`SIGNAL_COVERAGE.md` is the signal inventory, and `CLIENT_READY_IMPLEMENTATION_PLAN.md`
+is the client-ready and detection implementation plan. Code and tests remain the final source
 of truth.
 
 ## Honest product status
@@ -120,7 +120,7 @@ aggregates, dashboard editing of tenant policy, usage metering/billing, support
 operations, multi-node replay/failover, load/soak testing, and reviewed legal
 documents remain. These are requirements for a self-service hosted product,
 not capabilities of the managed single-client pilot. The detailed backlog is
-in `BACKEND_IMPLEMENTATION_PLAN.md` and `ROADMAP.md`.
+in `CLIENT_READY_IMPLEMENTATION_PLAN.md` and `ROADMAP.md`.
 
 ## Verification actually completed
 
@@ -141,8 +141,8 @@ host, or measured bot-catch test has passed.
 This file replaces the dated `SESSION_HANDOFF_2026-09-24.md`. The generic
 `go_expert.txt` tool list and obsolete Phase 1 review/Phase 2 status snapshots
 were removed; their lasting decisions and open work are recorded here, in the
-implementation plan, the topic docs, and Git history. The Phase 1 API contract
-is consolidated into `BACKEND_IMPLEMENTATION_PLAN.md`.
+implementation plan, the topic docs, and Git history. Consult the source code
+and Git history for the older Phase 1 API contract.
 
 For the next session: read `CLAUDE.md` and `AGENT.md`, then this file and
 `CLIENT_PILOT_RELEASE.md`; run `git status` and check the release branch before
