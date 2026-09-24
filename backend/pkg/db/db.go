@@ -41,13 +41,16 @@ func Init(databaseURL string) error {
 		return fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	if err:=InitSchema(ctx,pool); err!=nil { pool.Close(); return err }
+	if err := InitSchema(ctx, pool); err != nil {
+		pool.Close()
+		return err
+	}
 	DB = pool
 	return nil
 }
 
 // InitSchema applies additive startup migrations to the selected database.
-func InitSchema(ctx context.Context,pool *pgxpool.Pool) error {
+func InitSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS tenants (
 		id VARCHAR(255) PRIMARY KEY,
