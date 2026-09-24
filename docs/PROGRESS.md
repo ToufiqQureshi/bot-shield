@@ -279,3 +279,11 @@ certificate copy that the renewal hook refreshes.
 `c44b83d6` — Consolidate completed work, behavioural detection gaps and
 client launch gates in `CURRENT_STATUS.md`; remove obsolete snapshots and
 correct stale product and architecture claims.
+
+### 2026-09-24 — client-ready detection plan
+
+`ea136178` — Sequence the managed-client launch, fifteen reviewed detection
+tracks, `pkg/decide` evidence gates, and cloud-cost controls in
+`CLIENT_READY_IMPLEMENTATION_PLAN.md`.
+Gotcha: 80% blocked bots requires measured hard-block recall on independent
+labels; challenges cannot be counted as blocks.
