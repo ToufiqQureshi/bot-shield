@@ -240,6 +240,15 @@ Chromium's mandatory randomized GREASE brand, is evidence of a forged
 header. Shadow-only, same as the other client-hint candidates.
 Gotcha: none — pure header parse, no new state, mutation-checked.
 
+### 2026-09-24 — WebGL renderer-vs-OS mismatch check
+
+`0f5478b7` — Challenge page's WebGL renderer check now also flags a
+renderer naming an OS-exclusive backend (Direct3D/Metal/Adreno) that
+disagrees with the claimed platform, alongside the existing SwiftShader/
+llvmpipe headless-VM check. Same `headless` flag, same rejection path.
+Gotcha: JS-only logic, so it's tested by asserting the regex markers
+survive in the served page (mutation-verified), not by executing it.
+
 ### 2026-09-24 - session handoff report
 
 `docs/SESSION_HANDOFF_2026-09-24.md` records this session's changes, verification
