@@ -262,3 +262,8 @@ for WebGPU f16 absence, duplicate canvas output, pointer inactivity, and
 legacy automation keys; decisions remain unchanged. Tests, mutation checks,
 vet, build, lint, and a JavaScript runtime smoke check passed.
 Gotcha: exact-host evidence is skipped on a cold node until its tenant is loaded.
+
+### 2026-09-24 — DNSBL pilot scope
+
+`12115dae` — Defer DNSBL/IP reputation for the low-cost managed pilot;
+revisit after labelled client traffic shows a specific coverage gap.
