@@ -1800,3 +1800,18 @@ timeout and the canvas pair is sent only below 40 KiB. Per-tenant evidence
 uses an already loaded exact host, avoiding a database call from verify.
 On a cold second node or wildcard development tenant, shadow evidence may be
 absent.
+
+---
+
+## Defer DNSBL for the low-cost pilot — 2026-09-24
+
+**Decision:** launch the managed pilot without a DNSBL or external IP
+reputation provider. The owner prioritised keeping initial costs low while
+the domain and deployment are still being arranged.
+
+**Why:** a live commercial feed adds recurring cost and licensing work;
+a self-hosted list adds refresh and validation operations. Existing JA4,
+velocity, challenge, and honeypot signals already provide the first pilot
+baseline. Revisit after labelled traffic shows whether IP reputation would
+add useful coverage without harming legitimate shared-IP visitors. Any later
+provider choice must be reviewed for terms, cost, latency, and false positives.
