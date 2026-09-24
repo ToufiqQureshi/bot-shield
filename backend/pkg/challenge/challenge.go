@@ -543,6 +543,21 @@ h2 { font-weight: normal; font-size: 1.2rem; }
           if (/SwiftShader|llvmpipe|VirtualBox|Mesa OffScreen/i.test(rend)) {
             headless = true;
           }
+          // A renderer string only exists on one platform's real graphics
+          // stack. A scraper that forges navigator.userAgent to claim a
+          // different OS cannot also forge the GPU driver underneath it,
+          // because that string comes from the actual machine, not from
+          // anything JS sets. Only fires when both sides are legible, so a
+          // stripped or unusual navigator.platform stays neutral rather than
+          // false-flagging.
+          var claimedOS = navigator.platform + " " + navigator.userAgent;
+          if (/Direct3D|\bD3D(?:9|11|12)\b/i.test(rend) && !/Win/i.test(claimedOS)) {
+            headless = true;
+          } else if (/Metal Renderer|Apple GPU|Apple M[0-9]/i.test(rend) && !/Mac|iPhone|iPad|iPod/i.test(claimedOS)) {
+            headless = true;
+          } else if (/Adreno|Mali-|PowerVR Rogue/i.test(rend) && !/Android/i.test(claimedOS)) {
+            headless = true;
+          }
         }
       }
     } catch (e) {}

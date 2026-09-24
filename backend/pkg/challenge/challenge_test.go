@@ -427,6 +427,31 @@ func TestChallengePageDetectsAdvancedAutomation(t *testing.T) {
 	}
 }
 
+// TestChallengePageDetectsGPUPlatformMismatch: the WebGL renderer-vs-OS
+// cross-check is computed entirely in JS the Go tests never execute — the
+// same blind spot TestChallengePageDetectsAdvancedAutomation exists for.
+// This is the only thing that would catch a future edit silently deleting
+// it from the served page.
+func TestChallengePageDetectsGPUPlatformMismatch(t *testing.T) {
+	c := newChallenge(t)
+	h := c.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, challengePath, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	for _, marker := range []string{
+		`Direct3D|\bD3D(?:9|11|12)\b`,
+		`Metal Renderer|Apple GPU|Apple M[0-9]`,
+		`Adreno|Mali-|PowerVR Rogue`,
+	} {
+		if !strings.Contains(body, marker) {
+			t.Errorf("challenge page missing GPU-platform mismatch check %q", marker)
+		}
+	}
+}
+
 // TestChallengePageObfuscatesAutomationTells: the classic tell property
 // names (cdc_..., __playwright, __puppeteer, __selenium_unwrapped, ...)
 // must not appear in the served page as plain text — a scraper author's
