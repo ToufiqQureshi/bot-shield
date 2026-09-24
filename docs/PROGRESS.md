@@ -267,3 +267,9 @@ Gotcha: exact-host evidence is skipped on a cold node until its tenant is loaded
 
 `12115dae` — Defer DNSBL/IP reputation for the low-cost managed pilot;
 revisit after labelled client traffic shows a specific coverage gap.
+
+### 2026-09-24 — dashboard evidence and pilot TLS audit
+
+`5f773e98` — Scope dashboard evidence to the selected owned domain, show
+observed signals separately, and provide the non-root container a restricted
+certificate copy that the renewal hook refreshes.
