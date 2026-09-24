@@ -231,3 +231,9 @@ Supabase and exact dashboard-origin settings, and dashboard/Go regression tests
 plus CI gates were added.
 Gotcha: self-service DNS ownership, ACME certificates, billing and legal terms
 remain launch blockers for a hosted SaaS; this release is a managed pilot.
+
+### 2026-09-24 - session handoff report
+
+`docs/SESSION_HANDOFF_2026-09-24.md` records this session's changes, verification
+evidence, deployment and client-traffic gates, known limitations, and pre-existing
+workspace changes for the next agent. Documentation-only; no tests rerun.
