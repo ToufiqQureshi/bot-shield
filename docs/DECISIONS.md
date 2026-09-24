@@ -1800,6 +1800,10 @@ timeout and the canvas pair is sent only below 40 KiB. Per-tenant evidence
 uses an already loaded exact host, avoiding a database call from verify.
 On a cold second node or wildcard development tenant, shadow evidence may be
 absent.
+The proxy's initial shadow mode serves no challenge page, so it produces no
+real visitor observations for these four challenge-only probes. Evaluation
+requires a separately reviewed challenge cohort; server-side header and
+traffic shadow signals continue to collect normally in shadow mode.
 
 ---
 

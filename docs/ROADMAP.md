@@ -440,7 +440,10 @@ dimensions and nonblank pixels (item 28 follow-up). A scripted client can
 still forge a PNG, so solves remain unverified candidate observations.
 The challenge also records four browser-reported candidates as shadow-only
 evidence after valid solves; they require real client traffic review before
-any policy promotion. DNSBL/IP reputation is deferred for the low-cost pilot;
+any policy promotion. The initial proxy shadow mode never serves challenges,
+so these four candidates will have no real-visitor samples during that phase.
+They need a separately reviewed challenge cohort before promotion. DNSBL/IP
+reputation is deferred for the low-cost pilot;
 no provider or request-path query is configured. Revisit after labelled client
 traffic shows a measurable gap that an IP list can close.
 

@@ -12,21 +12,29 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!selectedDomain) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+    const controller = new AbortController();
     setStats(null);
     setOffenders([]);
     setError(null);
-    Promise.all([getStats(selectedDomain.id), getTopOffenders()])
+    if (!selectedDomain) {
+      setLoading(false);
+      return () => controller.abort();
+    }
+    setLoading(true);
+    Promise.all([getStats(selectedDomain.id, controller.signal), getTopOffenders(selectedDomain.id, controller.signal)])
       .then(([s, o]) => {
-        setStats(s);
-        setOffenders(o);
+        if (!controller.signal.aborted) {
+          setStats(s);
+          setOffenders(o);
+        }
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load dashboard data.'))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err instanceof ApiError ? err.message : 'Could not load dashboard data.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [selectedDomain]);
 
   if (!domainsLoading && !selectedDomain) {

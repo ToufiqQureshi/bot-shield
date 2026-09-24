@@ -30,6 +30,8 @@ code was copied into the product.
   only after resolving a tenant. Replay and short-secret regressions pass.
 - Stable secret, evidence token, public host and origin are required by Compose.
   Evidence token/secret travel in environment variables, not process arguments.
+- Certbot's root-only private key is copied to a restricted root:65532 directory
+  for the non-root container. The renewal hook refreshes the copy before restart.
 - Redis keeps nonce keys until TTL (`noeviction`) and persists them in an AOF
   volume. At capacity, the local nonce store rejects new solves.
 - Chromium client-hint mismatch appears as `shadowSignals` in evidence and
@@ -132,6 +134,10 @@ binding documents. Public signup is invitation-only until reviewed terms exist.
 - The shadow client-hint candidates have no measured precision or recall. New
   Phase 3 behavior, asset fidelity and HTTP/2 intelligence remain research
   work, not pilot protection claims.
+- The four challenge-page browser candidates do not run while the proxy is in
+  shadow mode, because visitors are forwarded without a challenge. They add
+  no measured detection coverage to the initial pilot; a reviewed challenge
+  cohort is needed before evaluating them against real visitors.
 - No live origin, domain, certificate, load test or real-browser smoke result
   exists in this workspace yet. A local image build is only a packaging check;
   the release cannot be called live until these gates run on the chosen host.

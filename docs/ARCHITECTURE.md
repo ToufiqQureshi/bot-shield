@@ -11,6 +11,8 @@ Completed challenge solves can also record bounded, per-tenant shadow evidence
 for optional WebGPU f16 support, repeated canvas output, pointer inactivity,
 and legacy automation globals. Verify uses a cached exact-host tenant lookup;
 unloaded tenants yield no challenge shadow record on that node.
+The proxy's shadow mode forwards without serving a challenge, so these
+challenge-only observations appear only when an enforced challenge is solved.
 Hosted global availability, automated tenant certificate
 issuance and durable evidence are planned architecture, not current pilot
 capabilities. See `CLIENT_PILOT_RELEASE.md`.

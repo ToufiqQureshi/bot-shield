@@ -136,11 +136,12 @@ export interface DashboardStats {
 // getStats talks to the authenticated stats endpoint. Its response is raw
 // JSON (rather than the CRUD API envelope), so it keeps a small dedicated
 // fetch while still attaching the current Supabase session token.
-export async function getStats(tenantId: string): Promise<DashboardStats> {
+export async function getStats(tenantId: string, signal?: AbortSignal): Promise<DashboardStats> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   const res = await fetch(`${BASE_URL}/dashboard/stats?tenant=${encodeURIComponent(tenantId)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    signal,
   });
   if (!res.ok) {
     throw new ApiError(res.status, `Could not load stats (${res.status})`);
@@ -154,19 +155,20 @@ export interface TopOffender {
   blocked: number;
 }
 
-export async function getTopOffenders() {
-  return request<TopOffender[]>('/dashboard/top-offenders');
+export async function getTopOffenders(tenantId: string, signal?: AbortSignal) {
+  return request<TopOffender[]>(`/dashboard/top-offenders?tenant=${encodeURIComponent(tenantId)}`, { signal });
 }
 
 export interface EvidenceEntry {
   time: string;
   ja4: string;
   signals: string[];
+  shadowSignals?: string[];
   score: number;
   decision: string;
   enforced: boolean;
 }
 
-export async function getEvidenceLogs() {
-  return request<EvidenceEntry[]>('/dashboard/evidence-logs');
+export async function getEvidenceLogs(tenantId: string, signal?: AbortSignal) {
+  return request<EvidenceEntry[]>(`/dashboard/evidence-logs?tenant=${encodeURIComponent(tenantId)}`, { signal });
 }

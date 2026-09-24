@@ -3,6 +3,9 @@
 React/Vite dashboard for the managed single-client pilot. It displays real
 domain status, request totals, evidence and saved rule drafts from the Go API.
 It does not activate domains, process payments, or change live policy.
+Evidence rows distinguish scored signals from yellow "Observed" candidates.
+The proxy's shadow mode does not serve challenge pages, so challenge-only
+observations appear only for visitors who later solve an enforced challenge.
 
 ## Local development
 
