@@ -25,7 +25,7 @@ func TestCrawlPatternNoRedisFailsOpen(t *testing.T) {
 	rdb = nil
 	defer func() { rdb = prev }()
 
-	if CrawlPatternSuspected(RequestFacts{IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: "/a"}) {
+	if CrawlPatternSuspected(RequestFacts{Tenant: "test-tenant", IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: "/a"}) {
 		t.Fatal("CrawlPatternSuspected with nil rdb must fail open (false)")
 	}
 }
@@ -36,7 +36,7 @@ func TestCrawlPatternNoRedisFailsOpen(t *testing.T) {
 func TestCrawlPatternExemptsNonBrowser(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxDistinctPaths+10; i++ {
-		f := RequestFacts{IP: "1.2.3.4", UA: "curl/8.6.0", Path: fmt.Sprintf("/p/%d", i)}
+		f := RequestFacts{Tenant: "test-tenant", IP: "1.2.3.4", UA: "curl/8.6.0", Path: fmt.Sprintf("/p/%d", i)}
 		if CrawlPatternSuspected(f) {
 			t.Fatal("a non-browser-claiming client must stay exempt from crawl detection")
 		}
@@ -48,7 +48,7 @@ func TestCrawlPatternExemptsNonBrowser(t *testing.T) {
 func TestCrawlPatternExemptsAssets(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxDistinctPaths+10; i++ {
-		f := RequestFacts{IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/static/%d.js", i)}
+		f := RequestFacts{Tenant: "test-tenant", IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/static/%d.js", i)}
 		if CrawlPatternSuspected(f) {
 			t.Fatal("asset requests must not count toward distinct page paths")
 		}
@@ -58,7 +58,7 @@ func TestCrawlPatternExemptsAssets(t *testing.T) {
 func TestCrawlPatternUnderLimit(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxDistinctPaths; i++ {
-		f := RequestFacts{IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/p/%d", i)}
+		f := RequestFacts{Tenant: "test-tenant", IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/p/%d", i)}
 		if CrawlPatternSuspected(f) {
 			t.Fatalf("page %d: fired before exceeding maxDistinctPaths=%d", i, maxDistinctPaths)
 		}
@@ -71,7 +71,7 @@ func TestCrawlPatternFiresOnManyDistinctPaths(t *testing.T) {
 	newTestRedis(t)
 	var last bool
 	for i := 0; i < maxDistinctPaths+1; i++ {
-		last = CrawlPatternSuspected(RequestFacts{IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/p/%d", i)})
+		last = CrawlPatternSuspected(RequestFacts{Tenant: "test-tenant", IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/p/%d", i)})
 	}
 	if !last {
 		t.Fatalf("want crawl pattern after exceeding maxDistinctPaths=%d", maxDistinctPaths)
@@ -84,7 +84,7 @@ func TestCrawlPatternFiresOnManyDistinctPaths(t *testing.T) {
 func TestCrawlPatternRepeatedSamePathDoesNotFire(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxDistinctPaths*3; i++ {
-		if CrawlPatternSuspected(RequestFacts{IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: "/pricing"}) {
+		if CrawlPatternSuspected(RequestFacts{Tenant: "test-tenant", IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: "/pricing"}) {
 			t.Fatal("repeated requests to one path must not look like a crawl")
 		}
 	}
@@ -93,9 +93,23 @@ func TestCrawlPatternRepeatedSamePathDoesNotFire(t *testing.T) {
 func TestCrawlPatternIsolatedPerIP(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxDistinctPaths+1; i++ {
-		CrawlPatternSuspected(RequestFacts{IP: "9.9.9.9", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/p/%d", i)})
+		CrawlPatternSuspected(RequestFacts{Tenant: "test-tenant", IP: "9.9.9.9", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/p/%d", i)})
 	}
-	if CrawlPatternSuspected(RequestFacts{IP: "1.1.1.1", UA: "Mozilla/5.0 Chrome/120.0", Path: "/p/0"}) {
+	if CrawlPatternSuspected(RequestFacts{Tenant: "test-tenant", IP: "1.1.1.1", UA: "Mozilla/5.0 Chrome/120.0", Path: "/p/0"}) {
 		t.Fatal("a fresh IP must not inherit another IP's crawl count")
+	}
+}
+
+func TestCrawlPatternIsolatedPerTenant(t *testing.T) {
+	newTestRedis(t)
+	var last bool
+	for i := 0; i < maxDistinctPaths+1; i++ {
+		last = CrawlPatternSuspected(RequestFacts{Tenant: "tenant-a", IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: fmt.Sprintf("/p/%d", i)})
+	}
+	if !last {
+		t.Fatal("tenant A's crawl must fire")
+	}
+	if CrawlPatternSuspected(RequestFacts{Tenant: "tenant-b", IP: "1.2.3.4", UA: "Mozilla/5.0 Chrome/120.0", Path: "/p/0"}) {
+		t.Fatal("tenant B inherited tenant A's crawl counter")
 	}
 }

@@ -1,6 +1,15 @@
 # hakaishield Architecture
 
-This document details the enterprise-grade architecture of HakaiShield, designed to process high-volume traffic with near-zero latency. See `docs/ROADMAP.md` for upcoming enterprise features, `docs/DECISIONS.md` for architectural reasoning, and `CLAUDE.md` for our strict enterprise engineering rules.
+**Pilot reality (2026-09-24):** The current deploy path is one TLS-terminating
+Go proxy with a host-bound default tenant and private Redis. Velocity, JA4
+velocity and crawl counters are tenant-scoped. Redis persists nonce markers
+without eviction; on outage, nonce fallback is local to the node. A bounded
+Chromium client-hint mismatch is stored as `shadowSignals` evidence with no
+score/action effect. Hosted global availability, automated tenant certificate
+issuance and durable evidence are planned architecture, not current pilot
+capabilities. See `CLIENT_PILOT_RELEASE.md`.
+
+This document covers the current proxy architecture and planned hosted design. Throughput and latency for a real client have not yet been measured. See `docs/ROADMAP.md` for upcoming features, `docs/DECISIONS.md` for design reasoning, and `CLAUDE.md` for engineering rules.
 
 ---
 

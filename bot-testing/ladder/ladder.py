@@ -25,6 +25,22 @@ import sys
 import time
 import urllib.request
 
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Sec-CH-UA": '"Chromium";v="120", "Not(A:Brand";v="24"',
+    "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
+    "Upgrade-Insecure-Requests": "1",
+}
+
 # Each rung is (name, what it exercises, callable -> status code or None).
 # The order is deliberate: every rung adds exactly one capability over the
 # one before it, so the rung where detection stops is the answer.
@@ -47,43 +63,26 @@ def rung_requests_browser_ua(url):
     """requests claiming to be Chrome. The user agent is a lie the TLS
     handshake does not back up - this is what ua_mismatch exists for."""
     import requests
-    return requests.get(url, timeout=15, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0.0.0 Safari/537.36",
-    }).status_code
+    return requests.get(url, timeout=15, headers={"User-Agent": BROWSER_HEADERS["User-Agent"]}).status_code
 
 
 def rung_requests_full_headers(url):
     """The same lie, told properly: every header a real Chrome navigation
     sends. Header checks go quiet; the handshake still does not match."""
     import requests
-    return requests.get(url, timeout=15, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Sec-CH-UA": '"Chromium";v="120", "Not(A:Brand";v="24"',
-        "Sec-CH-UA-Mobile": "?0",
-        "Sec-CH-UA-Platform": '"Windows"',
-        "Upgrade-Insecure-Requests": "1",
-    }).status_code
+    return requests.get(url, timeout=15, headers=BROWSER_HEADERS).status_code
 
 
 def rung_crawl(url):
-    """Twelve distinct paths in quick succession, fetching no subresources.
-    A real browser never browses like this - crawl_pattern's whole point."""
+    """A browser-claiming client walks past the distinct-path threshold
+    without fetching subresources."""
     import requests
     session = requests.Session()
     last = None
-    for i in range(12):
-        last = session.get(f"{url.rstrip('/')}/page-{i}", timeout=15).status_code
-        time.sleep(0.05)
+    for i in range(75):
+        last = session.get(f"{url.rstrip('/')}/page-{i}", timeout=15,
+                           headers=BROWSER_HEADERS).status_code
+        time.sleep(0.01)
     return last
 
 
@@ -119,7 +118,7 @@ LADDER = [
     ("2. requests (default UA)",  "openly a script",                   rung_requests),
     ("3. requests + Chrome UA",   "UA lies, handshake does not",       rung_requests_browser_ua),
     ("4. requests + all headers", "header checks satisfied",           rung_requests_full_headers),
-    ("5. crawl pattern",          "12 paths, no subresources",         rung_crawl),
+    ("5. crawl pattern",          "75 paths, no subresources",         rung_crawl),
     ("6. Playwright headless",    "real engine, runs JS",              rung_playwright_headless),
     ("7. Playwright headful",     "real window, real renderer",        rung_playwright_headful),
 ]

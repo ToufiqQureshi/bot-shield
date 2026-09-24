@@ -7,6 +7,22 @@ happens; don't let it go stale silently.
 
 ---
 
+## 2026-09-24 — source review of five local reference repositories
+
+Reviewed `inspired/horizon/HARDENING.md` and its server admission flow,
+`inspired/nexus/data/common/` policy recipes, `inspired/vertex/src/server/analysis.ts`,
+`inspired/quantum/brotector.js`, and `inspired/zenith/lib/action/challenge.go`.
+The useful operational finding is that replay markers need storage without
+eviction and a stable signing key. The useful detection finding is that browser
+client hints can contradict a forged user agent, but are themselves client
+claims and require measured false-positive rates. Nexus's infrastructure and
+API carve-outs show why one global challenge policy can break crawlers and
+integrations. Quantum's debugger and prototype hooks are unsuitable for live
+visitors. See `CLIENT_PILOT_RELEASE.md` for the per-repo decision table and
+outstanding work. No code was copied.
+
+---
+
 ## Proof-of-work challenges: Anubis and FCaptcha cost model (2026-09-23)
 
 Researched for Phase 2 (adaptive challenge difficulty) to pick a difficulty

@@ -14,10 +14,9 @@ constant and quietly guts detection. Nothing errors.
 ## What goes where
 
 ```text
-DigitalOcean Basic Droplet, 2 vCPU / 4 GB, region BLR1 (Bangalore).
-$24/mo, 4 TB transfer included, $0.01/GiB after. ~5–40ms from Indian
-cities. Keep the ORIGIN in the same region, or a visitor pays that hop
-three times (see docs/DEPLOYMENT.md §3).
+One Linux server near the protected origin; size and price are chosen when
+the pilot domain and traffic estimate are known. Keep the ORIGIN nearby to
+avoid an extra long network hop (see docs/DEPLOYMENT.md §3).
 ├── hakaishield   :443, in Docker
 └── Redis         no published port; only hakaishield reaches it
 
@@ -27,9 +26,9 @@ Vercel / Pages  the dashboard. Static files, free, not in the request
                 path — so TLS termination there does not matter.
 ```
 
-Do not self-host Postgres on the same box. Redis is fine there: it holds
-velocity counters, and losing them fails the signals open rather than losing
-anything that matters.
+Do not self-host Postgres on the same box. Redis also holds spent challenge
+nonces, so Compose uses a persistent AOF volume and `noeviction`. Back up and
+monitor that volume; see `../docs/CLIENT_PILOT_RELEASE.md` for outage limits.
 
 ---
 
@@ -39,7 +38,7 @@ anything that matters.
 # On a fresh box, as root
 git clone <repo> /opt/hakaishield
 cd /opt/hakaishield
-bash deploy/setup.sh neurofiq.in you@example.com
+bash deploy/setup.sh customer.example you@example.com
 ```
 
 That installs Docker and certbot, sets a default-deny firewall open on 22/80/443,
@@ -50,12 +49,14 @@ Then:
 
 ```bash
 cp deploy/.env.example deploy/.env
-$EDITOR deploy/.env                 # EVIDENCE_TOKEN: openssl rand -hex 32
+$EDITOR deploy/.env                 # Set domain/origin and generate both tokens with openssl rand -hex 32
+docker compose -f deploy/docker-compose.yml config --quiet
 docker compose -f deploy/docker-compose.yml up -d --build
 docker compose -f deploy/docker-compose.yml logs -f
 ```
 
-Point the domain's A record at the box.
+Point the domain's A record at the box. Keep `HAKAISHIELD_CHALLENGE_SECRET`
+stable across restarts; changing it invalidates active challenges and cookies.
 
 ---
 
@@ -68,7 +69,7 @@ Watch it for a few days:
 
 ```bash
 curl -s -H "Authorization: Bearer $EVIDENCE_TOKEN" \
-  https://neurofiq.in/api/v1/dashboard/evidence | jq '.[:20]'
+  https://customer.example/api/v1/dashboard/evidence | jq '.[:20]'
 ```
 
 Switch to `HAKAISHIELD_MODE=enforce` only once nothing legitimate is being
@@ -80,7 +81,7 @@ caught. Then `docker compose ... up -d` again.
 
 ```bash
 pip install requests playwright && playwright install chromium
-python3 bot-testing/ladder/ladder.py --url https://neurofiq.in/ --token "$EVIDENCE_TOKEN"
+python3 bot-testing/ladder/ladder.py --url https://customer.example/ --token "$EVIDENCE_TOKEN"
 ```
 
 Seven rungs, each adding exactly one capability over the last — stdlib client,
@@ -118,6 +119,8 @@ sudo journalctl -u hakaishield -f
 - [ ] Renewal proven: `certbot renew --dry-run`
 - [ ] SSH restricted to your IP, not `0.0.0.0/0`
 - [ ] `EVIDENCE_TOKEN` random, and not in shell history
+- [ ] `HAKAISHIELD_CHALLENGE_SECRET` random, stable, and at least 32 bytes
+- [ ] Domain/Host and origin URL match this customer's site
 - [ ] Started in `shadow`
 - [ ] `-collect-labels` off while testing
 - [ ] Billing alert set with the host
@@ -132,7 +135,7 @@ That last one is the only way to know the restart configuration is real.
 ```bash
 docker compose -f deploy/docker-compose.yml logs --tail=100 hakaishield
 curl -sk https://localhost/__hakaishield/healthz     # from the box itself
-openssl s_client -connect neurofiq.in:443 -servername neurofiq.in </dev/null 2>&1 | head -20
+openssl s_client -connect customer.example:443 -servername customer.example </dev/null 2>&1 | head -20
 ```
 
 **Every JA4 looks identical** → something is terminating TLS in front of you.

@@ -18,11 +18,14 @@ const (
 // this request stopped?" days later, and nothing more about the
 // visitor than the decision itself already used.
 type Evidence struct {
-	Time     time.Time `json:"time"`
-	JA4      string    `json:"ja4"`
-	Signals  []string  `json:"signals"`
-	Score    int       `json:"score"`
-	Decision string    `json:"decision"`
+	Time    time.Time `json:"time"`
+	JA4     string    `json:"ja4"`
+	Signals []string  `json:"signals"`
+	// ShadowSignals are observed candidates that do not contribute to Score
+	// or Decision until measured on real traffic and explicitly promoted.
+	ShadowSignals []string `json:"shadowSignals,omitempty"`
+	Score         int      `json:"score"`
+	Decision      string   `json:"decision"`
 	// Enforced is false when the decision was only recorded, not acted
 	// on (shadow mode). Without it a reader cannot tell a real block
 	// from one that never happened.
@@ -148,6 +151,7 @@ func (t *Trail) Recent(limit int) []Evidence {
 
 func cloneEvidence(e Evidence) Evidence {
 	e.Signals = append([]string(nil), e.Signals...)
+	e.ShadowSignals = append([]string(nil), e.ShadowSignals...)
 	if e.Policy != nil {
 		p := *e.Policy
 		e.Policy = &p

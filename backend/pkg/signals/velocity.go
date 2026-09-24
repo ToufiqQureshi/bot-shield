@@ -44,16 +44,16 @@ func InitRedis(client *redis.Client) {
 // passed the JS challenge can still be rate-limited on later requests
 // (guard.go) — a solved challenge proves the client can run JS once,
 // not that every request after it is legitimate at any volume.
-func VelocityExceeded(ip, ja4, path string) bool {
-	return checkVelocitySpike(ip, path) || checkJA4VelocitySpike(ja4)
+func VelocityExceeded(tenant, ip, ja4, path string) bool {
+	return checkVelocitySpike(tenant, ip, path) || checkJA4VelocitySpike(tenant, ja4)
 }
 
 // checkVelocitySpike returns true if the IP has exceeded the rate limit
 // for its request class in the current window. Navigations and assets
 // have separate counters and limits, so a browser loading a page's
 // subresources is never mistaken for a crawler hitting many pages.
-func checkVelocitySpike(ip, path string) bool {
-	if ip == "" || !redisRequestAllowed() {
+func checkVelocitySpike(tenant, ip, path string) bool {
+	if tenant == "" || ip == "" || !redisRequestAllowed() {
 		return false
 	}
 
@@ -61,7 +61,7 @@ func checkVelocitySpike(ip, path string) bool {
 	defer cancel()
 
 	window := time.Now().UnixMilli() / int64(rateLimitMs)
-	key, limit := velocityBucket(ip, path, window)
+	key, limit := velocityBucket(tenant, ip, path, window)
 
 	pipe := rdb.Pipeline()
 	incr := pipe.Incr(ctx, key)
@@ -77,18 +77,18 @@ func checkVelocitySpike(ip, path string) bool {
 }
 
 // velocityBucket picks the counter key and its limit for a request.
-func velocityBucket(ip, path string, window int64) (string, int64) {
+func velocityBucket(tenant, ip, path string, window int64) (string, int64) {
 	if isStaticAsset(path) {
-		return fmt.Sprintf("vel:ip:%s:asset:%d", ip, window), maxAssetPerWindow
+		return fmt.Sprintf("vel:t:%d:%s:ip:%s:asset:%d", len(tenant), tenant, ip, window), maxAssetPerWindow
 	}
-	return fmt.Sprintf("vel:ip:%s:nav:%d", ip, window), maxNavPerWindow
+	return fmt.Sprintf("vel:t:%d:%s:ip:%s:nav:%d", len(tenant), tenant, ip, window), maxNavPerWindow
 }
 
 // checkJA4VelocitySpike returns true if a single non-standard JA4 fingerprint exceeds maxJA4Requests
 // across all IPs within the current rateLimitMs window. This neutralises residential proxy networks
 // where bots rotate IP on every request but keep the same underlying scraper client TLS profile.
-func checkJA4VelocitySpike(ja4 string) bool {
-	if ja4 == "" || ja4 == JA4Unreadable || !redisRequestAllowed() {
+func checkJA4VelocitySpike(tenant, ja4 string) bool {
+	if tenant == "" || ja4 == "" || ja4 == JA4Unreadable || !redisRequestAllowed() {
 		return false
 	}
 	if !hasCommonBrowserPrefixes() {
@@ -103,7 +103,7 @@ func checkJA4VelocitySpike(ja4 string) bool {
 	defer cancel()
 
 	window := time.Now().UnixMilli() / int64(rateLimitMs)
-	key := fmt.Sprintf("vel:ja4:%s:%d", ja4, window)
+	key := fmt.Sprintf("vel:t:%d:%s:ja4:%s:%d", len(tenant), tenant, ja4, window)
 
 	pipe := rdb.Pipeline()
 	incr := pipe.Incr(ctx, key)

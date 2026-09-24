@@ -30,7 +30,21 @@ Already present in `backend/`:
 - In-memory per-tenant stats/evidence and an initial lazy tenant store
   (`pkg/tenant`, `pkg/evidence`, `pkg/stats`, `pkg/db`).
 
-## Current Status Snapshot — 2026-09-22
+## Current Status Snapshot — 2026-09-24
+
+The first client pilot is being prepared on a single proxy node in `shadow`
+mode. Server/domain/TLS and representative traffic are still outstanding, so
+neither production availability nor a 70–80% bot detection rate has been
+measured. See `CLIENT_PILOT_RELEASE.md` for the release gate and reference-repo
+feature triage.
+
+Pilot hardening now scopes velocity, JA4 velocity, and crawl Redis keys to the
+tenant; retains local spent nonces until expiry even when the store is full;
+configures Redis with `noeviction` and persistent storage; pins the default
+tenant to an explicit production host; and requires stable deployment secrets.
+Public challenge issuance is closed at the mux. The first Phase 3 candidate,
+Chromium user-agent/client-hint major mismatch, is recorded in evidence as a
+shadow signal only. It cannot raise the score or change the action.
 
 Phase 0 items completed in the current backend include single-pass dynamic
 signal evaluation, bounded and boundary-safe Goodbot DNS verification,
@@ -55,7 +69,7 @@ and effective decisions. An activated revision can enforce allow, rate-limit,
 challenge, deceive, or block in `core.Guard`; account-wide legacy rules remain
 shadow-only. Policy loading is asynchronous and bounded. Activation requires
 100 evaluated requests over 30 minutes on the serving node. See
-`docs/PHASE1_POLICY.md` for the API, behavior, and rollout limits. Production
+the policy API and `CLIENT_PILOT_RELEASE.md` for behavior and rollout limits. Production
 activation still needs representative live traffic review and durable
 cross-node shadow telemetry; no such data is claimed here.
 
@@ -139,8 +153,8 @@ trust-window flattening — each went red, then restored green). Known limits:
 without it. A Phase 2 hardening follow-up decodes bounded PNG proofs,
 checks 300x150 dimensions and nonblank pixels, enforces signed attempt-cookie
 expiry on the server, and gives failed/JavaScript-disabled visitors recovery
-instructions. The local nonce fallback uses bounded FIFO eviction, avoiding
-a full 50,000-entry map scan on every verify. A forged PNG remains possible:
+instructions. The local nonce fallback retains unexpired nonces and rejects
+new solves when its 50,000-entry cap is full. A forged PNG remains possible:
 challenge solves are candidate labels only and cannot authorize model enforcement.
 
 | Feature | What will be implemented | Why it matters |

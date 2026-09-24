@@ -18,14 +18,14 @@ func TestLocalNonceStoreExpiryAndBound(t *testing.T) {
 	if s.Consume(context.Background(), "0", now.Add(time.Second), challengeMaxAge) {
 		t.Fatal("recent nonce replay accepted")
 	}
-	if !s.Consume(context.Background(), "next", now.Add(time.Second), challengeMaxAge) {
-		t.Fatal("capacity blocked a new solve")
+	if s.Consume(context.Background(), "next", now.Add(time.Second), challengeMaxAge) {
+		t.Fatal("capacity must reject a new solve instead of evicting an unexpired nonce")
 	}
 	if len(s.used) != maxUsedChallenges {
 		t.Fatalf("nonce count = %d, want %d", len(s.used), maxUsedChallenges)
 	}
-	if !s.Consume(context.Background(), "0", now.Add(time.Second), challengeMaxAge) {
-		t.Fatal("oldest nonce should have been evicted at capacity")
+	if s.Consume(context.Background(), "0", now.Add(time.Second), challengeMaxAge) {
+		t.Fatal("oldest nonce replay accepted after capacity was reached")
 	}
 	if !s.Consume(context.Background(), "expired", now.Add(challengeMaxAge+time.Second), challengeMaxAge) {
 		t.Fatal("new nonce rejected after expiry")
@@ -44,8 +44,8 @@ func BenchmarkLocalNonceStoreAtCapacity(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if !s.Consume(context.Background(), "new-"+strconv.Itoa(i), now, challengeMaxAge) {
-			b.Fatal("new nonce rejected")
+		if s.Consume(context.Background(), "new-"+strconv.Itoa(i), now, challengeMaxAge) {
+			b.Fatal("new nonce accepted while all retained nonces are unexpired")
 		}
 	}
 }

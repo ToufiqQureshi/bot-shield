@@ -211,7 +211,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// this check, one solve buys unlimited-speed access to the
 		// origin for the rest of passedMaxAge (CLAUDE.md Section 15/18 —
 		// bounded resource use, can't let a visitor exhaust the origin).
-		if signals.VelocityExceeded(ip, ja4, r.URL.Path) {
+		if signals.VelocityExceeded(tenant.ID, ip, ja4, r.URL.Path) {
 			tenant.Stats.Record(signals.DecisionBlock)
 			skip := g.skippedPolicyOpinion(tenant.ID, "challenge_solved")
 			tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"velocity_after_pass"}, Decision: signals.DecisionBlock.String(), Enforced: enforced, Policy: skip})
@@ -247,6 +247,10 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Tenant: tenant.ID,
 	}
 	evaluation := signals.Evaluate(facts)
+	shadowSignals := signals.ShadowSignals(facts)
+	if len(shadowSignals) > 0 {
+		observability.Inc("shadow_client_hint_major_mismatch_total")
+	}
 	score := evaluation.Score
 	decision := signals.DecideWithPolicy(score, tenant.Config.Policy)
 	if verifiedBot {
@@ -275,13 +279,14 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	tenant.Trail.Record(evidence.Evidence{
-		JA4:      ja4,
-		Signals:  evaluation.Signals,
-		Score:    score,
-		Decision: decision.String(),
-		Enforced: enforced,
-		Model:    g.shadowOpinion(evaluation.Fired, decision),
-		Policy:   opinion,
+		JA4:           ja4,
+		Signals:       evaluation.Signals,
+		ShadowSignals: shadowSignals,
+		Score:         score,
+		Decision:      decision.String(),
+		Enforced:      enforced,
+		Model:         g.shadowOpinion(evaluation.Fired, decision),
+		Policy:        opinion,
 	})
 	if tenant.PolicyShadow != nil {
 		tenant.PolicyShadow.Observe(opinion, time.Now())

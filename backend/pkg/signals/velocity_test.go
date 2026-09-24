@@ -1,6 +1,7 @@
 package signals
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -20,9 +21,13 @@ func newTestRedis(t *testing.T) {
 	t.Cleanup(mr.Close)
 
 	prev := rdb
+	prevWindow := rateLimitMs
+	// These tests assert counter isolation and thresholds, not a wall-clock
+	// boundary. Keep CI load from splitting a burst across one-second buckets.
+	rateLimitMs = 60_000
 	rdb = redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	redisHealth.reset()
-	t.Cleanup(func() { rdb = prev })
+	t.Cleanup(func() { rdb = prev; rateLimitMs = prevWindow })
 }
 
 func resetCommonBrowserPrefixes(t *testing.T) {
@@ -43,7 +48,7 @@ func TestCheckVelocitySpikeNoRedisFailsOpen(t *testing.T) {
 	rdb = nil
 	defer func() { rdb = prev }()
 
-	if checkVelocitySpike("1.2.3.4", "/") {
+	if checkVelocitySpike("test-tenant", "1.2.3.4", "/") {
 		t.Fatal("checkVelocitySpike with nil rdb must fail open (false)")
 	}
 }
@@ -51,7 +56,7 @@ func TestCheckVelocitySpikeNoRedisFailsOpen(t *testing.T) {
 func TestCheckVelocitySpikeUnderLimit(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow; i++ {
-		if checkVelocitySpike("1.2.3.4", "/pricing") {
+		if checkVelocitySpike("test-tenant", "1.2.3.4", "/pricing") {
 			t.Fatalf("request %d: spiked before exceeding maxNavPerWindow=%d", i, maxNavPerWindow)
 		}
 	}
@@ -61,7 +66,7 @@ func TestCheckVelocitySpikeOverLimit(t *testing.T) {
 	newTestRedis(t)
 	var lastSpiked bool
 	for i := 0; i < maxNavPerWindow+1; i++ {
-		lastSpiked = checkVelocitySpike("5.6.7.8", "/pricing")
+		lastSpiked = checkVelocitySpike("test-tenant", "5.6.7.8", "/pricing")
 	}
 	if !lastSpiked {
 		t.Fatalf("request %d: want spike after exceeding maxNavPerWindow=%d", maxNavPerWindow+1, maxNavPerWindow)
@@ -74,7 +79,7 @@ func TestCheckVelocitySpikeOverLimit(t *testing.T) {
 func TestCheckVelocitySpikeExemptsAssets(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow*5; i++ {
-		if checkVelocitySpike("7.7.7.7", "/static/app.js") {
+		if checkVelocitySpike("test-tenant", "7.7.7.7", "/static/app.js") {
 			t.Fatalf("asset request %d: assets must not count against the navigation limit", i)
 		}
 	}
@@ -83,18 +88,18 @@ func TestCheckVelocitySpikeExemptsAssets(t *testing.T) {
 func TestCheckVelocitySpikeIsolatedPerIP(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow+1; i++ {
-		checkVelocitySpike("9.9.9.9", "/")
+		checkVelocitySpike("test-tenant", "9.9.9.9", "/")
 	}
-	if checkVelocitySpike("1.1.1.1", "/") {
+	if checkVelocitySpike("test-tenant", "1.1.1.1", "/") {
 		t.Fatal("a fresh IP must not be flagged by another IP's velocity")
 	}
 }
 
 func TestVelocityBucketClassifies(t *testing.T) {
-	if _, limit := velocityBucket("1.2.3.4", "/static/app.js", 0); limit != maxAssetPerWindow {
+	if _, limit := velocityBucket("test-tenant", "1.2.3.4", "/static/app.js", 0); limit != maxAssetPerWindow {
 		t.Errorf("asset path: want asset limit %d, got %d", maxAssetPerWindow, limit)
 	}
-	if _, limit := velocityBucket("1.2.3.4", "/pricing", 0); limit != maxNavPerWindow {
+	if _, limit := velocityBucket("test-tenant", "1.2.3.4", "/pricing", 0); limit != maxNavPerWindow {
 		t.Errorf("navigation path: want nav limit %d, got %d", maxNavPerWindow, limit)
 	}
 }
@@ -104,7 +109,7 @@ func TestCheckJA4VelocitySpikeExemptsCommonBrowsers(t *testing.T) {
 	resetCommonBrowserPrefixes(t)
 	AddCommonBrowserPrefix("t13d1516h2")
 	for i := 0; i < maxJA4Requests+1; i++ {
-		if checkJA4VelocitySpike("t13d1516h2_8daaf6152771_e5627efa2ab1") {
+		if checkJA4VelocitySpike("test-tenant", "t13d1516h2_8daaf6152771_e5627efa2ab1") {
 			t.Fatal("a common browser JA4 prefix must never be flagged by aggregate velocity")
 		}
 	}
@@ -114,7 +119,7 @@ func TestCheckJA4VelocitySpikeFailsOpenWithoutBrowserPrefixes(t *testing.T) {
 	newTestRedis(t)
 	resetCommonBrowserPrefixes(t)
 	for i := 0; i < maxJA4Requests+1; i++ {
-		if checkJA4VelocitySpike("t99d000000_deadbeefdead_deadbeefdead") {
+		if checkJA4VelocitySpike("test-tenant", "t99d000000_deadbeefdead_deadbeefdead") {
 			t.Fatal("empty browser-prefix database must fail open to avoid challenging real browser builds")
 		}
 	}
@@ -126,7 +131,7 @@ func TestCheckJA4VelocitySpikeOverLimit(t *testing.T) {
 	AddCommonBrowserPrefix("t13d1516h2")
 	var lastSpiked bool
 	for i := 0; i < maxJA4Requests+1; i++ {
-		lastSpiked = checkJA4VelocitySpike("t99d000000_deadbeefdead_deadbeefdead")
+		lastSpiked = checkJA4VelocitySpike("test-tenant", "t99d000000_deadbeefdead_deadbeefdead")
 	}
 	if !lastSpiked {
 		t.Fatalf("want spike after exceeding maxJA4Requests for a non-browser JA4")
@@ -136,12 +141,45 @@ func TestCheckJA4VelocitySpikeOverLimit(t *testing.T) {
 func TestVelocityExceededCombinesBothChecks(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow+1; i++ {
-		VelocityExceeded("2.2.2.2", "", "/")
+		VelocityExceeded("test-tenant", "2.2.2.2", "", "/")
 	}
-	if !VelocityExceeded("2.2.2.2", "", "/") {
+	if !VelocityExceeded("test-tenant", "2.2.2.2", "", "/") {
 		t.Fatal("VelocityExceeded must reflect an IP-only spike")
 	}
-	if VelocityExceeded("3.3.3.3", "", "/") {
+	if VelocityExceeded("test-tenant", "3.3.3.3", "", "/") {
 		t.Fatal("VelocityExceeded must not flag an unrelated, low-volume IP")
+	}
+}
+
+func TestVelocitySignalIsolatedPerTenant(t *testing.T) {
+	newTestRedis(t)
+	var last Evaluation
+	for i := 0; i < maxNavPerWindow+1; i++ {
+		last = Evaluate(RequestFacts{Tenant: "tenant-a", IP: "2.2.2.2", Path: "/pricing"})
+	}
+	if !slices.Contains(last.Signals, "velocity_spike") {
+		t.Fatal("tenant A's navigation burst must fire velocity_spike")
+	}
+	other := Evaluate(RequestFacts{Tenant: "tenant-b", IP: "2.2.2.2", Path: "/pricing"})
+	if slices.Contains(other.Signals, "velocity_spike") {
+		t.Fatal("tenant B inherited tenant A's velocity counter")
+	}
+}
+
+func TestJA4VelocitySignalIsolatedPerTenant(t *testing.T) {
+	newTestRedis(t)
+	resetCommonBrowserPrefixes(t)
+	AddCommonBrowserPrefix("t13d1516h2")
+	const ja4 = "t99d000000_deadbeefdead_deadbeefdead"
+	var last Evaluation
+	for i := 0; i < maxJA4Requests+1; i++ {
+		last = Evaluate(RequestFacts{Tenant: "tenant-a", JA4: ja4, Path: "/pricing"})
+	}
+	if !slices.Contains(last.Signals, "ja4_velocity_spike") {
+		t.Fatal("tenant A's JA4 burst must fire ja4_velocity_spike")
+	}
+	other := Evaluate(RequestFacts{Tenant: "tenant-b", JA4: ja4, Path: "/pricing"})
+	if slices.Contains(other.Signals, "ja4_velocity_spike") {
+		t.Fatal("tenant B inherited tenant A's JA4 counter")
 	}
 }

@@ -1,5 +1,12 @@
 # Upcoming Enterprise Innovations
 
+**Pilot status (2026-09-24):** Phase 0/1/2 core code exists; a first Phase 3
+client-hint consistency candidate now records shadow-only evidence. Tenant
+counter isolation and challenge replay/deployment hardening are in the pilot
+branch. Real traffic precision/recall, live server/domain/TLS, durable evidence,
+and multi-node resilience remain open. See `CLIENT_PILOT_RELEASE.md`; do not
+advertise a 70–80% catch rate without a measured, labelled traffic sample.
+
 What's built, what's next, and why — in that order. Not a wishlist:
 every item targets a real evasion technique seen in the field
 (Patchright, Scrapling, curl_cffi impersonation clients, plain
@@ -432,8 +439,8 @@ ordered rules, preview, rollback, shadow evidence/summary, and gated
 enforcement code are implemented. Legacy dashboard rules remain account-wide
 and shadow-only. Live false-positive review, durable cross-node shadow
 metrics, and a tenant policy dashboard editor remain before calling this a
-production self-service feature. See `PHASE1_POLICY.md` and
-`PHASE1_PRODUCTION_REVIEW.md`.
+production self-service feature. See `BACKEND_IMPLEMENTATION_PLAN.md` and
+`CLIENT_PILOT_RELEASE.md`.
 
 - [~] **25. Learned scoring weights (`pkg/decide`)** — the scoring engine's
       weights (item 5) are hand-chosen guesses. `pkg/decide` fits them to

@@ -73,11 +73,9 @@ func loadDotEnv(path string) {
 	}
 }
 
-// redactCredentials returns a Postgres connection string with its
-// password removed, for logging. -db-url carries a real database
-// password (Supabase or otherwise); printing it verbatim would put a
-// production credential in plaintext logs, which on a hosted platform
-// often means a third-party log aggregator too.
+// redactCredentials removes URL userinfo passwords before logging database
+// or Redis endpoints. Deployment logs may leave the host, so credentials
+// must never be printed there.
 func redactCredentials(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -96,10 +94,11 @@ func main() {
 
 	addr := flag.String("addr", ":8080", "address to listen on")
 	target := flag.String("target", "", "origin server to protect, e.g. https://example.com")
+	host := flag.String("host", "", "public hostname for the default tenant; empty permits any Host for local development")
 	certFile := flag.String("tls-cert", "", "TLS certificate file; enables TLS + JA4 fingerprinting")
 	keyFile := flag.String("tls-key", "", "TLS private key file, required with -tls-cert")
 	challengeSecret := flag.String("challenge-secret", "", "Shared secret for stateless JS challenges. If empty, a random one is generated.")
-	evidenceToken := flag.String("evidence-token", "", "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
+	evidenceToken := flag.String("evidence-token", os.Getenv("EVIDENCE_TOKEN"), "bearer token for the per-request evidence endpoint; unset leaves the endpoint off")
 	observabilityToken := flag.String("observability-token", os.Getenv("HAKAISHIELD_OBSERVABILITY_TOKEN"), "bearer token for aggregate operational counters; unset leaves the endpoint off")
 	modeFlag := flag.String("mode", "enforce", `"enforce" acts on scores; "shadow" only records what it would have done`)
 	themeFlag := flag.String("theme", "ghost", `challenge page theme: "ghost", "branded", or "default"`)
@@ -169,9 +168,9 @@ func main() {
 	ctxRdb, cancelRdb := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelRdb()
 	if err := rdb.Ping(ctxRdb).Err(); err != nil {
-		log.Printf("hakaishield: warning: could not connect to redis at %s: %v (falling back to open)", *redisURL, err)
+		log.Printf("hakaishield: warning: could not connect to redis at %s: %v (falling back to open)", redactCredentials(*redisURL), err)
 	} else {
-		log.Printf("hakaishield: connected to redis at %s", *redisURL)
+		log.Printf("hakaishield: connected to redis at %s", redactCredentials(*redisURL))
 	}
 	signals.InitRedis(rdb)
 	challengeHandler.SetNonceStore(challenge.NewRedisNonceStore(rdb, ""))
@@ -197,13 +196,19 @@ func main() {
 		log.Fatalf("hakaishield: creating origin proxy: %v", err)
 	}
 
+	defaultHosts := []string{"*"}
+	if *host != "" {
+		defaultHosts = []string{*host}
+	} else {
+		log.Print("hakaishield: warning: -host unset; default origin accepts any hostname not claimed by a database tenant")
+	}
 	err = store.Add("default", tenant.TenantConfig{
 		Target:        *target,
 		Mode:          mode,
 		Policy:        policy,
 		EvidenceToken: *evidenceToken,
 		Deception:     *deceptionFlag,
-	}, []string{"*"}, originProxy)
+	}, defaultHosts, originProxy)
 
 	if err != nil {
 		log.Fatalf("hakaishield: provisioning default tenant: %v", err)
@@ -252,8 +257,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/__hakaishield/challenge", challengeHandler.Handler())
-	mux.Handle("/__hakaishield/verify", challengeHandler.Handler())
+	mountChallengeRoutes(mux, challengeHandler)
 	mux.Handle("/", guard)
 
 	if *evidenceToken != "" {
@@ -361,6 +365,13 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("hakaishield: shutdown error: %v", err)
 	}
+}
+
+// mountChallengeRoutes exposes verification without a public puzzle issuer.
+// Guard issues puzzles only after resolving the customer and scoring traffic.
+func mountChallengeRoutes(mux *http.ServeMux, c *challenge.Challenge) {
+	mux.Handle("/__hakaishield/challenge", http.NotFoundHandler())
+	mux.Handle("/__hakaishield/verify", c.Handler())
 }
 
 // loadShadowModel reads a trained model and checks it against the checks

@@ -142,9 +142,18 @@ func TestInternalRoutesReachGuardWhenChallengeRoutesAreMountedExactly(t *testing
 	guard := core.NewGuard(store, c)
 
 	mux := http.NewServeMux()
-	mux.Handle("/__hakaishield/challenge", c.Handler())
-	mux.Handle("/__hakaishield/verify", c.Handler())
+	mountChallengeRoutes(mux, c)
 	mux.Handle("/", guard)
+
+	// Puzzle issuance happens inside Guard after a tenant and risk decision.
+	// The standalone GET endpoint must not mint signed challenges for arbitrary
+	// Host headers or amplify unauthenticated requests into large HTML pages.
+	issueReq := httptest.NewRequest(http.MethodGet, "http://unknown.example/__hakaishield/challenge", nil)
+	issueRec := httptest.NewRecorder()
+	mux.ServeHTTP(issueRec, issueReq)
+	if issueRec.Code != http.StatusNotFound {
+		t.Fatalf("public challenge minting endpoint returned %d, want 404", issueRec.Code)
+	}
 
 	healthReq := httptest.NewRequest(http.MethodGet, "http://example.com/__hakaishield/healthz", nil)
 	healthRec := httptest.NewRecorder()

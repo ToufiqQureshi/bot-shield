@@ -47,6 +47,15 @@ func newChallenge(t *testing.T) *challenge.Challenge {
 	return c
 }
 
+func TestNewChallengeRejectsShortSecret(t *testing.T) {
+	if _, err := challenge.NewChallenge([]byte("short-secret"), ""); err == nil {
+		t.Fatal("short shared secret must be rejected")
+	}
+	if _, err := challenge.NewChallenge([]byte("0123456789abcdef0123456789abcdef"), ""); err != nil {
+		t.Fatalf("32-byte secret should be accepted: %v", err)
+	}
+}
+
 // solvePoW returns the smallest counter whose SHA-256 with nonce starts
 // with `zeros` leading hex zeros — exactly the proof-of-work the
 // challenge page's JS computes for the difficulty the server picked.

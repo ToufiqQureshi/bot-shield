@@ -10,6 +10,30 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Pilot replay storage and first Phase 3 candidate — 2026-09-24
+
+**Decision.** Tenant-scope each dynamic Redis counter; never evict a live
+spent challenge nonce to admit a new solve. The single-node Compose stack uses
+`noeviction` Redis with an AOF volume and a stable, minimum 32-byte signing
+secret. The public mux exposes verification but not direct puzzle issuance;
+the default tenant binds to an explicit host in deployment. A Chromium
+user-agent/client-hint major mismatch is recorded separately as shadow evidence
+and has zero influence on the existing score.
+
+**Why.** Shared counter keys let one customer's traffic penalize another.
+Evicting an unexpired replay marker makes a signed token reusable. A random
+startup key invalidates all issued state after restart, and a wildcard default
+host can forward unclaimed hosts to the wrong origin. Client hints are cheap to
+compare but client-controlled and can be affected by browser variants, so a
+production weight needs real traffic review first.
+
+**Limits.** Redis outage fallback is per-node; this release targets one node.
+AOF durability is not an absolute replay guarantee across a crash. Full
+multi-node replay guarantees and calibrated candidate enforcement are deferred
+until the corresponding outage and false-positive evidence exists.
+
+---
+
 ## Phase 2 verification hardening: bounded PNG and server-enforced attempt expiry - 2026-09-23
 
 **Decision:** Decode the browser's submitted PNG only on the challenge

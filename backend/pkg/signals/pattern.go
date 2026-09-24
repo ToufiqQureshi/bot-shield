@@ -56,7 +56,7 @@ const (
 // than stored, so memory stays bounded (~12KB) no matter how many paths
 // one IP throws at it (CLAUDE.md Section 15).
 func CrawlPatternSuspected(f RequestFacts) bool {
-	if f.IP == "" || !claimsBrowser(f.UA) || isStaticAsset(f.Path) || !redisRequestAllowed() {
+	if f.Tenant == "" || f.IP == "" || !claimsBrowser(f.UA) || isStaticAsset(f.Path) || !redisRequestAllowed() {
 		return false
 	}
 
@@ -64,7 +64,7 @@ func CrawlPatternSuspected(f RequestFacts) bool {
 	defer cancel()
 
 	window := time.Now().UnixMilli() / int64(crawlWindowMs)
-	key := fmt.Sprintf("crawl:ip:%s:%d", f.IP, window)
+	key := fmt.Sprintf("crawl:t:%d:%s:ip:%s:%d", len(f.Tenant), f.Tenant, f.IP, window)
 
 	pipe := rdb.Pipeline()
 	pipe.PFAdd(ctx, key, f.Path)
