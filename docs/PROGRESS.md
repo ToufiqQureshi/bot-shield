@@ -232,6 +232,14 @@ plus CI gates were added.
 Gotcha: self-service DNS ownership, ACME certificates, billing and legal terms
 remain launch blockers for a hosted SaaS; this release is a managed pilot.
 
+### 2026-09-24 — GREASE-brand client-hint shadow signal
+
+`3f64e5c3` — `client_hint_missing_grease_brand` added to the client-hint
+shadow signals: a Sec-CH-UA header naming only real brands, missing
+Chromium's mandatory randomized GREASE brand, is evidence of a forged
+header. Shadow-only, same as the other client-hint candidates.
+Gotcha: none — pure header parse, no new state, mutation-checked.
+
 ### 2026-09-24 - session handoff report
 
 `docs/SESSION_HANDOFF_2026-09-24.md` records this session's changes, verification
