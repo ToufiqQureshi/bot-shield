@@ -200,3 +200,15 @@ and secret regressions were red before fixes; full Go test/vet/build, lint,
 Linux cross-build and Compose config passed.
 Gotcha: Docker image build was blocked by Docker Hub DNS and Windows race build
 by missing gcc. Live domain/origin traffic and detection rate are unmeasured.
+
+### 2026-09-24 — passed-session detection continuity
+
+`0a886dcc` (branch `release/client-pilot-hardening`) — Guard now runs the
+scorer once on each passed-cookie request, blocks newly decisive scraper
+evidence, rate-limits server-observed burst/crawl behavior, and records fresh
+signals. Chromium platform/mobile hint contradictions join major mismatch as
+shadow-only evidence. Full Go test/vet/build and lint passed; the bypass and
+new shadow-signal tests were red before implementation.
+Gotcha: this adds bounded Redis checks after a solve; live latency and false
+positive measurement remain pilot gates. Browser-hint observations do not
+enforce.
