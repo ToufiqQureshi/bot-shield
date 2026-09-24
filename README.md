@@ -1,18 +1,20 @@
 <p align="center"><b>hakaishield</b></p>
-<p align="center"><a href="https://hakaishield.com">hakaishield.com</a></p>
 
 # hakaishield
 
-**HakaiShield** is an enterprise-grade, inline bot protection proxy that decides which automated clients reach your site — and proves exactly why it made that decision in real-time. 
+**HakaiShield** is an inline bot-traffic analysis and protection proxy. It
+records why it would allow, challenge or block each evaluated request. The
+current release is a managed, single-domain pilot; real-client detection and
+availability are not measured yet.
 
 Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or API abuse, HakaiShield sits directly in the request path and evaluates the very first request from any client using advanced JA4 TLS fingerprinting.
 
 ### Key Capabilities:
-- **Zero-Trust TLS Fingerprinting (JA4):** Instantly analyzes the TLS ClientHello handshake to identify headless browsers, scripts, and faked user-agents without relying on log analysis or shared blocklists.
-- **Real-Time Scoring Engine:** Evaluates every incoming request and takes immediate action — Allow, Serve JS Challenge, or Block Outright.
-- **Shadow Mode Testing:** Run the full scoring and fingerprinting pipeline in the background to see exactly what *would* be blocked on your production traffic, guaranteeing zero impact on real users during deployment.
-- **Evidence-Based Decisions:** Transparent live stats and an evidence endpoint (`/api/v1/dashboard/evidence`) tell you exactly which signals triggered a block.
-- **Enterprise Ready:** Available as a hosted CNAME solution (zero installation) or deployed within your own infrastructure to meet strict data-residency regulations.
+- **TLS Fingerprinting (JA4):** Reads the ClientHello directly and combines it with request evidence; a fingerprint is evidence, not a guaranteed bot identity.
+- **Scoring Engine:** Produces an explainable allow, challenge, rate-limit, deceive or block decision.
+- **Shadow Mode Testing:** Records proposed decisions while forwarding visitor traffic to the origin.
+- **Evidence-Based Decisions:** Authenticated stats and evidence endpoints show which signals contributed to a decision.
+- **Managed Pilot:** One operator-provisioned domain and server; automatic CNAME onboarding and multi-region availability are future work.
 
 > **Deploying it?** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — hakaishield
 > terminates TLS itself to read the ClientHello, so any platform that
@@ -21,7 +23,8 @@ Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or A
 >
 > **New here, or need to explain this to someone?**
 > [`docs/WHAT_IS_BUILT.md`](docs/WHAT_IS_BUILT.md) is a plain-language inventory of
-> what actually works today, what does not, and the numbers you can quote.
+> what is implemented. [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) is
+> the current handoff with verification and remaining launch work.
 
 ## Why this exists
 

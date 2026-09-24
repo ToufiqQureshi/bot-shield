@@ -137,8 +137,7 @@ TenantConfig` gained `OwnerUserID`, populated from a new `owner_user_id`
 select in `db.GetTenant`/`GetTenantByID` (the column already existed;
 nothing selected it before this).
 
-**Why:** This is the "remaining production gate #1" from `docs/
-PHASE1_PRODUCTION_REVIEW.md` — binding rules to validated tenant identity
+**Why:** This closed the missing binding of rules to validated tenant identity
 through a bounded, cached provider, tested through the real DB-to-guard
 path for two owners and two domains. `rules.ToPolicy` re-validates every
 row through `policy.ValidateRule` at read time (not just at Create) and

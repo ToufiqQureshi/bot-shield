@@ -22,14 +22,14 @@ two policy modes.
 |---|---|
 | score ≥ 100 | **Block** (or **Deceive**, if the tenant has deception enabled) |
 | 1–99 (Balanced policy) | **Challenge** |
-| 0 (Balanced policy) | **Allow**, zero latency |
-| any score, Strict policy | **Challenge** (mandatory interstitial) |
+| 0 (Balanced policy) | **Allow** without an interstitial |
+| score < 100, Strict policy | **Challenge** (mandatory interstitial) |
 
-Rule enforced in code: **no single signal reaches 100 alone.** The two
-100-weight checks (`ja4_blocklist`, `scripting_tool`) are each a single
-independent finding, not a combination — see `docs/DECISIONS.md` for why
-those two are treated as conclusive on their own while everything else
-stacks.
+Most signals stack below the 100-point block threshold. Two deliberate
+exceptions, `ja4_blocklist` and `scripting_tool`, each carry weight 100 and
+can reach block alone. The scripting-tool User-Agent is visitor-controlled,
+so verify its false-positive behavior before treating that as broad coverage.
+See `docs/DECISIONS.md` for the threshold rationale.
 
 ---
 
@@ -37,10 +37,10 @@ stacks.
 
 | Signal | File | Weight | What it actually checks | Data source | Fails open? |
 |---|---|---|---|---|---|
-| `fragmented_handshake` | `fingerprint.go`, `score.go` | 50 | JA4 came back `unreadable` — ClientHello was split across TLS records, a known fingerprinting-evasion trick real browsers never do | TLS ClientHello (server-observed, unspoofable) | Yes — no TLS, no fingerprint, no penalty |
+| `fragmented_handshake` | `fingerprint.go`, `score.go` | 50 | JA4 came back `unreadable`; fragmentation is one possible cause and is not proof of a bot alone | TLS ClientHello (server-observed) | Yes — no TLS, no fingerprint, no penalty |
 | `ua_mismatch` | `useragent.go` | 50 | UA claims Chrome/Firefox/Safari/Edge, but JA4 says TLS 1.0/1.1, is `unreadable`, or matches a known scraper library's JA4 | UA (visitor-controlled) vs JA4 (server-observed) | Yes — empty JA4 or non-browser UA exempted |
-| `header_anomaly` | `headers.go` | 25 | UA claims a browser but the request carries **none** of `Sec-Fetch-*` or `Sec-CH-UA*` — every real navigation sends at least one | Request headers | Yes — non-browser UA exempted; deliberately capped below the challenge bar alone (privacy tools/devtools fetches can miss one) |
-| `ja4_blocklist` | `ja4db.go`, `score.go` | 100 (alone) | JA4 matches a verified scraper-library fingerprint, from a hardcoded seed (`python-requests` verified capture) plus a Redis-fed, background-synced (30s poll) hash set | TLS fingerprint (unspoofable) | N/A — direct match |
+| `header_anomaly` | `headers.go` | 25 | UA claims a browser but the request carries **none** of `Sec-Fetch-*` or `Sec-CH-UA*` | Request headers | Yes — non-browser UA exempted; this can challenge alone but cannot reach the block threshold alone. |
+| `ja4_blocklist` | `ja4db.go`, `score.go` | 100 (alone) | JA4 matches a verified scraper-library fingerprint, from a hardcoded seed (`python-requests` verified capture) plus a Redis-fed, background-synced (30s poll) hash set | Server-observed TLS fingerprint; sophisticated clients can imitate one | N/A — direct match |
 | `scripting_tool` | `useragent.go`, `score.go` | 100 (alone) | UA literally names itself as one of ~45 known HTTP libraries, CLI tools, load-test tools, headless automation frameworks, scraping frameworks, or recon/vuln scanners (expanded 2026-09-23 from 11 to ~45 entries, e.g. `okhttp`, `axios`, `scrapy`, `sqlmap`, `nuclei`, `burpsuite`) | UA (visitor-controlled, spoofable — this is a weak signal despite the weight) | N/A |
 | `velocity_spike` | `velocity.go` | 50 | Per-tenant, per-IP request rate over a 1s fixed window, split into two buckets: 20 navigations/window vs 300 asset requests/window (asset detection by file extension) | Redis `INCR`/`EXPIRE` pipeline, 50ms timeout | Yes — Redis down → no penalty, circuit-breaker gated |
 | `ja4_velocity_spike` | `velocity.go` | 50 | One non-browser JA4 fingerprint exceeding 50 requests/second **within a tenant**, across its source IPs | Redis, same pipeline pattern | Yes, same circuit |
@@ -61,6 +61,13 @@ permanent allow decision. Evidence includes both the fresh signals and
 platform and mobile contradictions. These are client-controlled claims, so
 they live in `shadowSignals`, never alter the score or decision, and require
 real-browser false-positive measurement before promotion.
+
+Four more candidates—WebGPU f16 absence, repeated canvas output, pointer
+inactivity and legacy automation globals—are recorded after a valid enforced
+challenge solve. Proxy shadow mode serves no challenge, so these candidates
+collect no real-visitor samples during the initial shadow pilot and have no
+current catch-rate benefit. The pointer bit is not site-wide behavioural
+analysis.
 
 ### Allowlist / exemption logic (reduces false positives, not a score signal)
 

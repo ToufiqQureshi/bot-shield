@@ -14,7 +14,8 @@ rate or live availability claim exists yet. The tenant-scoped dynamic counters,
 stable challenge key, replay cap and host-bound production configuration are
 pilot hardening; client-hint major/platform/mobile mismatches are evidence-only
 in `shadowSignals`. Passed sessions are rescored after the first challenge.
-See `CLIENT_PILOT_RELEASE.md` for the release gate.
+See `CURRENT_STATUS.md` for the current handoff and
+`CLIENT_PILOT_RELEASE.md` for the release gate.
 
 ---
 
@@ -38,7 +39,8 @@ request-level evidence** — not price, not block rate.
 
 ## 2. What is actually running
 
-All of this is built, tested and works today.
+The following is implemented and locally tested. A live client deployment has
+not been verified here.
 
 ### The proxy
 Terminates TLS itself (it has to, to see the handshake), forwards everything to
@@ -49,7 +51,7 @@ Graceful shutdown, panic recovery, optional Sentry.
 
 | Check | What it catches |
 |---|---|
-| `fragmented_handshake` | ClientHello split across TLS records — a known fingerprint-evasion trick no real browser does |
+| `fragmented_handshake` | An unreadable ClientHello fingerprint; fragmentation is one possible cause and needs corroboration. |
 | `ua_mismatch` | Claims to be Chrome, but the TLS handshake says otherwise |
 | `header_anomaly` | Claims a browser, sends none of the headers browsers send |
 | `ja4_blocklist` | TLS fingerprint verified to belong to a scraping tool |
@@ -76,7 +78,7 @@ images. Failed solves show a retry link; visitors without JavaScript see an
 explanation. A scripted client can still forge the PNG and browser telemetry,
 so a solve remains an unverified human candidate.
 
-A real person solves it in about a second and mostly does not notice.
+Real visitor solve time and failure rate still need measurement on the pilot.
 
 ### Deception mode
 Instead of a 403, forward the request to the origin flagged as
@@ -91,7 +93,7 @@ rather than auto-blocked — a screen reader can reach a hidden link too, and
 those are real people.
 
 ### Good-bot protection
-Googlebot, Bingbot and Applebot are verified by reverse-then-forward DNS and
+Major search crawlers are verified by reverse-then-forward DNS and
 forwarded with no friction at all. Faking the user agent does not work; the DNS
 has to check out. **A customer's SEO is not collateral damage.**
 
@@ -116,8 +118,8 @@ piece of traffic-derived state — honeypot trips, rate counters, evidence — i
 scoped per customer.
 
 ### The dashboard
-React + Vite. Sign-up, sign-in, password reset and email verification run on
-Supabase Auth. Domains, mitigation rules and protection settings are real pages
+React + Vite. Sign-in, password reset and email verification use Supabase Auth;
+pilot access is invitation-only. Domains, mitigation rules and protection settings are real pages
 against a real API. The existing rules page stores account-wide legacy rules;
 the newer tenant policy API does not yet have a dashboard editor.
 
@@ -158,22 +160,13 @@ Step 7 is the product. Steps 5 and 6 are what everyone else also does.
 
 ---
 
-## 4. The numbers you can quote
+## 4. What can be claimed
 
-Every one of these is measured, not estimated:
-
-| | |
-|---|---|
-| Full request path through the guard | **~36 µs** |
-| JA4 fingerprint extraction | **14.3 µs** |
-| Learned model prediction | **14 ns**, zero allocations |
-| Label collection | **102 ns**, zero allocations |
-| Backend code | ~6,800 lines |
-| Test code | ~6,600 lines — **roughly 1:1 with the code** |
-| Lint | **0 issues** across the backend |
-
-That last pair is worth saying out loud. This is not a prototype with tests
-bolted on afterwards.
+Local tests, builds and lint pass as recorded in `CURRENT_STATUS.md`. Older
+microbenchmarks in Git history describe a development machine, not client
+latency or a production service-level result. There is **no measured bot catch
+rate, human false-positive rate, request-path p99, or uptime** for a real
+customer yet.
 
 ---
 
@@ -209,9 +202,9 @@ but a signal is missing.
 **The learned model has never enforced anything**, and should not until one
 open question is answered — see below.
 
-**Never run against real production traffic.** Everything is measured against
-tests, benchmarks, and driven browsers. No customer has pointed a real domain
-at this.
+**No real production-traffic result is recorded in this workspace.** Current
+verification covers tests, local builds and driven browsers, not a client
+domain under normal load.
 
 ---
 
@@ -261,9 +254,8 @@ implementation, mutation verification (deliberately breaking the code to prove
 the test catches it), an adversarial security pass, a performance and cost
 review, and a written record of every meaningful decision.
 
-That is why `docs/PROGRESS.md` is thousands of lines: every session recorded
-what it changed, what it verified, what it broke on purpose to check the tests
-were real, and what it left unfinished.
+That is why the historical `docs/PROGRESS_ARCHIVE.md` is long: earlier sessions
+recorded what they changed, verified, mutation-checked, and left unfinished.
 
 It is also why this document exists.
 
@@ -282,4 +274,4 @@ It is also why this document exists.
 | `docs/ROADMAP.md` | Built, in progress, and what is next |
 | `docs/DECISIONS.md` | Why each significant choice was made |
 | `docs/RESEARCH.md` | Threats, competitors, techniques studied |
-| `docs/PROGRESS.md` | The full session-by-session record |
+| `docs/PROGRESS.md` | Short commit index; older details are in `PROGRESS_ARCHIVE.md` |

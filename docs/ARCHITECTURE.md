@@ -25,9 +25,11 @@ This document covers the current proxy architecture and planned hosted design. T
 
 ---
 
-## How it's delivered — Hosted Enterprise SaaS
+## Target delivery model — hosted service
 
-HakaiShield is deployed primarily as a high-performance, globally available service. This multi-tenant SaaS architecture ensures zero maintenance overhead for customers.
+The target is a hosted multi-tenant service. The current managed pilot is one
+node and one operator-provisioned domain; global availability and self-service
+onboarding have not been built or measured.
 
 ```text
 Customer points their DNS (CNAME) at hakaishield
@@ -45,7 +47,7 @@ What this delivery model forces into the design, none of it optional:
 
 | Requirement | Why |
 |---|---|
-| **Multi-tenancy everywhere** | Today `Stats`, `Trail` and the origin are global. Every one of them needs a tenant boundary, and no query may ever cross it |
+| **Multi-tenancy everywhere** | The proxy has tenant-scoped stats, trail and origins; durable cross-node analytics and broader isolation tests remain future work. No query may cross the tenant boundary. |
 | **Automated certificates (ACME)** | We terminate TLS for domains we don't own; certs must issue and renew without us touching them |
 | **Bandwidth / request caps per plan** | Their traffic is now our bill. Without a cap, one large customer erases the margin on ten small ones |
 | **Usage metering** | Billing needs it, and so does knowing which customer is costing what |
@@ -95,7 +97,7 @@ Internet (every visitor, hostile until scored)
    ├── ratelimit     BUILT   Asset-aware per-IP velocity + crawl-pattern
    │                         detection (signals/velocity.go, signals/pattern.go)
    │
-   ├──► Redis        BUILT   Distributed global rate counters via INCR (velocity.go)
+   ├──► Redis        BUILT   Tenant-scoped rate counters via INCR (velocity.go)
    │                         with a shared one-second, single-probe fail-open circuit;
    │                         background synchronization for JA4 blocklists (ja4db.go)
    ├──► Postgres     BUILT   Client configurations and lazy-loaded Tenant Store via pgxpool (pkg/db)
@@ -104,8 +106,8 @@ Internet (every visitor, hostile until scored)
 [Client's origin server]
    receives the request plus the headers in the contract below
 
-[Dashboard]  Enterprise Analytics Portal (Next.js), wired to
-             the real-time /api/v1/dashboard/stats endpoint.
+[Dashboard]  React/Vite static app with Supabase Auth, wired to
+             authenticated domain, stats and evidence endpoints.
 
 [Mode]       BUILT  -mode enforce|shadow (proxy/mode.go) — shadow
              scores and records every request but forwards all of it,
@@ -137,7 +139,8 @@ Internet (every visitor, hostile until scored)
              observability bearer token is configured.
 ```
 
-As of the latest stable release, HakaiShield evaluates traffic continuously. `Guard` (`proxy/guard.go`) scores every request and allows, JS-challenges, or blocks it instantaneously. Our constantly updated heuristics feed the scoring engine.
+`core.Guard` evaluates request evidence and chooses a decision. In proxy shadow
+mode it records that decision and forwards the visitor to the origin.
 
 ---
 
@@ -149,7 +152,7 @@ own future scoring code. Treat it as an API: changing it breaks both.
 | Header | Meaning |
 |---|---|
 | `X-HakaiShield-JA4` | The connection's JA4 fingerprint, e.g. `t13d1516h2_8daaf6152771_e5627efa2ab1`. |
-| `X-HakaiShield-JA4: unreadable` | The connection was TLS, but the handshake couldn't be read — see the fragmentation note in `docs/RESEARCH.md`. A normal client never causes this, so it is itself a signal. |
+| `X-HakaiShield-JA4: unreadable` | TLS was present but the fingerprint could not be parsed; fragmentation is one possible cause. It is a signal to review, not proof of a bot by itself. |
 | *(header absent)* | Not a TLS connection at all — hakaishield is running without `-tls-cert`, so there is nothing to fingerprint. |
 | `X-Real-IP` | The real client address, set by us. |
 | `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto` | Set by us from the real connection. |
@@ -169,14 +172,14 @@ scoring layer would trust it (`CLAUDE.md` Section 6).
 | **Reverse proxy** | stdlib `httputil.ReverseProxy`, using `Rewrite` (not `Director`) | BUILT | `Rewrite` makes net/http strip the visitor's `X-Forwarded-*` headers; `Director` does not (`DECISIONS.md`) |
 | **TLS termination + handshake capture** | stdlib `crypto/tls` + `fingerproxy`'s `pkg/hack` conn wrapper | BUILT | Go discards the raw handshake bytes after the handshake; JA4 needs them. `Accept` returns a real `*tls.Conn`, so net/http owns the handshake, its timeout, its error handling and its connection management |
 | **JA4 computation** | `fingerproxy`'s `pkg/ja4` only | BUILT | Don't reinvent TLS parsing. Importing only this package keeps Prometheus and gopacket out of the binary (`DECISIONS.md`) |
-| **Client-side automation probe** | small custom JS snippet (BotD-inspired) | planned | Catches automation in a real browser, which server-side signals can't see |
+| **Client-side automation probe** | JS within the challenge page | BUILT, challenge-only | Checks some automation tells only when an enforced challenge is served; ordinary page traffic has no site-wide probe. |
 | **Fast state** (rate limits, session cache) | Redis | BUILT | Sub-millisecond reads with TTL; must not add latency per request |
-| **Durable state** (configs, logs, analytics) | PostgreSQL | BUILT | Dashboard queries and per-client settings must survive restarts |
-| **Dashboard** | Next.js, separate app (`dashboard/`) | BUILT (skeleton) | Client-facing UI, no reason to share the proxy's release cycle. Wired to the real `/api/v1/dashboard/stats` endpoint (`proxy/stats.go`); one stat card, no history/charts/auth yet |
-| **Deployment** | Our own infrastructure, one region to start | planned | We run it now (`DECISIONS.md` 2026-09-16). One small VPS until real load says otherwise — no Kubernetes, no multi-region on zero customers |
+| **Durable state** (tenant config and policy) | PostgreSQL | BUILT | Some customer configuration survives restarts; evidence and several aggregates remain in memory. |
+| **Dashboard** | React/Vite static app (`dashboard/`) | BUILT for pilot | Supabase Auth and authenticated domain, evidence, stats, rules and settings API views; tenant policy has no dashboard editor. |
+| **Deployment** | One TLS-terminating host for pilot | PACKAGED, not live-verified | Compose, Certbot setup and Redis are prepared; a real server, traffic and operational tests remain. |
 | **Onboarding** | Customer CNAMEs their domain to us | planned | Replaces "install a Docker image": nothing for them to run, which is the whole point of hosting it |
 | **Certificates** | ACME / Let's Encrypt, automated | planned | We terminate TLS for domains we don't own; manual certs don't scale past one customer |
-| **Tenancy** | Tenant ID on every record and every query | planned | Today's binary is single-tenant. One leak across tenants is a company-ending bug, not a defect |
+| **Tenancy** | Tenant-scoped proxy and ownership-checked APIs | BUILT for pilot | Multiple tenant records are supported, while automated onboarding and durable cross-node telemetry are not. |
 | **Billing** | Stripe subscription + usage metering | planned | Plans must carry bandwidth/request caps — their traffic is our bill |
 | **Enterprise (self-hosted)** | Same binary, customer runs it | supported, not built | For customers who cannot send traffic to our cloud. Priced above hosted, sales-led. Don't build tooling for it yet; don't delete the single-tenant path either |
 | **Metrics** | Prometheus client lib, off by default | planned | Optional; zero cost for clients who don't want it |
@@ -216,9 +219,9 @@ scoring layer would trust it (`CLAUDE.md` Section 6).
 - **No ML model in v1.** Rule/threshold scoring is explainable, fast,
   and good enough for naive-to-intermediate bots. Training a model on
   no data produces something worse than simple thresholds.
-- **Fail open by default.** If fingerprinting fails, the request is
-  still forwarded — labelled, never blocked. A broken bot-detector
-  must never take down the client's actual site.
+- **Explicit degraded behavior.** Missing JA4 does not create a fingerprint
+  match; unreadable JA4 can contribute a bounded signal, while other evidence
+  still decides. Proxy shadow mode forwards every request.
 
 ---
 
