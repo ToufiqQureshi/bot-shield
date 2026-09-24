@@ -212,3 +212,11 @@ new shadow-signal tests were red before implementation.
 Gotcha: this adds bounded Redis checks after a solve; live latency and false
 positive measurement remain pilot gates. Browser-hint observations do not
 enforce.
+
+### 2026-09-24 — production-test packaging and velocity test gate
+
+`f4e3b6ab` — Production Compose image built locally and its packaged binary
+started. The passed-session velocity test now tolerates a one-second fixed-window
+boundary; full Go suite, repeated focused test, and vet passed.
+Gotcha: the image check does not replace live TLS, origin, browser, and load
+tests on the pilot host.
