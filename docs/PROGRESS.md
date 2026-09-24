@@ -189,3 +189,14 @@ enforced attempt-cookie expiry, retry/no-JavaScript guidance, and FIFO local
 nonce eviction. Blank PNG, expired cookie and nonce-cap mutation checks went red.
 Gotcha: a scripted client can still forge a valid PNG; challenge solves remain
 candidate observations, never verified human labels.
+
+### 2026-09-24 — first client pilot hardening and reference audit
+
+`da9b44b3` (branch `release/client-pilot-hardening`) — tenant-scoped dynamic
+Redis counters, replay-safe nonce capacity, stable secrets/host-bound Compose,
+shadow-only client-hint evidence, corrected bot ladder, and all five reference
+repos mapped to a concrete pilot release gate. Tenant isolation, nonce, route,
+and secret regressions were red before fixes; full Go test/vet/build, lint,
+Linux cross-build and Compose config passed.
+Gotcha: Docker image build was blocked by Docker Hub DNS and Windows race build
+by missing gcc. Live domain/origin traffic and detection rate are unmeasured.
