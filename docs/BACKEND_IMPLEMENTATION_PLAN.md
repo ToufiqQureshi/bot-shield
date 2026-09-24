@@ -43,8 +43,11 @@ tenant; retains local spent nonces until expiry even when the store is full;
 configures Redis with `noeviction` and persistent storage; pins the default
 tenant to an explicit production host; and requires stable deployment secrets.
 Public challenge issuance is closed at the mux. The first Phase 3 candidate,
-Chromium user-agent/client-hint major mismatch, is recorded in evidence as a
-shadow signal only. It cannot raise the score or change the action.
+Chromium user-agent/client-hint major, platform and mobile mismatch, is
+recorded in evidence as shadow signals only. None can raise the score or
+change the action. Passed sessions are now rescored on each request; new
+high-confidence evidence can block and server-observed crawl/velocity can
+rate-limit without repeating a low-risk challenge.
 
 Phase 0 items completed in the current backend include single-pass dynamic
 signal evaluation, bounded and boundary-safe Goodbot DNS verification,

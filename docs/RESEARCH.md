@@ -9,16 +9,22 @@ happens; don't let it go stale silently.
 
 ## 2026-09-24 — source review of five local reference repositories
 
-Reviewed `inspired/horizon/HARDENING.md` and its server admission flow,
+Reviewed `inspired/horizon/HARDENING.md`, its server admission flow and
+`server-go/inputforensics.go`,
 `inspired/nexus/data/common/` policy recipes, `inspired/vertex/src/server/analysis.ts`,
-`inspired/quantum/brotector.js`, and `inspired/zenith/lib/action/challenge.go`.
+`inspired/quantum/brotector.js`, and `inspired/zenith/lib/action/challenge.go`
+plus `lib/challenge/resource-load/resource-load.go`.
 The useful operational finding is that replay markers need storage without
 eviction and a stable signing key. The useful detection finding is that browser
 client hints can contradict a forged user agent, but are themselves client
 claims and require measured false-positive rates. Nexus's infrastructure and
 API carve-outs show why one global challenge policy can break crawlers and
 integrations. Quantum's debugger and prototype hooks are unsuitable for live
-visitors. See `CLIENT_PILOT_RELEASE.md` for the per-repo decision table and
+visitors. Horizon's input timing thresholds came from its own browser/hardware
+corpus, so importing those numbers without local calibration would overclaim.
+Zenith's resource-load challenge is a browser capability check, but a scripted
+client can fetch a resource too; it is corroboration rather than proof of a
+human. See `CLIENT_PILOT_RELEASE.md` for the per-repo decision table and
 outstanding work. No code was copied.
 
 ---

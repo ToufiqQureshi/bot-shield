@@ -4,8 +4,10 @@
 Go proxy with a host-bound default tenant and private Redis. Velocity, JA4
 velocity and crawl counters are tenant-scoped. Redis persists nonce markers
 without eviction; on outage, nonce fallback is local to the node. A bounded
-Chromium client-hint mismatch is stored as `shadowSignals` evidence with no
-score/action effect. Hosted global availability, automated tenant certificate
+Chromium client-hint major/platform/mobile mismatch is stored as
+`shadowSignals` evidence with no score/action effect. A passed challenge
+cookie skips repeat low-risk puzzles while subsequent requests are rescored.
+Hosted global availability, automated tenant certificate
 issuance and durable evidence are planned architecture, not current pilot
 capabilities. See `CLIENT_PILOT_RELEASE.md`.
 

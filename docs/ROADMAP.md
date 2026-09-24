@@ -1,7 +1,8 @@
 # Upcoming Enterprise Innovations
 
 **Pilot status (2026-09-24):** Phase 0/1/2 core code exists; a first Phase 3
-client-hint consistency candidate now records shadow-only evidence. Tenant
+client-hint consistency candidates now record shadow-only evidence. Passed
+sessions now run detection on each request after the first challenge. Tenant
 counter isolation and challenge replay/deployment hardening are in the pilot
 branch. Real traffic precision/recall, live server/domain/TLS, durable evidence,
 and multi-node resilience remain open. See `CLIENT_PILOT_RELEASE.md`; do not

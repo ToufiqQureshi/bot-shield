@@ -10,6 +10,23 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Passed-cookie detection continuity — 2026-09-24
+
+**Decision.** A passed cookie suppresses repeating a low-risk challenge, but
+Guard evaluates every later request once. A hard-block score still blocks;
+server-observed velocity or crawl findings rate-limit even below the block
+threshold. Existing tenant policy skip semantics for solved sessions remain
+explicit in evidence. Chromium major, platform and mobile client-hint
+contradictions remain shadow-only because those fields are client controlled.
+
+**Why.** Previously a bot could solve one challenge with a browser, switch to
+an openly scripted client or known scraper TLS fingerprint, and reach the
+origin for the cookie lifetime. Running only the velocity check after a solve
+discarded stronger new evidence. This change adds the remaining bounded Redis
+checks to passed requests; production latency must be measured on the pilot.
+
+---
+
 ## Pilot replay storage and first Phase 3 candidate — 2026-09-24
 
 **Decision.** Tenant-scope each dynamic Redis counter; never evict a live

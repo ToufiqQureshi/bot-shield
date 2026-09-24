@@ -2,6 +2,7 @@ package core
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -206,33 +207,43 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !verifiedBot && g.challenge.Passed(r) {
-		// A solved challenge proves this client could run JS once; it
-		// says nothing about the volume of requests after that. Without
-		// this check, one solve buys unlimited-speed access to the
-		// origin for the rest of passedMaxAge (CLAUDE.md Section 15/18 —
-		// bounded resource use, can't let a visitor exhaust the origin).
-		if signals.VelocityExceeded(tenant.ID, ip, ja4, r.URL.Path) {
-			tenant.Stats.Record(signals.DecisionBlock)
-			skip := g.skippedPolicyOpinion(tenant.ID, "challenge_solved")
-			tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"velocity_after_pass"}, Decision: signals.DecisionBlock.String(), Enforced: enforced, Policy: skip})
-			if tenant.PolicyShadow != nil {
-				tenant.PolicyShadow.Observe(skip, time.Now())
-			}
-			if enforced {
+		// Passing a puzzle grants temporary challenge relief, not a bypass
+		// of later TLS, tool, honeypot, or crawl evidence. Evaluate once so
+		// Redis counters are incremented only once per request.
+		facts := signals.RequestFacts{IP: ip, JA4: ja4, UA: r.UserAgent(), Header: r.Header, Path: r.URL.Path, Tenant: tenant.ID}
+		evaluation := signals.Evaluate(facts)
+		shadowSignals := signals.ShadowSignals(facts)
+		for _, signal := range shadowSignals {
+			observability.Inc("shadow_" + signal + "_total")
+		}
+		decision := signals.DecisionAllow
+		if evaluation.Score >= signals.HardBlockThreshold() {
+			decision = signals.DecisionBlock
+		} else if slices.Contains(evaluation.Signals, "velocity_spike") ||
+			slices.Contains(evaluation.Signals, "ja4_velocity_spike") ||
+			slices.Contains(evaluation.Signals, "crawl_pattern") {
+			decision = signals.DecisionRateLimit
+		}
+		tenant.Stats.Record(decision)
+		skip := g.skippedPolicyOpinion(tenant.ID, "challenge_solved")
+		tenant.Trail.Record(evidence.Evidence{
+			JA4: ja4, Signals: append(evaluation.Signals, "challenge_solved"),
+			ShadowSignals: shadowSignals, Score: evaluation.Score,
+			Decision: decision.String(), Enforced: enforced, Policy: skip,
+		})
+		if tenant.PolicyShadow != nil {
+			tenant.PolicyShadow.Observe(skip, time.Now())
+		}
+		if enforced {
+			switch decision {
+			case signals.DecisionBlock:
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			case signals.DecisionRateLimit:
+				w.Header().Set("Retry-After", "60")
 				http.Error(w, "too many requests", http.StatusTooManyRequests)
 				return
 			}
-			tenant.Origin.ServeHTTP(w, r)
-			return
-		}
-		tenant.Stats.Record(signals.DecisionAllow)
-		// Recorded as its own reason, not as "scored zero", otherwise
-		// the trail would claim this visitor looked clean when really
-		// they had already proven themselves.
-		skip := g.skippedPolicyOpinion(tenant.ID, "challenge_solved")
-		tenant.Trail.Record(evidence.Evidence{JA4: ja4, Signals: []string{"challenge_solved"}, Decision: signals.DecisionAllow.String(), Enforced: enforced, Policy: skip})
-		if tenant.PolicyShadow != nil {
-			tenant.PolicyShadow.Observe(skip, time.Now())
 		}
 		tenant.Origin.ServeHTTP(w, r)
 		return
@@ -248,8 +259,8 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	evaluation := signals.Evaluate(facts)
 	shadowSignals := signals.ShadowSignals(facts)
-	if len(shadowSignals) > 0 {
-		observability.Inc("shadow_client_hint_major_mismatch_total")
+	for _, signal := range shadowSignals {
+		observability.Inc("shadow_" + signal + "_total")
 	}
 	score := evaluation.Score
 	decision := signals.DecideWithPolicy(score, tenant.Config.Policy)

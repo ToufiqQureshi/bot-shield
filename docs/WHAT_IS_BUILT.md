@@ -12,8 +12,9 @@ Last checked against the code: **2026-09-24**.
 The first client release is a single-node shadow pilot. No measured bot catch
 rate or live availability claim exists yet. The tenant-scoped dynamic counters,
 stable challenge key, replay cap and host-bound production configuration are
-pilot hardening; `client_hint_major_mismatch` is evidence-only in
-`shadowSignals`. See `CLIENT_PILOT_RELEASE.md` for the release gate.
+pilot hardening; client-hint major/platform/mobile mismatches are evidence-only
+in `shadowSignals`. Passed sessions are rescored after the first challenge.
+See `CLIENT_PILOT_RELEASE.md` for the release gate.
 
 ---
 
