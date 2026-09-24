@@ -46,11 +46,12 @@ code was copied into the product.
 Local verification on 2026-09-24: `go test ./... -count=1`, `go vet ./...`,
 `go build ./...`, Linux/amd64 CGO-off cross-build of both binaries,
 `golangci-lint run ./...` (0 issues), Python syntax parse, and Compose config
-with dummy required values passed. The Docker image build could not fetch
-`golang:1.25-alpine` because this workstation could not resolve
-`auth.docker.io`. Windows `go test -race` could not start because the C
-compiler is absent. Run the Linux CI race suite and build the image on the
-deployment host before calling the release verified.
+with dummy required values passed. The initial Docker Hub DNS issue cleared:
+the production Compose image built locally and its binary started with `-h`.
+The Go suite and `go vet ./...` passed again after the fixed-window velocity
+test was made resilient to a one-second boundary. Windows `go test -race`
+could not start because the C compiler is absent; Linux CI ran the race suite.
+The deployment host still needs a live TLS/origin/browser smoke test.
 The tenant-isolation, nonce-cap, short-secret and public puzzle-route tests
 were observed failing against the previous behavior and passing after the
 corresponding fixes; the shadow-signal test was compile-red before its code
@@ -93,5 +94,5 @@ vet, build and lint passed again after these changes.
   Phase 3 behavior, asset fidelity and HTTP/2 intelligence remain research
   work, not pilot protection claims.
 - No live origin, domain, certificate, load test or real-browser smoke result
-  exists in this workspace yet. The release cannot be called live until these
-  gates are executed on the chosen host.
+  exists in this workspace yet. A local image build is only a packaging check;
+  the release cannot be called live until these gates run on the chosen host.
