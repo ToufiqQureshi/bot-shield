@@ -1780,3 +1780,23 @@ measurement. Durable aggregate telemetry and representative false-positive
 review are required before multi-node activation. Existing challenge-solved
 and honeypot branches keep their dedicated behavior; their policy skip reason
 is explicit in evidence and those requests do not satisfy the gate.
+
+---
+
+## Challenge browser probes remain observational — 2026-09-24
+
+**Decision:** WebGPU f16 absence, identical outputs from two different canvas
+draws, absent pointer movement during a reported solve of at least one second,
+and legacy automation globals are recorded only after a valid challenge solve.
+They do not change the challenge outcome or request score. Browser telemetry is
+client-reported and can be forged; these probes need labelled traffic and
+false-positive review before enforcement.
+
+**Why:** WebGPU f16 is an optional hardware/driver capability, a person may
+leave a pointer motionless, privacy tools can alter canvas output, and some
+embedded browsers expose legacy globals. The challenge page adds no forced
+gesture or tracking on customer pages. WebGPU discovery has a 100 ms client
+timeout and the canvas pair is sent only below 40 KiB. Per-tenant evidence
+uses an already loaded exact host, avoiding a database call from verify.
+On a cold second node or wildcard development tenant, shadow evidence may be
+absent.

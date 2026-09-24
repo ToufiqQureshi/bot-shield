@@ -63,6 +63,20 @@ func TestGetByHost_Wildcard(t *testing.T) {
 	}
 }
 
+func TestGetCachedByHostUsesOnlyLoadedExactTenant(t *testing.T) {
+	store := newStore(t)
+	store.TenantLoader = func(context.Context, string) (string, string, string, string, string, string, error) {
+		t.Fatal("cached lookup must not call database loader")
+		return "", "", "", "", "", "", nil
+	}
+	if got := store.GetCachedByHost("A.EXAMPLE.COM:443"); got == nil || got.ID != "a" {
+		t.Fatalf("cached exact tenant = %v, want a", got)
+	}
+	if got := store.GetCachedByHost("unloaded.example.com"); got != nil {
+		t.Fatalf("unknown host mapped to tenant %s", got.ID)
+	}
+}
+
 func TestGetByHost_LoadsDatabaseTenantBeforeWildcard(t *testing.T) {
 	store := tenant.NewStore()
 	defaultURL, _ := newOrigin(t)

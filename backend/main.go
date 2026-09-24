@@ -24,6 +24,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/core"
 	"github.com/ToufiqQureshi/hakaishield/pkg/db"
 	"github.com/ToufiqQureshi/hakaishield/pkg/decide"
+	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
 	"github.com/ToufiqQureshi/hakaishield/pkg/labels"
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/policyprovider"
@@ -186,6 +187,17 @@ func main() {
 	}
 
 	store := tenant.NewStore()
+	challengeHandler.SetShadowRecorder(func(host string, signals []string) {
+		// The verify route is unauthenticated. Only use a tenant already
+		// resolved by its original request; never trigger a new DB lookup here.
+		if tn := store.GetCachedByHost(host); tn != nil {
+			tn.Trail.Record(evidence.Evidence{
+				ShadowSignals: signals,
+				Decision:      "allow",
+				Enforced:      true,
+			})
+		}
+	})
 	// Dashboard/database-created tenant origins are customer-controlled input.
 	// Keep the default -target dev path flexible, but require lazy-loaded SaaS
 	// origins to be public and rechecked on dial to close the SSRF path.

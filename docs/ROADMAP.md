@@ -438,6 +438,10 @@ browser-class counters are built in `pkg/challenge` and wired from
 cannot be lowered by a client. The canvas proof is decoded and checked for
 dimensions and nonblank pixels (item 28 follow-up). A scripted client can
 still forge a PNG, so solves remain unverified candidate observations.
+The challenge also records four browser-reported candidates as shadow-only
+evidence after valid solves; they require real client traffic review before
+any policy promotion. DNSBL/IP reputation provider and licensing remain an
+owner choice; no request-path query is configured.
 
 **Phase 1 backend policy status (2026-09-23):** versioned tenant snapshots,
 ordered rules, preview, rollback, shadow evidence/summary, and gated

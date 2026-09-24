@@ -783,4 +783,19 @@ large blocklist is built here:
 
 It is the no-lone-signal rule in a different domain.
 
+## 2026-09-24 — Challenge browser probe limits
+
+The `inspired/vertex/src/checks.ts` legacy key list contains exact globals
+from several automation and embedded-browser families. These names were
+adapted as observational challenge telemetry; merely finding one truthy
+property is insufficient to reject a visitor.
+
+The [WebGPU specification](https://www.w3.org/TR/webgpu/#features) defines
+`shader-f16` as optional. [Chrome's WebGPU 120 notes](https://developer.chrome.com/blog/new-in-webgpu-120)
+also say some hardware lacks 16-bit support. Therefore the prior
+"Chrome 113+ hardware always supports f16" premise is false; the probe is
+limited to Chromium 120+ and remains shadow-only. A missing GPU API, missing
+adapter, or lookup timeout is neutral. No detection percentage is inferred
+until real labelled client traffic is measured.
+
 Sources are listed at the end of `docs/DEPLOYMENT.md`.
