@@ -39,6 +39,17 @@ func TestScoreNoSignals(t *testing.T) {
 
 func TestEvaluateRunsStatefulChecksOnce(t *testing.T) {
 	newTestRedis(t)
+	// checkJA4VelocitySpike fails open until at least one common-browser
+	// prefix is loaded (see docs/DECISIONS.md, "Audit P0 routing, JA4,
+	// host-cache..."), so this test's JA4 counter assertion depended on
+	// whichever earlier test in the package happened to leave
+	// browserPrefixes populated — order-dependent and flaky in isolation
+	// (confirmed: `go test -run TestEvaluateRunsStatefulChecksOnce` fails
+	// on a fresh binary). Seed a prefix that does not match f.JA4 below,
+	// so hasCommonBrowserPrefixes() is true and isCommonBrowserJA4(f.JA4)
+	// stays false, deterministically, regardless of test run order.
+	resetCommonBrowserPrefixes(t)
+	AddCommonBrowserPrefix("t13d1516h2")
 
 	f := RequestFacts{
 		IP:     "203.0.113.20",
