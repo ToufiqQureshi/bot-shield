@@ -6,7 +6,7 @@ in the request path today, exactly how it's implemented, and — separately
 design doc. Source of truth is the code in `backend/pkg/signals/`,
 `backend/pkg/core/`, `backend/pkg/challenge/`, `backend/pkg/deception/`;
 cross-checked against `docs/ROADMAP.md`, `docs/DECISIONS.md`,
-`docs/RESEARCH.md`, `docs/PROGRESS.md` as of 2026-09-22.
+`docs/RESEARCH.md`, `docs/PROGRESS.md` as of 2026-09-24.
 
 Keep this updated whenever a signal is added, removed, or reweighted —
 see `CLAUDE.md` Section 22.
@@ -42,11 +42,25 @@ stacks.
 | `header_anomaly` | `headers.go` | 25 | UA claims a browser but the request carries **none** of `Sec-Fetch-*` or `Sec-CH-UA*` — every real navigation sends at least one | Request headers | Yes — non-browser UA exempted; deliberately capped below the challenge bar alone (privacy tools/devtools fetches can miss one) |
 | `ja4_blocklist` | `ja4db.go`, `score.go` | 100 (alone) | JA4 matches a verified scraper-library fingerprint, from a hardcoded seed (`python-requests` verified capture) plus a Redis-fed, background-synced (30s poll) hash set | TLS fingerprint (unspoofable) | N/A — direct match |
 | `scripting_tool` | `useragent.go`, `score.go` | 100 (alone) | UA literally names itself as one of ~45 known HTTP libraries, CLI tools, load-test tools, headless automation frameworks, scraping frameworks, or recon/vuln scanners (expanded 2026-09-23 from 11 to ~45 entries, e.g. `okhttp`, `axios`, `scrapy`, `sqlmap`, `nuclei`, `burpsuite`) | UA (visitor-controlled, spoofable — this is a weak signal despite the weight) | N/A |
-| `velocity_spike` | `velocity.go` | 50 | Per-IP request rate over a 1s fixed window, split into two buckets: 20 navigations/window vs 300 asset requests/window (asset detection by file extension) | Redis `INCR`/`EXPIRE` pipeline, 50ms timeout | Yes — Redis down → no penalty, circuit-breaker gated |
-| `ja4_velocity_spike` | `velocity.go` | 50 | One non-browser JA4 fingerprint exceeding 50 requests/second **across all source IPs** — defeats residential-proxy IP rotation, since the underlying TLS client stays the same | Redis, same pipeline pattern | Yes, same circuit |
-| `crawl_pattern` | `pattern.go` | 50 | One IP touching >60 distinct page paths inside a 60s window (HyperLogLog cardinality estimate, ~12KB bounded memory); static assets and non-browser-claiming UAs excluded | Redis PFADD/PFCOUNT, 50ms timeout | Yes, same circuit |
+| `velocity_spike` | `velocity.go` | 50 | Per-tenant, per-IP request rate over a 1s fixed window, split into two buckets: 20 navigations/window vs 300 asset requests/window (asset detection by file extension) | Redis `INCR`/`EXPIRE` pipeline, 50ms timeout | Yes — Redis down → no penalty, circuit-breaker gated |
+| `ja4_velocity_spike` | `velocity.go` | 50 | One non-browser JA4 fingerprint exceeding 50 requests/second **within a tenant**, across its source IPs | Redis, same pipeline pattern | Yes, same circuit |
+| `crawl_pattern` | `pattern.go` | 50 | One tenant/IP touching >60 distinct page paths inside a 60s window (HyperLogLog cardinality estimate, ~12KB bounded memory); static assets and non-browser-claiming UAs excluded | Redis PFADD/PFCOUNT, 50ms timeout | Yes, same circuit |
 | `honeypot_trap` | `honeypot.go`, `deception.go` | 50 | Fetched the invisible (`aria-hidden`, `tabindex="-1"`, `rel=nofollow`, `display:none`) trap link injected into **deceived** HTML responses. Keyed on (tenant, IP, JA4), 6h TTL, capped at 50k entries in-memory per node | Server-injected link + server-observed fetch | N/A — absence of a fetch just means no signal |
 | automation-tool probe | `challenge.go` (not `score.go`) | hard fail, not scored | Inside the JS challenge page: checks `navigator.webdriver` and known Selenium/PhantomJS/Nightmare.js globals. Fires *in addition to* the SHA-256/canvas proof — fails the challenge outright (no passed cookie), doesn't add to the score | Client-side JS, self-reported | N/A — only runs for traffic already reaching the challenge |
+
+### 2026-09-24 pilot detection changes
+
+A solved challenge no longer bypasses the detector. Later
+requests run the same scorer once. A new hard-block finding still blocks, and
+velocity, JA4 velocity or crawl findings can rate-limit the passed session.
+The signed cookie grants relief from repeating a low-risk challenge, not a
+permanent allow decision. Evidence includes both the fresh signals and
+`challenge_solved`.
+
+`ShadowSignals` additionally records Chromium UA versus client-hint major,
+platform and mobile contradictions. These are client-controlled claims, so
+they live in `shadowSignals`, never alter the score or decision, and require
+real-browser false-positive measurement before promotion.
 
 ### Allowlist / exemption logic (reduces false positives, not a score signal)
 
@@ -113,8 +127,8 @@ above are once traffic gets large — relevant given the "can this do
 
 | Gap | Why it matters |
 |---|---|
-| **Unrecognized `Host` header triggers an uncached Postgres lookup on every request** | A visitor sending many distinct bogus Host headers can drive unbounded DB load — no negative caching yet (found in the 2026-09-18 code review, not yet fixed) |
-| **`--challenge-secret` silently falls back to a random per-process secret if unset** | In a real multi-node cluster this means node A's issued tokens get rejected by node B — fails confusingly instead of refusing to start |
+| **Unknown `Host` handling** | Negative caching now bounds repeated unknown-host DB lookups. The single-domain Compose pilot also pins its default tenant to an explicit host. Arbitrary distinct hosts still need deployment-level admission/load testing. |
+| **Challenge secret in standalone development** | The binary can generate a per-process key when no secret is configured. Compose now requires a stable minimum 32-byte secret; multi-node deployment still needs outage and replay review. |
 | **No load test has been run** | Architecture (Redis-backed distributed rate state, Postgres-backed lazy tenant config, stateless challenge secret) is *designed* for 10M+ req/scale, but `docs/PROGRESS.md` itself lists "verify end-to-end under high traffic (`wrk`)" as an open item — no real throughput/p99 numbers exist yet |
 | **Redis outage circuit is shared across all rate/pattern signals** | Correct fail-open behavior, but it means a Redis outage silently disables `velocity_spike`, `ja4_velocity_spike`, and `crawl_pattern` simultaneously — worth knowing this is one blast radius, not three independent ones |
 
@@ -137,6 +151,6 @@ database (item 19)** are meant to close, and neither is built yet.
 
 ---
 
-*Last verified against source: 2026-09-22. Re-check this file whenever
+*Last verified against source: 2026-09-24. Re-check this file whenever
 `backend/pkg/signals/score.go`'s `checks` table changes — that table is
 the single source of truth for what's actually scored.*

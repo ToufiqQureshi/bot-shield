@@ -52,6 +52,7 @@ func TestEvaluateRunsStatefulChecksOnce(t *testing.T) {
 	AddCommonBrowserPrefix("t13d1516h2")
 
 	f := RequestFacts{
+		Tenant: "test-tenant",
 		IP:     "203.0.113.20",
 		JA4:    "t99d000000_deadbeefdead_deadbeefdead",
 		UA:     "SomeUnknownClient/1.0",
@@ -67,7 +68,7 @@ func TestEvaluateRunsStatefulChecksOnce(t *testing.T) {
 		t.Fatalf("Evaluate() signals = %v, want none", evaluation.Signals)
 	}
 
-	ipKey, _ := velocityBucket(f.IP, f.Path, window)
+	ipKey, _ := velocityBucket(f.Tenant, f.IP, f.Path, window)
 	ipCount, err := rdb.Get(context.Background(), ipKey).Int64()
 	if err != nil {
 		t.Fatalf("read IP velocity counter: %v", err)
@@ -76,7 +77,7 @@ func TestEvaluateRunsStatefulChecksOnce(t *testing.T) {
 		t.Fatalf("IP velocity counter = %d, want one increment", ipCount)
 	}
 
-	ja4Key := fmt.Sprintf("vel:ja4:%s:%d", f.JA4, window)
+	ja4Key := fmt.Sprintf("vel:t:%d:%s:ja4:%s:%d", len(f.Tenant), f.Tenant, f.JA4, window)
 	ja4Count, err := rdb.Get(context.Background(), ja4Key).Int64()
 	if err != nil {
 		t.Fatalf("read JA4 velocity counter: %v", err)

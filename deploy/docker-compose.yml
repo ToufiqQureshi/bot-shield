@@ -1,10 +1,11 @@
 # Production compose for a single box (see docs/DEPLOYMENT.md).
 #
 # Reads from a .env file next to this one:
-#   HAKAISHIELD_DOMAIN=neurofiq.in
-#   HAKAISHIELD_ORIGIN=http://172.17.0.1:3000
+#   HAKAISHIELD_DOMAIN=customer.example
+#   HAKAISHIELD_ORIGIN=https://origin.example
 #   HAKAISHIELD_MODE=shadow
 #   EVIDENCE_TOKEN=<openssl rand -hex 32>
+#   HAKAISHIELD_CHALLENGE_SECRET=<openssl rand -hex 32>
 #   DATABASE_URL=postgres://...
 #   SUPABASE_URL=https://xxxx.supabase.co
 
@@ -16,7 +17,11 @@ services:
     # internet-reachable Redis is found and taken over within hours. Only
     # the hakaishield container needs it, and it reaches it over the
     # compose network by name.
-    command: redis-server --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # Challenge nonce keys must survive until their TTL. Eviction could reopen
+    # replay across nodes, so full Redis fails writes instead of evicting them.
+    command: redis-server --save "" --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -41,13 +46,16 @@ services:
       # Certificates live on the host where certbot renews them. Read-only:
       # the proxy never needs to write here.
       - /etc/letsencrypt:/etc/letsencrypt:ro
+    environment:
+      HAKAISHIELD_CHALLENGE_SECRET: ${HAKAISHIELD_CHALLENGE_SECRET:?Set a stable random challenge secret}
+      EVIDENCE_TOKEN: ${EVIDENCE_TOKEN:?Set a random evidence token}
     command:
       - "-addr=:8443"
-      - "-target=${HAKAISHIELD_ORIGIN}"
-      - "-tls-cert=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN}/fullchain.pem"
-      - "-tls-key=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN}/privkey.pem"
+      - "-target=${HAKAISHIELD_ORIGIN:?Set the protected origin URL}"
+      - "-host=${HAKAISHIELD_DOMAIN:?Set the public hostname}"
+      - "-tls-cert=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN:?Set the public hostname}/fullchain.pem"
+      - "-tls-key=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN:?Set the public hostname}/privkey.pem"
       - "-mode=${HAKAISHIELD_MODE:-shadow}"
-      - "-evidence-token=${EVIDENCE_TOKEN}"
       - "-redis-url=redis://redis:6379"
       - "-db-url=${DATABASE_URL}"
       - "-supabase-url=${SUPABASE_URL}"
@@ -62,3 +70,6 @@ services:
         # serving - a slow outage nobody is watching for.
         max-size: "20m"
         max-file: "5"
+
+volumes:
+  redis-data:

@@ -89,14 +89,11 @@ const verifyPath = "/__hakaishield/verify"
 // leaves headroom without letting one caller send an unbounded body.
 const maxVerifyBodyBytes = 64 * 1024
 
-// NewChallenge takes a shared secret for signing challenges.
-// By using a shared secret provided at startup (e.g., via CLI flag),
-// any instance in a multi-node deployment can verify a challenge
-// issued by any other instance, making the challenge system completely
-// stateless and database-free.
+// NewChallenge takes a shared secret for signing challenges. The same secret
+// lets instances verify each other's tokens; nonce replay state is separate.
 func NewChallenge(secret []byte, theme string) (*Challenge, error) {
-	if len(secret) == 0 {
-		return nil, fmt.Errorf("proxy: challenge secret cannot be empty")
+	if len(secret) < 32 {
+		return nil, fmt.Errorf("proxy: challenge secret must be at least 32 bytes")
 	}
 	if theme == "" {
 		theme = "ghost"
@@ -224,8 +221,8 @@ func canonicalHost(raw string) string {
 
 // consume marks a valid nonce as used once. Entries are bounded and expire
 // with the challenge so an attacker cannot turn verification into unbounded
-// process memory. Multi-node deployments should use the planned Redis-backed
-// nonce store; this local guard still closes replay on a single instance.
+// process memory. Multi-node deployments should use the Redis-backed nonce
+// store; this local guard closes replay on a single instance.
 func (s *localNonceStore) Consume(_ context.Context, nonce string, now time.Time, ttl time.Duration) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -239,8 +236,10 @@ func (s *localNonceStore) Consume(_ context.Context, nonce string, now time.Time
 		return false
 	}
 	if len(s.used) >= maxUsedChallenges {
-		// The oldest consumed nonce has the least replay life left.
-		s.popOldest()
+		// Keeping replay markers until expiry matters more than accepting a
+		// new solve while storage is full. Eviction would make an old token
+		// usable again before its signed lifetime ends.
+		return false
 	}
 	s.used[nonce] = now
 	s.ordered = append(s.ordered, nonceUse{nonce: nonce, at: now})

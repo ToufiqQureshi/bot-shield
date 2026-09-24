@@ -123,8 +123,8 @@ var checks = []struct {
 		return isScraper || badJA4Hashes[f.JA4]
 	}},
 	{"scripting_tool", 100, func(f RequestFacts) bool { return IsScriptingTool(f.UA) }},
-	{"velocity_spike", 50, func(f RequestFacts) bool { return checkVelocitySpike(f.IP, f.Path) }},
-	{"ja4_velocity_spike", 50, func(f RequestFacts) bool { return checkJA4VelocitySpike(f.JA4) }},
+	{"velocity_spike", 50, func(f RequestFacts) bool { return checkVelocitySpike(f.Tenant, f.IP, f.Path) }},
+	{"ja4_velocity_spike", 50, func(f RequestFacts) bool { return checkJA4VelocitySpike(f.Tenant, f.JA4) }},
 	// crawl_pattern is a server-observed behaviour signal, not a client
 	// claim: a real browser's requests per page look nothing like a
 	// scraper walking many distinct URLs quickly with no subresources.

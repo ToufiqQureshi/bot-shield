@@ -7,7 +7,14 @@ customer, an investor, or a new hire — without overclaiming.
 demo that promises more than the code does is a problem you find out about in
 front of the person you were trying to impress.
 
-Last checked against the code: **2026-09-22**.
+Last checked against the code: **2026-09-24**.
+
+The first client release is a single-node shadow pilot. No measured bot catch
+rate or live availability claim exists yet. The tenant-scoped dynamic counters,
+stable challenge key, replay cap and host-bound production configuration are
+pilot hardening; client-hint major/platform/mobile mismatches are evidence-only
+in `shadowSignals`. Passed sessions are rescored after the first challenge.
+See `CLIENT_PILOT_RELEASE.md` for the release gate.
 
 ---
 
@@ -58,7 +65,7 @@ person* means being slow, which defeats the point of scraping.
 
 ### The JavaScript challenge
 A proof-of-work puzzle plus a canvas render plus automation-framework
-detection. It catches Selenium, Puppeteer and Playwright even when the browser
+detection. It probes Selenium, Puppeteer and Playwright even when the browser
 underneath is genuinely real — `navigator.webdriver`, `__pwInitScripts`, the
 default 800×600 viewport, a Chromium-without-Chrome client-hints brand,
 SwiftShader/llvmpipe headless renderers. The property names it looks for are
@@ -179,7 +186,7 @@ traffic.** Their account-wide rules are evaluated only in shadow. The new
 versioned tenant policy API can change live decisions after explicit activation
 and a measured local shadow period, but no representative production traffic
 has been reviewed and the dashboard cannot edit those snapshots yet. See
-`PHASE1_POLICY.md`.
+`BACKEND_IMPLEMENTATION_PLAN.md` and `CLIENT_PILOT_RELEASE.md`.
 
 **No billing.** No Stripe, no payments, no subscriptions. There was a fake
 billing UI that showed invented invoices and collected card numbers under a
