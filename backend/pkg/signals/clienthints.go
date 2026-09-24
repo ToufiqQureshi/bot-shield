@@ -9,6 +9,14 @@ import (
 var (
 	chromiumUAMajor   = regexp.MustCompile(`(?:Chrome|Chromium)/([0-9]{1,3})`)
 	chromiumHintMajor = regexp.MustCompile(`"(?:Chromium|Google Chrome|Microsoft Edge)";v="([0-9]{1,3})"`)
+	// hintBrandEntry captures every brand name in a Sec-CH-UA list, real or
+	// GREASE, unlike chromiumHintMajor which only matches the known real ones.
+	hintBrandEntry = regexp.MustCompile(`"([^"]*)"\s*;\s*v="[0-9]+"`)
+	// greaseBrand matches Chromium's randomized GREASE brand (e.g.
+	// "Not/A)Brand", "Not;A=Brand"). The words are fixed, the punctuation
+	// between them is deliberately randomized per spec, so match on the
+	// words alone.
+	greaseBrand = regexp.MustCompile(`(?i)not[^a-z0-9]*a[^a-z0-9]*brand`)
 )
 
 // ShadowSignals reports new detection candidates without changing the score.
@@ -27,12 +35,30 @@ func ShadowSignals(f RequestFacts) []string {
 		return nil
 	}
 	var found []string
-	if hint := f.Header.Get("Sec-CH-UA"); len(hint) <= 512 {
+	if hint := f.Header.Get("Sec-CH-UA"); hint != "" && len(hint) <= 512 {
 		for _, match := range chromiumHintMajor.FindAllStringSubmatch(hint, 4) {
 			major, _ := strconv.Atoi(match[1])
 			if major != uaMajor {
 				found = append(found, "client_hint_major_mismatch")
 				break
+			}
+		}
+		// Every Chromium build since v90 injects a randomized GREASE brand
+		// into this list so servers cannot hardcode the set (see
+		// GREASE_BRAND_PATTERN prior art in browser fingerprinting tooling).
+		// A hand-built Sec-CH-UA header that names only real brands is a
+		// forged client hint, not a real Chromium build.
+		brands := hintBrandEntry.FindAllStringSubmatch(hint, 8)
+		if len(brands) > 0 {
+			hasGrease := false
+			for _, b := range brands {
+				if greaseBrand.MatchString(b[1]) {
+					hasGrease = true
+					break
+				}
+			}
+			if !hasGrease {
+				found = append(found, "client_hint_missing_grease_brand")
 			}
 		}
 	}
