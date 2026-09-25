@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Search, Filter, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { getEvidenceLogs, ApiError, type EvidenceEntry } from '../lib/api';
+import EvidenceSignals from '../components/EvidenceSignals';
 import type { LayoutContext } from '../components/Layout';
 
 const decisions = ['allow', 'challenge', 'block', 'deceive'];
@@ -33,15 +34,25 @@ export default function EvidenceLogs() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
+    const controller = new AbortController();
+    setLogs([]);
+    setError(null);
     if (!selectedDomain) {
       setLoading(false);
-      return;
+      return () => controller.abort();
     }
     setLoading(true);
-    getEvidenceLogs()
-      .then(setLogs)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load evidence logs.'))
-      .finally(() => setLoading(false));
+    getEvidenceLogs(selectedDomain.id, controller.signal)
+      .then((entries) => {
+        if (!controller.signal.aborted) setLogs(entries);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err instanceof ApiError ? err.message : 'Could not load evidence logs.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [selectedDomain]);
 
   const filteredLogs = useMemo(() => {
@@ -114,7 +125,7 @@ export default function EvidenceLogs() {
                   </div>
                 </th>
                 <th>JA4 Fingerprint</th>
-                <th>Signals</th>
+                <th>Scored / observed signals</th>
                 <th>Score</th>
                 <th>Decision</th>
                 <th>Enforced</th>
@@ -134,13 +145,7 @@ export default function EvidenceLogs() {
                   <td className="font-mono text-[10px]" style={{ maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                     {log.ja4 || '—'}
                   </td>
-                  <td>
-                    <div className="flex flex-wrap gap-1">
-                      {(log.signals || []).slice(0, 3).map((s, si) => (
-                        <span key={si} className="badge badge-red text-[10px]">{s}</span>
-                      ))}
-                    </div>
-                  </td>
+                  <td><EvidenceSignals signals={log.signals} shadowSignals={log.shadowSignals} /></td>
                   <td><span className={`font-mono text-xs font-medium ${getScoreColor(log.score)}`}>{log.score}</span></td>
                   <td><span className={`badge ${getDecisionBadge(log.decision)}`}>{log.decision}</span></td>
                   <td className="text-xs" style={{ color: log.enforced ? 'var(--text-primary)' : 'var(--text-muted)' }}>

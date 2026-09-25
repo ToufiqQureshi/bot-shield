@@ -25,8 +25,16 @@ func TopOffendersHandler(store *tenant.Store, verifier *auth.Verifier) http.Hand
 			return
 		}
 
-		domainID, ok := callerDomain(r)
+		domainID, ok, lookupErr := callerDomain(r)
+		if lookupErr != nil {
+			writeError(w, http.StatusInternalServerError, "could not verify domain ownership")
+			return
+		}
 		if !ok {
+			if r.URL.Query().Get("tenant") != "" {
+				writeError(w, http.StatusNotFound, "domain not found")
+				return
+			}
 			writeJSON(w, http.StatusOK, []any{})
 			return
 		}
@@ -93,8 +101,16 @@ func EvidenceLogsHandler(store *tenant.Store, verifier *auth.Verifier) http.Hand
 			return
 		}
 
-		domainID, ok := callerDomain(r)
+		domainID, ok, lookupErr := callerDomain(r)
+		if lookupErr != nil {
+			writeError(w, http.StatusInternalServerError, "could not verify domain ownership")
+			return
+		}
 		if !ok {
+			if r.URL.Query().Get("tenant") != "" {
+				writeError(w, http.StatusNotFound, "domain not found")
+				return
+			}
 			writeJSON(w, http.StatusOK, []any{})
 			return
 		}
@@ -107,15 +123,24 @@ func EvidenceLogsHandler(store *tenant.Store, verifier *auth.Verifier) http.Hand
 	})
 }
 
-// callerDomain resolves the authenticated user's first domain (by
-// creation order) as the implicit scope for endpoints that don't
-// take a domain ID. Multi-domain accounts querying a specific domain
-// need db.ListDomains directly until these endpoints grow a
-// ?domain= parameter — see docs/PROGRESS.md.
-func callerDomain(r *http.Request) (string, bool) {
+// callerDomain selects a domain owned by the authenticated caller. Omitting
+// tenant preserves the first-domain behavior for older dashboard clients.
+func callerDomain(r *http.Request) (string, bool, error) {
 	domains, err := listDomains(r.Context(), UserIDFromContext(r.Context()))
-	if err != nil || len(domains) == 0 {
-		return "", false
+	if err != nil {
+		return "", false, err
 	}
-	return domains[0].ID, true
+	if len(domains) == 0 {
+		return "", false, nil
+	}
+	wanted := r.URL.Query().Get("tenant")
+	if wanted == "" {
+		return domains[0].ID, true, nil
+	}
+	for _, domain := range domains {
+		if domain.ID == wanted {
+			return domain.ID, true, nil
+		}
+	}
+	return "", false, nil
 }

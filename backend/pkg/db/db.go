@@ -114,6 +114,7 @@ func InitSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_training_samples_tenant ON training_samples(tenant_id, created_at);
 	CREATE INDEX IF NOT EXISTS idx_training_samples_version ON training_samples(feature_version);
+	CREATE INDEX IF NOT EXISTS idx_training_samples_retention ON training_samples(created_at, id);
 
 	CREATE TABLE IF NOT EXISTS protection_settings (
 		owner_user_id VARCHAR(255) PRIMARY KEY,
@@ -267,14 +268,17 @@ func ReadSamples(ctx context.Context, tenantID, featureVersion string, limit int
 	return out, rows.Err()
 }
 
-// DeleteSamplesBefore drops labelled traffic older than cutoff. Nothing
-// derived from traffic is kept forever (CLAUDE.md Section 15), and old
-// samples are also the least useful: traffic changes.
+// DeleteSamplesBefore drops one 1000-row batch older than cutoff. Callers
+// schedule repeated bounded batches off the request path; old traffic is
+// both less useful for training and subject to the pilot retention period.
 func DeleteSamplesBefore(ctx context.Context, cutoff time.Time) (int64, error) {
 	if DB == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
-	tag, err := DB.Exec(ctx, `DELETE FROM training_samples WHERE created_at < $1`, cutoff)
+	tag, err := DB.Exec(ctx, `DELETE FROM training_samples WHERE id IN (
+		SELECT id FROM training_samples WHERE created_at < $1
+		ORDER BY created_at, id LIMIT 1000
+	)`, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("deleting old training samples: %w", err)
 	}

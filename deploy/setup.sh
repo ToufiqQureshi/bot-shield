@@ -38,14 +38,25 @@ echo "==> TLS certificate for ${DOMAIN}"
 certbot certonly --standalone --non-interactive --agree-tos \
     -m "${EMAIL}" -d "${DOMAIN}"
 
+echo "==> Install container-readable certificate copy"
+install -m 0755 deploy/sync-certs.sh /usr/local/sbin/hakaishield-sync-certs
+install -d -m 0755 /etc/hakaishield
+printf '%s\n' "${DOMAIN}" > /etc/hakaishield/pilot-domain
+chmod 0600 /etc/hakaishield/pilot-domain
+/usr/local/sbin/hakaishield-sync-certs "/etc/letsencrypt/live/${DOMAIN}"
+
 echo "==> Certificate renewal"
-# certbot's packaged timer handles renewal. The deploy hook restarts
-# whatever is serving so it picks up the new certificate - a renewed cert
-# that nothing reloaded is an outage 90 days after install.
+# certbot's packaged timer handles renewal. Copy the new key before restarting
+# the non-root container; dry-run renewal alone does not exercise this hook.
 mkdir -p /etc/letsencrypt/renewal-hooks/deploy
 cat > /etc/letsencrypt/renewal-hooks/deploy/reload-hakaishield.sh <<'HOOK'
 #!/usr/bin/env bash
 set -eu
+pilot_domain=$(cat /etc/hakaishield/pilot-domain)
+if [ "${RENEWED_LINEAGE:-}" != "/etc/letsencrypt/live/${pilot_domain}" ]; then
+    exit 0
+fi
+/usr/local/sbin/hakaishield-sync-certs "$RENEWED_LINEAGE"
 if systemctl is-active --quiet hakaishield; then
     systemctl restart hakaishield
 elif [ -f /opt/hakaishield/deploy/docker-compose.yml ]; then
@@ -56,8 +67,8 @@ HOOK
 chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-hakaishield.sh
 systemctl enable --now certbot.timer
 
-echo "==> Verifying renewal actually works"
-# Do this now, not in 90 days when it silently fails.
+echo "==> Verifying Certbot renewal"
+# This checks the ACME renewal path; the initial sync above tests the file copy.
 certbot renew --dry-run
 
 echo

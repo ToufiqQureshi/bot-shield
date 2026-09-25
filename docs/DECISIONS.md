@@ -137,8 +137,7 @@ TenantConfig` gained `OwnerUserID`, populated from a new `owner_user_id`
 select in `db.GetTenant`/`GetTenantByID` (the column already existed;
 nothing selected it before this).
 
-**Why:** This is the "remaining production gate #1" from `docs/
-PHASE1_PRODUCTION_REVIEW.md` — binding rules to validated tenant identity
+**Why:** This closed the missing binding of rules to validated tenant identity
 through a bounded, cached provider, tested through the real DB-to-guard
 path for two owners and two domains. `rules.ToPolicy` re-validates every
 row through `policy.ValidateRule` at read time (not just at Create) and
@@ -1800,6 +1799,10 @@ timeout and the canvas pair is sent only below 40 KiB. Per-tenant evidence
 uses an already loaded exact host, avoiding a database call from verify.
 On a cold second node or wildcard development tenant, shadow evidence may be
 absent.
+The proxy's initial shadow mode serves no challenge page, so it produces no
+real visitor observations for these four challenge-only probes. Evaluation
+requires a separately reviewed challenge cohort; server-side header and
+traffic shadow signals continue to collect normally in shadow mode.
 
 ---
 
@@ -1817,6 +1820,103 @@ add useful coverage without harming legitimate shared-IP visitors. Any later
 provider choice must be reviewed for terms, cost, latency, and false positives.
 
 ---
+
+## Model artifacts become v2 with provenance and a promotion gate — 2026-09-25
+
+**Decision:** the saved model format moves to version 2 and every v2 artifact
+carries a provenance record: the check-list hash the training masks used, a
+hash of the labelled dataset, the training options, the held-out evaluation
+summary, and an optional approver. `decide.Load` refuses any artifact whose
+provenance contradicts its own feature list, and v1 files (no provenance) are
+refused outright. The trainer stamps provenance automatically; `-approved-by`
+records the human sign-off, and the proxy logs whether a loaded model is
+approved at startup. Evaluation gained `SplitLeakageSafe` (a later-time,
+identity-clean holdout), plan metrics (intervention recall, hard-block human
+FPR, challenge burden, Brier), calibration buckets, and `RunPromotion`, which
+holds the model unless it matches rule recall on the holdout at equal-or-lower
+hard-block human harm. None of this changes enforcement: the model stays
+shadow-only.
+
+**Why:** the plan's `pkg/decide` section required label provenance, leakage-
+safe evaluation and a promotion test before the model may influence anything.
+A model file that cannot explain where it came from is operator input nobody
+can audit; a promotion decision made on aggregate accuracy can hide human
+harm. The gate encodes the plan's threshold language (recall at no more human
+harm, minimum holdout size) in code so "it looked good" cannot promote a
+model. Enforcing remains a separate, explicit, later step.
+
+---
+
+## Egress bytes and challenge burden are first-class tenant stats — 2026-09-25
+
+**Decision:** per-tenant stats gained a saturating egress-bytes counter fed
+from a measuring response writer wrapped once in `Guard.ServeHTTP`, plus
+per-tenant challenge solve/fail counters fed from the challenge verify path
+through a host-scoped recorder. Both surface through the existing
+`/api/v1/dashboard/stats` response and the Overview page (egress formatted
+MB/GB).
+
+**Why:** the plan's measurement stage (P1) and its cloud-bill section name
+egress bytes as the dominant hosting cost and challenge burden as the human-
+impact number; neither existed per tenant. Counting at the response writer
+means every response path (origin body, challenge page, block page) is
+counted without each path remembering to. The counter saturates instead of
+wrapping so hostile traffic cannot corrupt the cost number. Challenge
+outcomes are recorded against an already-loaded cached tenant only, so the
+unauthenticated verify route cannot create database lookups or touch another
+tenant's numbers.
+
+---
+
+## Endpoint-class velocity buckets and a shared classifier — 2026-09-25
+
+**Decision:** `velocity_spike` now counts per-IP requests in five endpoint-
+class buckets — login 10, API 100, checkout 20, navigation 20, assets 300
+per 1s window — with class computed from the normalized path plus HTTP
+method. The classifier (`Classify`, `NormalizePath`) moved from `pkg/policy`
+into `pkg/signals`; `pkg/policy` re-exports it. The verify path's admission
+ceiling (64 concurrent, counted 503 shed) implements the plan's admission
+budgets for the only unauthenticated endpoint with attacker-supplied work.
+
+**Why:** credential stuffing is a login-shaped flood, scraping is a browse-
+shaped flood, and no single global rate limits both without either missing
+the stuffing or breaking real browsing. The classifier lives in `pkg/signals`
+because `pkg/policy` already imports `pkg/signals` and the reverse edge would
+be a cycle; delegation keeps one vocabulary so dashboard rules and rate
+buckets cannot disagree about what a "login endpoint" is. Bucket limits are
+deliberately conservative and need client-traffic calibration; the login
+limit is strictest because no person posts ten logins a second while NAT
+sharing makes strictness elsewhere risky.
+
+---
+
+## Tenant route drafts and bounded sample retention — 2026-09-25
+
+**Decision:** Customers may label up to 64 canonical exact paths as login or
+checkout in the existing owner-scoped, versioned tenant policy. Dashboard
+Settings saves a shadow revision through the authenticated policy API.
+The labels reuse `velocity_spike` only when that revision is activated; they
+cannot weaken built-in sensitive routes or create a new model feature.
+The default pilot tenant loads its owner from a matching active database row
+at startup. Candidate training samples are pruned off the request path at
+startup and hourly, with 1000-row SQL batches, at most 10 per run, and a
+configurable 1-365 day retention period (default 30).
+
+**Why:** A client may use `/account/signin` instead of `/login`; the global
+classifier otherwise gives it the navigation limit. Versioned shadow drafts
+preserve existing ownership, validation, history and activation gates. Exact
+paths avoid broad prefixes that could capture unrelated traffic. Restricting
+to sensitive classes prevents a customer typo from silently loosening their
+login bucket. Retention cannot depend on an operator remembering to run SQL,
+and a single unbounded delete could stall the pilot database.
+
+**Limits:** The existing policy activation gate uses overall local traffic,
+not per-route samples, so the operator must review each tagged route and
+shared-IP impact before activation. The 30-day default must be confirmed
+against the client's agreed retention period before label collection. The
+current P2 plan offers no evidence that another uncalibrated browser signal
+would improve bot recall; resource/session/route-sequence work waits for
+real baselines or an approved collection surface.
 
 ## Bound unknown-host tenant lookups — 2026-09-25
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"flag"
 	"log"
 	"net"
@@ -35,6 +36,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenantpolicy"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -90,6 +92,15 @@ func redactCredentials(rawURL string) string {
 	return u.String()
 }
 
+// matchingDefaultOwner binds policy ownership only when the dashboard row
+// describes the same live host and origin as this pilot process.
+func matchingDefaultOwner(rowHost, rowTarget, rowStatus, owner, host, target string) (string, error) {
+	if rowHost != host || rowTarget != target || rowStatus != tenant.StatusActive {
+		return "", errors.New("default tenant database row does not match the active pilot host/origin")
+	}
+	return owner, nil
+}
+
 func main() {
 	loadDotEnv(".env")
 
@@ -109,9 +120,13 @@ func main() {
 	redisURL := flag.String("redis-url", "redis://localhost:6379", "Redis connection URL for distributed rate limiting")
 	dbURL := flag.String("db-url", os.Getenv("DATABASE_URL"), "PostgreSQL URL for the Supabase project's database (Project Settings > Database in the Supabase dashboard). Falls back to $DATABASE_URL (including from a local .env file) if unset.")
 	collectLabels := flag.Bool("collect-labels", false, "collect candidate observations from solved challenges and honeypot hits. Requires -db-url. Off by default; see docs/LEARNED_SCORING.md.")
+	sampleRetentionDays := flag.Int("sample-retention-days", 30, "delete training samples older than this many days, 1-365; background cleanup requires -db-url")
 	modelPath := flag.String("model", "", "trained decision model (pkg/decide) to score alongside the rules in shadow; it never affects a decision. Unset leaves it off.")
 	supabaseURL := flag.String("supabase-url", os.Getenv("SUPABASE_URL"), "Supabase project URL (e.g. https://xxxx.supabase.co); used to verify dashboard session JWTs against the project's published JWKS. Required, with -db-url, to enable the domains/rules/settings API. Falls back to $SUPABASE_URL (including from a local .env file) if unset.")
 	flag.Parse()
+	if *sampleRetentionDays < 1 || *sampleRetentionDays > 365 {
+		log.Fatal("hakaishield: -sample-retention-days must be between 1 and 365")
+	}
 
 	mode, err := config.ParseMode(*modeFlag)
 	if err != nil {
@@ -187,6 +202,19 @@ func main() {
 	}
 
 	store := tenant.NewStore()
+	challengeHandler.SetOutcomeRecorder(func(host string, solved bool) {
+		// The verify route is unauthenticated; like the shadow recorder,
+		// only an already-loaded cached tenant is charged, so a forged
+		// Host can never create a database lookup or touch another
+		// tenant's numbers.
+		if tn := store.GetCachedByHost(host); tn != nil {
+			if solved {
+				tn.Stats.RecordChallengeSolved()
+			} else {
+				tn.Stats.RecordChallengeFailed()
+			}
+		}
+	})
 	challengeHandler.SetShadowRecorder(func(host string, signals []string) {
 		// The verify route is unauthenticated. Only use a tenant already
 		// resolved by its original request; never trigger a new DB lookup here.
@@ -214,12 +242,27 @@ func main() {
 	} else {
 		log.Print("hakaishield: warning: -host unset; default origin accepts any hostname not claimed by a database tenant")
 	}
+	defaultOwner := ""
+	if *dbURL != "" && *host != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		rowHost, rowTarget, _, _, rowStatus, owner, lookupErr := db.GetTenantByID(ctx, "default")
+		cancel()
+		if lookupErr == nil {
+			defaultOwner, err = matchingDefaultOwner(rowHost, rowTarget, rowStatus, owner, *host, *target)
+			if err != nil {
+				log.Fatalf("hakaishield: %v", err)
+			}
+		} else if !errors.Is(lookupErr, pgx.ErrNoRows) {
+			log.Fatalf("hakaishield: reading default tenant owner: %v", lookupErr)
+		}
+	}
 	err = store.Add("default", tenant.TenantConfig{
 		Target:        *target,
 		Mode:          mode,
 		Policy:        policy,
 		EvidenceToken: *evidenceToken,
 		Deception:     *deceptionFlag,
+		OwnerUserID:   defaultOwner,
 	}, defaultHosts, originProxy)
 
 	if err != nil {
@@ -255,7 +298,14 @@ func main() {
 			log.Fatalf("hakaishield: -model: %v", err)
 		}
 		guard.WithShadowModel(model)
-		log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests); it records opinions and decides nothing", *modelPath, model.TrainedOn())
+		// Approval state is visible at startup so an operator can tell a
+		// shadow-analysis artifact from one a person signed off. Either
+		// way it decides nothing here; enforcement is a separate gate.
+		if model.Approved() {
+			log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests, approved by %s); it records opinions and decides nothing", *modelPath, model.TrainedOn(), model.Provenance().ApprovedBy)
+		} else {
+			log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests, UNAPPROVED - shadow analysis only); it records opinions and decides nothing", *modelPath, model.TrainedOn())
+		}
 	}
 
 	// The proxy loads versioned tenant policy asynchronously. Legacy account
@@ -358,6 +408,9 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if *dbURL != "" {
+		go runSampleRetention(ctx, *sampleRetentionDays)
+	}
 
 	go func() {
 		log.Printf("hakaishield: listening on %s, protecting %s", *addr, *target)

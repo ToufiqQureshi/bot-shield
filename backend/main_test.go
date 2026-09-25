@@ -50,6 +50,22 @@ func TestRedactCredentials(t *testing.T) {
 	}
 }
 
+func TestDefaultTenantOwnerRequiresMatchingLiveRoute(t *testing.T) {
+	owner, err := matchingDefaultOwner("client.example", "https://origin.example", "active", "user-1", "client.example", "https://origin.example")
+	if err != nil || owner != "user-1" {
+		t.Fatalf("matching owner=%q err=%v", owner, err)
+	}
+	for _, tc := range []struct{ host, target, status string }{
+		{"other.example", "https://origin.example", "active"},
+		{"client.example", "https://other.example", "active"},
+		{"client.example", "https://origin.example", "pending"},
+	} {
+		if owner, err := matchingDefaultOwner(tc.host, tc.target, tc.status, "user-1", "client.example", "https://origin.example"); err == nil || owner != "" {
+			t.Fatalf("mismatched row %+v yielded owner=%q err=%v", tc, owner, err)
+		}
+	}
+}
+
 func TestRedactCredentials_NeverLeaksPasswordSubstring(t *testing.T) {
 	// The specific regression this guards: a raw password string must
 	// never appear in the redacted output, regardless of URL shape.

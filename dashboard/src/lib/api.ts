@@ -87,6 +87,38 @@ export async function listDomains() {
   return request<Domain[]>('/domains');
 }
 
+export interface PolicyDocument {
+  mode: 'shadow' | 'enforce';
+  rules: unknown[];
+  routeClasses?: Record<string, 'login' | 'checkout'>;
+  allowlist?: string[];
+  challengeTheme?: string;
+  blockMessage?: string;
+}
+
+export interface PolicyRevision {
+  version: number;
+  document: PolicyDocument;
+}
+
+// A missing revision is normal for a new pilot domain. PUT checks ownership
+// against the authenticated account before it can create version one.
+export async function getTenantPolicy(tenantId: string, signal?: AbortSignal): Promise<PolicyRevision | null> {
+  try {
+    return await request<PolicyRevision>(`/domains/${encodeURIComponent(tenantId)}/policy`, { signal });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export async function saveTenantPolicy(tenantId: string, expectedVersion: number, document: PolicyDocument): Promise<PolicyRevision> {
+  return request<PolicyRevision>(`/domains/${encodeURIComponent(tenantId)}/policy`, {
+    method: 'PUT',
+    body: JSON.stringify({ expectedVersion, document }),
+  });
+}
+
 // ---- Mitigation Rules ----
 
 export interface ManagedRule {
@@ -129,6 +161,12 @@ export interface DashboardStats {
   challenged: number;
   blocked: number;
   deceived: number;
+  rateLimited: number;
+  // P1 measurement: egress bytes are the inline proxy's dominant hosting
+  // cost, and challenge solves/failures are the human-burden numbers.
+  egress_bytes: number;
+  challenge_solves: number;
+  challenge_failures: number;
   mode: string;
   enforcing: boolean;
 }
@@ -136,11 +174,12 @@ export interface DashboardStats {
 // getStats talks to the authenticated stats endpoint. Its response is raw
 // JSON (rather than the CRUD API envelope), so it keeps a small dedicated
 // fetch while still attaching the current Supabase session token.
-export async function getStats(tenantId: string): Promise<DashboardStats> {
+export async function getStats(tenantId: string, signal?: AbortSignal): Promise<DashboardStats> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   const res = await fetch(`${BASE_URL}/dashboard/stats?tenant=${encodeURIComponent(tenantId)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    signal,
   });
   if (!res.ok) {
     throw new ApiError(res.status, `Could not load stats (${res.status})`);
@@ -154,19 +193,20 @@ export interface TopOffender {
   blocked: number;
 }
 
-export async function getTopOffenders() {
-  return request<TopOffender[]>('/dashboard/top-offenders');
+export async function getTopOffenders(tenantId: string, signal?: AbortSignal) {
+  return request<TopOffender[]>(`/dashboard/top-offenders?tenant=${encodeURIComponent(tenantId)}`, { signal });
 }
 
 export interface EvidenceEntry {
   time: string;
   ja4: string;
   signals: string[];
+  shadowSignals?: string[];
   score: number;
   decision: string;
   enforced: boolean;
 }
 
-export async function getEvidenceLogs() {
-  return request<EvidenceEntry[]>('/dashboard/evidence-logs');
+export async function getEvidenceLogs(tenantId: string, signal?: AbortSignal) {
+  return request<EvidenceEntry[]>(`/dashboard/evidence-logs?tenant=${encodeURIComponent(tenantId)}`, { signal });
 }

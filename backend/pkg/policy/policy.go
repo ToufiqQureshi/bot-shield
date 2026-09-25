@@ -118,6 +118,7 @@ type Policy struct {
 	Version        int
 	Mode           string // shadow or enforce; empty is shadow
 	Rules          []Rule
+	RouteClasses   map[string]string
 	Allowlist      []*net.IPNet
 	ChallengeTheme string
 	BlockMessage   string
@@ -266,6 +267,12 @@ func Compile(p *Policy) (*Policy, error) {
 		return nil, nil
 	}
 	copyPolicy := *p
+	if p.RouteClasses != nil {
+		copyPolicy.RouteClasses = make(map[string]string, len(p.RouteClasses))
+		for path, class := range p.RouteClasses {
+			copyPolicy.RouteClasses[path] = class
+		}
+	}
 	copyPolicy.Rules = make([]Rule, len(p.Rules))
 	for i, rule := range p.Rules {
 		copyPolicy.Rules[i] = rule

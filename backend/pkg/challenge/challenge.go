@@ -43,6 +43,10 @@ type Challenge struct {
 	// shadowRecorder receives only validated, completed challenge solves.
 	// Install it before serving requests; nil disables per-tenant evidence.
 	shadowRecorder func(host string, signals []string)
+	// outcomeRecorder, when set, receives every verify outcome so the
+	// tenant's dashboard shows challenge burden. Failures include the
+	// malformed and replayed attempts a real visitor can also produce.
+	outcomeRecorder func(host string, solved bool)
 }
 
 type themeContextKey struct{}
@@ -123,6 +127,14 @@ func (c *Challenge) SetLabelRecorder(r *labels.Recorder) {
 // The host comes from a signed challenge token checked before this is called.
 func (c *Challenge) SetShadowRecorder(record func(host string, signals []string)) {
 	c.shadowRecorder = record
+}
+
+// SetOutcomeRecorder attaches per-tenant challenge outcome counting.
+// Call it during setup, before serving traffic. Passing nil turns it off,
+// which is the default. The host is the already-canonicalized request host
+// of the verify call, not a client-supplied value we look up in a database.
+func (c *Challenge) SetOutcomeRecorder(record func(host string, solved bool)) {
+	c.outcomeRecorder = record
 }
 
 func (c *Challenge) SetNonceStore(store NonceStore) {
@@ -709,6 +721,18 @@ func (c *Challenge) Serve(w http.ResponseWriter, r *http.Request) {
 // hard 403: the visitor's next page load re-triggers the challenge
 // from Serve, which issues a fresh token and puzzle.
 func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
+	// The verify path is unauthenticated and does attacker-supplied work
+	// (canvas PNG decode). Shed load at a fixed ceiling rather than
+	// spending unbounded CPU during a flood; a real visitor's page
+	// retries, and the refusal is counted.
+	if !TryAdmitVerify(func() { c.verify(w, r) }) {
+		http.Error(w, "verification busy, try again", http.StatusServiceUnavailable)
+		return
+	}
+}
+
+// verify is handleVerify's body once an admission slot is held.
+func (c *Challenge) verify(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxVerifyBodyBytes)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "request too large or malformed", http.StatusBadRequest)
@@ -732,17 +756,20 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Millisecond)
 	defer cancel()
 	if !c.nonceStore.Consume(ctx, info.nonce, now, challengeMaxAge) {
+		c.recordOutcome(r.Host, false)
 		http.Error(w, "challenge already used", http.StatusForbidden)
 		return
 	}
 	answer := r.FormValue("answer")
 	if !validPoW(info.nonce, answer, info.difficulty) {
 		c.failSolve(w, r)
+		c.recordOutcome(r.Host, false)
 		http.Error(w, "incorrect answer", http.StatusForbidden)
 		return
 	}
 	if !validCanvasProof(r.FormValue("canvas")) {
 		c.failSolve(w, r)
+		c.recordOutcome(r.Host, false)
 		http.Error(w, "invalid canvas proof", http.StatusForbidden)
 		return
 	}
@@ -756,6 +783,7 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 	// suspiciously fast solve is only measured, never enforced.
 	if telemetry.Automation || telemetry.Headless {
 		c.failSolve(w, r)
+		c.recordOutcome(r.Host, false)
 		http.Error(w, "automation detected", http.StatusForbidden)
 		return
 	}
@@ -765,6 +793,7 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 	// the trainer excludes these observations by default.
 	c.clearAttempts(w, r)
 	recordChallengeOutcome(true, r.UserAgent())
+	c.recordOutcome(r.Host, true)
 	if telemetry.FastSolve {
 		observability.Inc(counterFastSolve)
 	}
@@ -785,6 +814,14 @@ func (c *Challenge) handleVerify(w http.ResponseWriter, r *http.Request) {
 func (c *Challenge) failSolve(w http.ResponseWriter, r *http.Request) {
 	recordChallengeOutcome(false, r.UserAgent())
 	c.recordAttempt(w, r)
+}
+
+// recordOutcome reports one verified verify-call outcome to the tenant
+// stats hook, when one is attached. It never fails a request.
+func (c *Challenge) recordOutcome(host string, solved bool) {
+	if c.outcomeRecorder != nil {
+		c.outcomeRecorder(canonicalHost(host), solved)
+	}
 }
 
 // Passed reports whether r already carries a valid, unexpired

@@ -68,7 +68,7 @@ func TestEvaluateRunsStatefulChecksOnce(t *testing.T) {
 		t.Fatalf("Evaluate() signals = %v, want none", evaluation.Signals)
 	}
 
-	ipKey, _ := velocityBucket(f.Tenant, f.IP, f.Path, window)
+	ipKey, _ := velocityBucket(f.Tenant, f.IP, f.Path, f.Method, window)
 	ipCount, err := rdb.Get(context.Background(), ipKey).Int64()
 	if err != nil {
 		t.Fatalf("read IP velocity counter: %v", err)

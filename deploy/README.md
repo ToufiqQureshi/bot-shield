@@ -43,8 +43,10 @@ bash deploy/setup.sh customer.example you@example.com
 ```
 
 That installs Docker and certbot, sets a default-deny firewall open on 22/80/443,
-issues the certificate, installs a renewal hook that restarts hakaishield when
-the certificate rolls, and **verifies renewal works now** rather than in 90 days.
+issues the certificate, copies it into a directory readable by the container's
+non-root GID 65532, installs a renewal hook that refreshes that copy before
+restarting hakaishield, and runs Certbot's renewal dry-run. The dry-run checks
+certificate renewal; the initial copy checks the hook's file-permission path.
 
 Then:
 
@@ -66,6 +68,11 @@ slash); the API rejects arbitrary browser origins in the deployed stack.
 
 Keep the domain's A record pointed at the box. Keep `HAKAISHIELD_CHALLENGE_SECRET`
 stable across restarts; changing it invalidates active challenges and cookies.
+Set `HAKAISHIELD_SAMPLE_RETENTION_DAYS` to the client-approved period (1-365;
+example/default 30) before collecting candidate labels. The proxy prunes old
+samples at startup and hourly, at most 10,000 rows per run, without a request
+path query. After binding the pilot Auth owner in Postgres, restart the proxy
+so the host-bound default tenant loads that owner and its policy drafts.
 
 ---
 
@@ -151,7 +158,14 @@ openssl s_client -connect customer.example:443 -servername customer.example </de
 Re-read `DEPLOYMENT.md` §1.
 
 **Certificate errors 90 days in** → the renewal hook never ran. That is what
-`certbot renew --dry-run` was meant to catch.
+the hook and `certbot renew --dry-run` checks are meant to catch. Inspect
+`/etc/hakaishield/tls` and rerun
+`sudo /usr/local/sbin/hakaishield-sync-certs /etc/letsencrypt/live/<domain>`
+before restarting the service if the mounted copy is stale.
+
+**Permission denied on the TLS key** → verify `/etc/hakaishield/tls` is mode
+`0750` and `privkey.pem` is root:65532 mode `0640`. The container mounts only
+this copy at `/run/hakaishield/tls`, not Certbot's root-only tree.
 
 **Port 443 refused** → in Docker the process listens on 8443 and the host
 publishes 443; check the port mapping before the process.

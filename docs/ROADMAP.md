@@ -7,8 +7,8 @@ counter isolation and challenge replay/deployment hardening are in the pilot
 branch. Real traffic precision/recall, live server/domain/TLS, durable evidence,
 and multi-node resilience remain open. See `CLIENT_PILOT_RELEASE.md`; do not
 advertise a 70–80% catch rate without a measured, labelled traffic sample.
-The pilot dashboard now exposes managed setup only: unverified self-service
-domain creation, misleading live-policy controls, and unimplemented billing
+The pilot dashboard now exposes managed setup and shadow route-tag drafts only: unverified self-service
+domain creation, direct live-policy controls, and unimplemented billing
 claims are not available to customers. Automated ownership proof, certificate
 issuance and customer activation remain item 21 below.
 
@@ -440,7 +440,10 @@ dimensions and nonblank pixels (item 28 follow-up). A scripted client can
 still forge a PNG, so solves remain unverified candidate observations.
 The challenge also records four browser-reported candidates as shadow-only
 evidence after valid solves; they require real client traffic review before
-any policy promotion. DNSBL/IP reputation is deferred for the low-cost pilot;
+any policy promotion. The initial proxy shadow mode never serves challenges,
+so these four candidates will have no real-visitor samples during that phase.
+They need a separately reviewed challenge cohort before promotion. DNSBL/IP
+reputation is deferred for the low-cost pilot;
 no provider or request-path query is configured. Revisit after labelled client
 traffic shows a measurable gap that an IP list can close.
 
@@ -531,8 +534,9 @@ production self-service feature. See `BACKEND_IMPLEMENTATION_PLAN.md` and
       `LEARNED_SCORING.md`) is an unmade product decision, and the parked
       challenge samples are per-process, so behind several nodes a
       visitor challenged on one and verified on another produces no
-      label. Retention (`db.DeleteSamplesBefore`) exists but nothing
-      calls it on a schedule yet.
+      label. Candidate sample retention now runs at startup and hourly in
+      batches of 1000 (up to 10 batches/run), defaulting to 30 days; confirm
+      the approved period before enabling collection.
 
       Also see `docs/DECISIONS.md`, "Learned decision weights are a linear
       model over existing signals".
@@ -624,19 +628,25 @@ production self-service feature. See `BACKEND_IMPLEMENTATION_PLAN.md` and
       Missing: referrer-chain analysis,
       per-fingerprint request *rate* (not just distinct paths), and the
       caps are reasoned guesses, not tuned against real traffic.
-- [ ] **9a. API-aware endpoint rules** — tag endpoints by category
-      (login, checkout, listing, generic) in config so item 9's rate
-      thresholds differ per category, instead of one global rate limit
-      for the whole site. Reuses items 9 + 11's machinery — a config
-      field, not a new signal or new package. Competitor gap: see
-      `docs/RESEARCH.md`'s 2026-09-15 competitor scan (DataDome's
-      stated differentiator).
-      **Risk:** wrong category tagging is worse than no tagging — a
-      client mislabeling their login endpoint as "generic" gets the
-      loose threshold on their most sensitive route, silently, with no
-      warning. Needs a sane default (unlabeled endpoint = strictest
-      category, not loosest) and validation that catches an empty/
-      missing category rather than defaulting quietly.
+- [x] **9a. API-aware endpoint rules** — tag endpoints by category
+      so item 9's rate thresholds differ per category, instead of one
+      global rate limit for the whole site.
+      **Done 2026-09-25:** per-IP velocity now counts five endpoint-
+      class buckets (login 10, API 100, checkout 20, navigation 20,
+      assets 300 per 1s window). Classification is by normalized path
+      plus HTTP method using the shared classifier that moved from
+      `pkg/policy` into `pkg/signals` (`Classify`/`NormalizePath`);
+      `pkg/policy` re-exports it so dashboard rules and rate buckets
+      cannot disagree. See `DECISIONS.md` 2026-09-25.
+      **Done 2026-09-25:** authenticated customers can tag up to 64 exact
+      login/checkout paths in a tenant's versioned shadow policy. Tags
+      use the existing velocity signal only after policy activation; the
+      default classifier remains in force before that. The first pilot
+      domain owner is loaded from a matching active database row on startup.
+      **Remaining risk:** an ordinary high-volume path mislabelled as login
+      gets a stricter 10/s per-IP bucket after activation; review shared-IP
+      clients and route samples first. The validator rejects generic/API
+      downgrades and changing built-in login/checkout classes.
 - [x] **10. Honeypot fields** — invisible form fields/links only a
       blind selector-based script would interact with.
       **Done 2026-09-20:** an `aria-hidden`, `tabindex="-1"`,

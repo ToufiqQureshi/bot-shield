@@ -128,6 +128,32 @@ Guardrails:
   because showing false data to a real user is worse than returning an error.
 - Rule changes are auditable, versioned, tenant-scoped, and can be rolled back.
 
+**Current Phase 1 API contract.** Tenant policy revisions are immutable,
+ordered snapshots. A write checks the authenticated owner and
+`expectedVersion`; a rollback appends a new **shadow** revision rather than
+rewriting history. The first enabled matching rule wins, while no match keeps
+the baseline signal decision. Conditions cover canonical path/method, CIDR,
+verified search/monitor status, score, signal and request class. Unsafe or
+ambiguous rules are rejected. Legacy account-wide dashboard rules remain
+shadow-only; the dashboard has no editor for the tenant revision API.
+
+| Authenticated route under `/api/v1/domains/{id}/policy` | Purpose |
+|---|---|
+| `GET` and `PUT` on the base path | Read current revision or append a shadow revision with `expectedVersion` and `document` (`0` for the first version). |
+| `GET /history` and `GET /history/{version}` | Read recent revision summaries or a complete historical document. |
+| `POST /rollback` | Append an older document as a new shadow revision with `expectedVersion` and `targetVersion`. |
+| `POST /preview` | Evaluate hypothetical facts without changing visitor traffic. |
+| `GET /shadow` | Read bounded local matches, disagreements, actions and readiness. |
+| `POST /activate` | Append an enforce revision only after the local shadow gate. |
+
+The activation gate requires 100 unskipped evaluations of the current
+revision over at least 30 minutes, with a recent observation. Its aggregates
+are node-local and reset on restart; multi-node activation needs durable
+telemetry. Global proxy shadow mode still forwards every request even if a
+tenant revision has been activated. Policy refresh is asynchronous and
+bounded; a cache miss uses baseline scoring while the revision loads. The
+endpoint source and tests in `backend/pkg/api/` remain authoritative.
+
 ## Phase 2 — Challenge and Continuous Trust
 
 Inspired by Anubis and FCaptcha: make automation pay a cost, but do not punish

@@ -4,6 +4,16 @@ import { AlertCircle } from 'lucide-react';
 import { getStats, getTopOffenders, ApiError, type DashboardStats, type TopOffender } from '../lib/api';
 import type { LayoutContext } from '../components/Layout';
 
+// formatEgress renders the tenant's cost number the way the monthly
+// bill reads: MB under a gigabyte, GB above. Exported for the tests —
+// this is the number a customer will question, so its formatting is
+// pinned, not left to whatever the browser shows.
+export function formatEgress(bytes: number): string {
+  return bytes >= 1024 * 1024 * 1024
+    ? `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function Overview() {
   const { selectedDomain, domainsLoading } = useOutletContext<LayoutContext>();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -12,21 +22,29 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!selectedDomain) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+    const controller = new AbortController();
     setStats(null);
     setOffenders([]);
     setError(null);
-    Promise.all([getStats(selectedDomain.id), getTopOffenders()])
+    if (!selectedDomain) {
+      setLoading(false);
+      return () => controller.abort();
+    }
+    setLoading(true);
+    Promise.all([getStats(selectedDomain.id, controller.signal), getTopOffenders(selectedDomain.id, controller.signal)])
       .then(([s, o]) => {
-        setStats(s);
-        setOffenders(o);
+        if (!controller.signal.aborted) {
+          setStats(s);
+          setOffenders(o);
+        }
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load dashboard data.'))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err instanceof ApiError ? err.message : 'Could not load dashboard data.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [selectedDomain]);
 
   if (!domainsLoading && !selectedDomain) {
@@ -46,6 +64,14 @@ export default function Overview() {
     { label: 'Blocked', value: stats.blocked },
     { label: 'Challenged', value: stats.challenged },
     { label: 'Deceived', value: stats.deceived },
+  ] : [];
+
+  // Format bytes the way the cost conversation needs: a raw byte count
+  // is unreadable, and this is the number the monthly bill is built on.
+  const measurements = stats ? [
+    { label: 'Egress', value: formatEgress(stats.egress_bytes) },
+    { label: 'Challenge Solves', value: stats.challenge_solves.toLocaleString() },
+    { label: 'Challenge Failures', value: stats.challenge_failures.toLocaleString() },
   ] : [];
 
   return (
@@ -79,14 +105,25 @@ export default function Overview() {
       {loading ? (
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading…</p>
       ) : stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {metrics.map((m, i) => (
-            <div key={i} className="card p-4">
-              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{m.label}</p>
-              <p className="text-2xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>{m.value.toLocaleString()}</p>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {metrics.map((m, i) => (
+              <div key={i} className="card p-4">
+                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{m.label}</p>
+                <p className="text-2xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>{m.value.toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+          {/* P1 measurement strip: traffic cost and challenge burden. */}
+          <div className="grid grid-cols-3 gap-3">
+            {measurements.map((m, i) => (
+              <div key={i} className="card p-4">
+                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{m.label}</p>
+                <p className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>{m.value}</p>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Top Offenders */}

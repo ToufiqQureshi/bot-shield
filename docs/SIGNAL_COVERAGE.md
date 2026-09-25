@@ -6,7 +6,7 @@ in the request path today, exactly how it's implemented, and — separately
 design doc. Source of truth is the code in `backend/pkg/signals/`,
 `backend/pkg/core/`, `backend/pkg/challenge/`, `backend/pkg/deception/`;
 cross-checked against `docs/ROADMAP.md`, `docs/DECISIONS.md`,
-`docs/RESEARCH.md`, `docs/PROGRESS.md` as of 2026-09-24.
+`docs/RESEARCH.md`, `docs/PROGRESS.md` as of 2026-09-25.
 
 Keep this updated whenever a signal is added, removed, or reweighted —
 see `CLAUDE.md` Section 22.
@@ -22,14 +22,14 @@ two policy modes.
 |---|---|
 | score ≥ 100 | **Block** (or **Deceive**, if the tenant has deception enabled) |
 | 1–99 (Balanced policy) | **Challenge** |
-| 0 (Balanced policy) | **Allow**, zero latency |
-| any score, Strict policy | **Challenge** (mandatory interstitial) |
+| 0 (Balanced policy) | **Allow** without an interstitial |
+| score < 100, Strict policy | **Challenge** (mandatory interstitial) |
 
-Rule enforced in code: **no single signal reaches 100 alone.** The two
-100-weight checks (`ja4_blocklist`, `scripting_tool`) are each a single
-independent finding, not a combination — see `docs/DECISIONS.md` for why
-those two are treated as conclusive on their own while everything else
-stacks.
+Most signals stack below the 100-point block threshold. Two deliberate
+exceptions, `ja4_blocklist` and `scripting_tool`, each carry weight 100 and
+can reach block alone. The scripting-tool User-Agent is visitor-controlled,
+so verify its false-positive behavior before treating that as broad coverage.
+See `docs/DECISIONS.md` for the threshold rationale.
 
 ---
 
@@ -37,16 +37,24 @@ stacks.
 
 | Signal | File | Weight | What it actually checks | Data source | Fails open? |
 |---|---|---|---|---|---|
-| `fragmented_handshake` | `fingerprint.go`, `score.go` | 50 | JA4 came back `unreadable` — ClientHello was split across TLS records, a known fingerprinting-evasion trick real browsers never do | TLS ClientHello (server-observed, unspoofable) | Yes — no TLS, no fingerprint, no penalty |
+| `fragmented_handshake` | `fingerprint.go`, `score.go` | 50 | JA4 came back `unreadable`; fragmentation is one possible cause and is not proof of a bot alone | TLS ClientHello (server-observed) | Yes — no TLS, no fingerprint, no penalty |
 | `ua_mismatch` | `useragent.go` | 50 | UA claims Chrome/Firefox/Safari/Edge, but JA4 says TLS 1.0/1.1, is `unreadable`, or matches a known scraper library's JA4 | UA (visitor-controlled) vs JA4 (server-observed) | Yes — empty JA4 or non-browser UA exempted |
-| `header_anomaly` | `headers.go` | 25 | UA claims a browser but the request carries **none** of `Sec-Fetch-*` or `Sec-CH-UA*` — every real navigation sends at least one | Request headers | Yes — non-browser UA exempted; deliberately capped below the challenge bar alone (privacy tools/devtools fetches can miss one) |
-| `ja4_blocklist` | `ja4db.go`, `score.go` | 100 (alone) | JA4 matches a verified scraper-library fingerprint, from a hardcoded seed (`python-requests` verified capture) plus a Redis-fed, background-synced (30s poll) hash set | TLS fingerprint (unspoofable) | N/A — direct match |
+| `header_anomaly` | `headers.go` | 25 | UA claims a browser but the request carries **none** of `Sec-Fetch-*` or `Sec-CH-UA*` | Request headers | Yes — non-browser UA exempted; this can challenge alone but cannot reach the block threshold alone. |
+| `ja4_blocklist` | `ja4db.go`, `score.go` | 100 (alone) | JA4 matches a verified scraper-library fingerprint, from a hardcoded seed (`python-requests` verified capture) plus a Redis-fed, background-synced (30s poll) hash set | Server-observed TLS fingerprint; sophisticated clients can imitate one | N/A — direct match |
 | `scripting_tool` | `useragent.go`, `score.go` | 100 (alone) | UA literally names itself as one of ~45 known HTTP libraries, CLI tools, load-test tools, headless automation frameworks, scraping frameworks, or recon/vuln scanners (expanded 2026-09-23 from 11 to ~45 entries, e.g. `okhttp`, `axios`, `scrapy`, `sqlmap`, `nuclei`, `burpsuite`) | UA (visitor-controlled, spoofable — this is a weak signal despite the weight) | N/A |
-| `velocity_spike` | `velocity.go` | 50 | Per-tenant, per-IP request rate over a 1s fixed window, split into two buckets: 20 navigations/window vs 300 asset requests/window (asset detection by file extension) | Redis `INCR`/`EXPIRE` pipeline, 50ms timeout | Yes — Redis down → no penalty, circuit-breaker gated |
+| `velocity_spike` | `velocity.go` | 50 | Per-tenant, per-IP request rate over a 1s fixed window, split into **five endpoint-class buckets** (2026-09-25): login 10/window, API 100, checkout 20, navigation 20, assets 300 — classes come from the shared classifier in `signals/class.go`, which `pkg/policy` re-exports so rules and rate buckets can never disagree | Redis `INCR`/`EXPIRE` pipeline, 50ms timeout | Yes — Redis down → no penalty, circuit-breaker gated |
 | `ja4_velocity_spike` | `velocity.go` | 50 | One non-browser JA4 fingerprint exceeding 50 requests/second **within a tenant**, across its source IPs | Redis, same pipeline pattern | Yes, same circuit |
 | `crawl_pattern` | `pattern.go` | 50 | One tenant/IP touching >60 distinct page paths inside a 60s window (HyperLogLog cardinality estimate, ~12KB bounded memory); static assets and non-browser-claiming UAs excluded | Redis PFADD/PFCOUNT, 50ms timeout | Yes, same circuit |
 | `honeypot_trap` | `honeypot.go`, `deception.go` | 50 | Fetched the invisible (`aria-hidden`, `tabindex="-1"`, `rel=nofollow`, `display:none`) trap link injected into **deceived** HTML responses. Keyed on (tenant, IP, JA4), 6h TTL, capped at 50k entries in-memory per node | Server-injected link + server-observed fetch | N/A — absence of a fetch just means no signal |
 | automation-tool probe | `challenge.go` (not `score.go`) | hard fail, not scored | Inside the JS challenge page: checks `navigator.webdriver` and known Selenium/PhantomJS/Nightmare.js globals. Fires *in addition to* the SHA-256/canvas proof — fails the challenge outright (no passed cookie), doesn't add to the score | Client-side JS, self-reported | N/A — only runs for traffic already reaching the challenge |
+
+### 2026-09-25 route classification update
+
+The existing `velocity_spike` check now accepts up to 64 exact-path
+login/checkout labels from an activated, owner-scoped tenant policy. Shadow
+drafts do not change live buckets. Built-in login/checkout classes cannot be
+weakened by a malformed label. The same login 10/s and checkout 20/s limits
+apply; no new scored signal or model feature was added.
 
 ### 2026-09-24 pilot detection changes
 
@@ -61,6 +69,13 @@ permanent allow decision. Evidence includes both the fresh signals and
 platform and mobile contradictions. These are client-controlled claims, so
 they live in `shadowSignals`, never alter the score or decision, and require
 real-browser false-positive measurement before promotion.
+
+Four more candidates—WebGPU f16 absence, repeated canvas output, pointer
+inactivity and legacy automation globals—are recorded after a valid enforced
+challenge solve. Proxy shadow mode serves no challenge, so these candidates
+collect no real-visitor samples during the initial shadow pilot and have no
+current catch-rate benefit. The pointer bit is not site-wide behavioural
+analysis.
 
 ### Allowlist / exemption logic (reduces false positives, not a score signal)
 
@@ -98,7 +113,7 @@ narrower than the original spec.
 | **Session consistency check** | No cross-check of IP geolocation vs. declared timezone/Accept-Language vs. TLS fingerprint's likely OS — would catch mismatched proxy/fingerprint automation pipelines | Item 8 (P1) |
 | **Referrer-chain analysis** | `crawl_pattern` counts distinct paths but never checks whether navigation has a plausible referrer chain | Item 9 remaining scope |
 | **Per-fingerprint request rate** (not just distinct-path count) | Current `ja4_velocity_spike` is a raw count cap; no rate-shape analysis | Item 9 remaining scope |
-| **API-aware endpoint rules** | One global rate limit for the whole site — no per-category (login/checkout/listing) thresholds | Item 9a (P1), named as a stated DataDome differentiator in the competitor scan |
+| **Route-sequence / transition summaries** | Endpoint-class velocity exists (login/API/checkout/asset/nav buckets, 2026-09-25) but there is no bounded per-session route-transition summary yet | Plan P2 track 4 remaining scope |
 
 ### Built, but narrower than the roadmap originally scoped
 

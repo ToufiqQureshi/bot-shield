@@ -14,6 +14,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/observability"
 	"github.com/ToufiqQureshi/hakaishield/pkg/policy"
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
+	"github.com/ToufiqQureshi/hakaishield/pkg/stats"
 	"github.com/ToufiqQureshi/hakaishield/pkg/tenant"
 )
 
@@ -114,6 +115,21 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Egress measurement: everything written to the visitor from here on
+	// is the tenant's bandwidth cost, whoever wrote it — origin body,
+	// challenge page, or block page. One wrapper around the writer means
+	// no response path can forget to be counted. The tenant's stats are
+	// wired in once the host is resolved; earlier rejections belong to
+	// no tenant and are not charged to one.
+	mw := NewMeasureWriter(w)
+	w = mw
+	var measured *stats.Stats
+	defer func() {
+		if measured != nil {
+			measured.RecordEgressBytes(mw.BytesWritten())
+		}
+	}()
+
 	ja4 := JA4FromContext(r.Context())
 
 	ip := g.clientIP.ClientIP(r)
@@ -140,6 +156,15 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		observability.Inc("request_unknown_host_total")
 		http.Error(w, "misdirected request", http.StatusMisdirectedRequest)
 		return
+	}
+	measured = tenant.Stats
+	var activePolicy *policy.Policy
+	if g.policyProvider != nil {
+		activePolicy = g.policyProvider(tenant.ID)
+	}
+	routeClass := ""
+	if activePolicy != nil {
+		routeClass = activePolicy.ClassifyRoute(r.URL.Path, r.Method)
 	}
 
 	enforced := tenant.Config.Mode == config.ModeEnforce
@@ -210,7 +235,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Passing a puzzle grants temporary challenge relief, not a bypass
 		// of later TLS, tool, honeypot, or crawl evidence. Evaluate once so
 		// Redis counters are incremented only once per request.
-		facts := signals.RequestFacts{IP: ip, JA4: ja4, UA: r.UserAgent(), Header: r.Header, Path: r.URL.Path, Tenant: tenant.ID}
+		facts := signals.RequestFacts{IP: ip, JA4: ja4, UA: r.UserAgent(), Header: r.Header, Path: r.URL.Path, Method: r.Method, RouteClass: routeClass, Tenant: tenant.ID}
 		evaluation := signals.Evaluate(facts)
 		shadowSignals := signals.ShadowSignals(facts)
 		for _, signal := range shadowSignals {
@@ -250,12 +275,14 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	facts := signals.RequestFacts{
-		IP:     ip,
-		JA4:    ja4,
-		UA:     r.UserAgent(),
-		Header: r.Header,
-		Path:   r.URL.Path,
-		Tenant: tenant.ID,
+		IP:         ip,
+		JA4:        ja4,
+		UA:         r.UserAgent(),
+		Header:     r.Header,
+		Path:       r.URL.Path,
+		Method:     r.Method,
+		RouteClass: routeClass,
+		Tenant:     tenant.ID,
 	}
 	evaluation := signals.Evaluate(facts)
 	shadowSignals := signals.ShadowSignals(facts)
@@ -272,10 +299,6 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	baseline := decision
 	var opinion *evidence.PolicyOpinion
-	var activePolicy *policy.Policy
-	if g.policyProvider != nil {
-		activePolicy = g.policyProvider(tenant.ID)
-	}
 	if activePolicy != nil {
 		decision, opinion = evaluateTenantPolicy(activePolicy, facts, evaluation.Signals, score, strings.ToUpper(r.Method), verifiedBot, baseline, enforced)
 		if opinion.Matched {
@@ -341,6 +364,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			FeatureVersion: signals.FeatureVersion(),
 			Identity:       labelIdentity(tenant.ID, ip, ja4),
 		}))
+		challengeRequest = challengeRequest.WithContext(WithMethod(challengeRequest.Context(), r.Method))
 		if activePolicy != nil && opinion != nil && opinion.Enforced {
 			challengeRequest = challengeRequest.WithContext(challenge.WithTheme(challengeRequest.Context(), activePolicy.ChallengeTheme))
 		}
@@ -402,7 +426,7 @@ func evaluateTenantPolicy(p *policy.Policy, facts signals.RequestFacts, fired []
 		opinion.SkippedReason = "ambiguous_path"
 		return baseline, opinion
 	}
-	class := policy.Classify(path, method)
+	class := p.ClassifyRoute(path, method)
 	opinion.Class = class
 	opinion.Method = method
 	allowlisted := p.Allowlisted(facts.IP)
