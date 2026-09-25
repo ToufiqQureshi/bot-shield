@@ -34,6 +34,15 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — close UA-only crawler exemption in path detection
+
+`acbdfc45` — The existing `crawl_pattern` now counts declared crawler UAs
+unless supported-crawler reverse/forward DNS verification succeeds. Unknown
+crawlers follow ordinary scoring; no signal or model feature was added.
+Gotcha: unverified crawlers above 60 distinct pages/minute may be challenged
+once enforcement is enabled; review them in shadow traffic.
+Mutation: removing the verified-good-bot exemption made its regression test fail.
+
 ### 2026-09-25 — tenant route labels and sample retention
 
 `b76a8583` — Owner-scoped exact login/checkout labels are saved as versioned
