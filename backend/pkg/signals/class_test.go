@@ -38,8 +38,8 @@ func TestNormalizePath(t *testing.T) {
 		{"/a/b", "/a/b", true},
 		{"", "/", true},
 		{"/a/./b", "/a/b", true},
-		{"/a/%62", "/a/b", true},  // one level of unescaping is fine
-		{"/a/%252e", "", false}, // still percent-encoded after unescape: ambiguous
+		{"/a/%62", "/a/b", true}, // one level of unescaping is fine
+		{"/a/%252e", "", false},  // still percent-encoded after unescape: ambiguous
 		{"relative", "", false},
 		{"/a//b", "", false},
 	}
