@@ -799,3 +799,26 @@ adapter, or lookup timeout is neutral. No detection percentage is inferred
 until real labelled client traffic is measured.
 
 Sources are listed at the end of `docs/DEPLOYMENT.md`.
+
+## 2026-09-25 — Go bug-finding tools evaluated
+
+Checked against this codebase, not just from vendor claims. Current guidance
+(2026) for a Go service: gosec + staticcheck + govulncheck on every commit,
+CodeQL where free. Results here:
+
+| Tool | Findings on this repo | Kept |
+|---|---|---|
+| gosec (already on) | 0 | yes |
+| errorlint | 6 (wrapped-error `==`/`%v`) — fixed | yes |
+| bodyclose, nilerr, sqlclosecheck | 0 | yes, cheap guard |
+| contextcheck, noctx | 11, none actionable | no |
+| nilaway | 17, 0 real | no |
+| govulncheck | not runnable in the sandbox (vuln.go.dev blocked) | yes, CI |
+
+No linter finds "endpoint a visitor can spam to load the DB"; that needed a
+manual pass over request-path lookups. It found the unbounded unknown-host
+lookup (see DECISIONS 2026-09-25). Good-bot DNS verification, the policy
+provider, and the JWKS refresh were already bounded.
+
+Sources: appsecsanta.com/sast-tools/sast-tools-for-go,
+golangci-lint.run/docs/linters, google.github.io/clusterfuzzlite.

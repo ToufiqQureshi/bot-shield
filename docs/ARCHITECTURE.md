@@ -96,7 +96,8 @@ Internet (every visitor, hostile until scored)
    ├──► Redis        BUILT   Distributed global rate counters via INCR (velocity.go)
    │                         with a shared one-second, single-probe fail-open circuit;
    │                         background synchronization for JA4 blocklists (ja4db.go)
-   ├──► Postgres     BUILT   Client configurations and lazy-loaded Tenant Store via pgxpool (pkg/db)
+   ├──► Postgres     BUILT   Client configurations and lazy-loaded Tenant Store via pgxpool (pkg/db);
+   │                         unknown-host lookups capped at 8 concurrent, same host shared
    │
    ▼
 [Client's origin server]

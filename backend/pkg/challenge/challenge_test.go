@@ -38,7 +38,7 @@ const (
 	verifyPath    = "/__hakaishield/verify"
 )
 
-func newChallenge(t *testing.T) *challenge.Challenge {
+func newChallenge(t testing.TB) *challenge.Challenge {
 	t.Helper()
 	c, err := challenge.NewChallenge([]byte("test-secret-1234567890123456789012"), "")
 	if err != nil {

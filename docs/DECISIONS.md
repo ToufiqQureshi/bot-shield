@@ -1815,3 +1815,45 @@ velocity, challenge, and honeypot signals already provide the first pilot
 baseline. Revisit after labelled traffic shows whether IP reputation would
 add useful coverage without harming legitimate shared-IP visitors. Any later
 provider choice must be reviewed for terms, cost, latency, and false positives.
+
+---
+
+## Bound unknown-host tenant lookups — 2026-09-25
+
+**Decision:** a Host header not already in memory triggers at most 8
+concurrent Postgres lookups across the node, and concurrent requests for the
+same host share one lookup (`singleflight`). When all 8 slots are busy the
+request is answered "tenant not found" immediately and the host is **not**
+negative-cached.
+
+**Why:** the Host header is visitor-controlled. Before this, every request
+with a new random hostname ran one synchronous database query on the request
+path (the 30 s negative cache only helps for a repeated name), so one client
+could turn a request flood into a database flood shared by every tenant. The
+same-host sharing also stops the first burst to a newly onboarded domain from
+loading and replacing its tenant several times, which split its stats.
+
+**Trade-off:** during a random-host flood, the first request to a genuinely
+new domain can be turned away; the next one resolves because nothing was
+cached. Existing tenants are unaffected because they are served from memory.
+This follows the pattern already used by good-bot DNS verification (64 slots)
+and the policy provider's bounded background loaders.
+
+---
+
+## Static analysis and fuzzing in CI — 2026-09-25
+
+**Decision:** add `errorlint`, `bodyclose`, `nilerr` and `sqlclosecheck` to
+golangci-lint (gosec was already on), `govulncheck` as a blocking CI step, and
+20 s fuzz runs for the four fuzz targets that parse visitor input.
+
+**Rejected:**
+- `nilaway` — 17 findings on this codebase, 0 real after reading each one
+  (e.g. it cannot see that `opinion != nil` implies `activePolicy != nil`).
+  A non-blocking warning nobody reads is noise.
+- `contextcheck` / `noctx` — 11 findings, all either false positives (the
+  code already uses `r.Context()`) or deliberate (a DB lookup with its own
+  2 s timeout, detached from one visitor's cancellation).
+- CodeQL — free only for public repositories; this one is private.
+- ClusterFuzzLite per-PR — 10–30 min per run exhausts the private-repo
+  Actions allowance; revisit as a weekly scheduled job.

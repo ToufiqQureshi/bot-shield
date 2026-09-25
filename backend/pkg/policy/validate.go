@@ -126,7 +126,7 @@ func validateCondition(c Condition) error {
 	}
 	if c.Operator == OpMatches {
 		if _, err := regexp.Compile(c.Value); err != nil {
-			return fmt.Errorf("%w: %v", ErrBadRegex, err)
+			return fmt.Errorf("%w: %w", ErrBadRegex, err)
 		}
 	}
 	if c.Field == FieldScore {
@@ -136,7 +136,7 @@ func validateCondition(c Condition) error {
 	}
 	if c.Field == FieldCIDR {
 		if _, _, err := net.ParseCIDR(c.Value); err != nil {
-			return fmt.Errorf("%w: %v", ErrBadCIDR, err)
+			return fmt.Errorf("%w: %w", ErrBadCIDR, err)
 		}
 	}
 	if c.Field == FieldRequestClass && !validClass(c.Value) {

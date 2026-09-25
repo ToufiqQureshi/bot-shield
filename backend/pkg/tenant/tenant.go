@@ -14,6 +14,7 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/db"
 	"github.com/ToufiqQureshi/hakaishield/pkg/evidence"
 	"github.com/ToufiqQureshi/hakaishield/pkg/stats"
+	"golang.org/x/sync/singleflight"
 )
 
 // ErrTenantNotFound is returned when a requested tenant ID or host does not exist.
@@ -60,6 +61,13 @@ const StatusActive = "active"
 const (
 	negativeHostTTL        = 30 * time.Second
 	maxNegativeHostEntries = 4096
+
+	// maxConcurrentHostLookups caps simultaneous Postgres lookups for
+	// hosts not yet in memory. The Host header is visitor-controlled, so
+	// without a cap a flood of random hostnames becomes one database
+	// query per request. Overflow is answered "not found" without being
+	// negative-cached, so a real new domain resolves on the next request.
+	maxConcurrentHostLookups = 8
 )
 
 // Store is a thread-safe implementation that maps hostnames and IDs to tenant environments.
@@ -68,6 +76,8 @@ type Store struct {
 	byHost       map[string]*Tenant
 	byID         map[string]*Tenant
 	negativeHost map[string]time.Time
+	lookupSlots  chan struct{}
+	lookups      singleflight.Group
 	ProxyFactory ProxyFactory
 	TenantLoader TenantLoader
 }
@@ -78,6 +88,7 @@ func NewStore() *Store {
 		byHost:       make(map[string]*Tenant),
 		byID:         make(map[string]*Tenant),
 		negativeHost: make(map[string]time.Time),
+		lookupSlots:  make(chan struct{}, maxConcurrentHostLookups),
 	}
 }
 
@@ -138,13 +149,11 @@ func (s *Store) GetByHost(host string) (*Tenant, error) {
 	// Load an exact database-backed tenant before consulting the single-tenant
 	// wildcard. Checking the wildcard first makes lazy loading unreachable.
 	if s.ProxyFactory != nil && !s.negativeHostFresh(host, time.Now()) {
-		if t, err := s.fetchFromDB(host); err == nil {
+		if t, err := s.lookupHost(host); err == nil {
 			if !t.Config.routesTraffic() {
 				return nil, ErrTenantNotFound
 			}
 			return t, nil
-		} else {
-			s.rememberNegativeHost(host, time.Now())
 		}
 	}
 
@@ -171,6 +180,34 @@ func (s *Store) GetCachedByHost(host string) *Tenant {
 	return t
 }
 
+// errLookupBusy means every lookup slot was taken, so the host was not
+// checked at all and must not be remembered as missing.
+var errLookupBusy = errors.New("tenant: host lookup capacity exhausted")
+
+// lookupHost loads an unknown host from the database. Concurrent requests
+// for the same host share one query, and at most maxConcurrentHostLookups
+// queries run at once across all hosts.
+func (s *Store) lookupHost(host string) (*Tenant, error) {
+	v, err, _ := s.lookups.Do(host, func() (any, error) {
+		select {
+		case s.lookupSlots <- struct{}{}:
+			defer func() { <-s.lookupSlots }()
+		default:
+			return nil, errLookupBusy
+		}
+		t, err := s.fetchFromDB(host)
+		if err != nil {
+			s.rememberNegativeHost(host, time.Now())
+			return nil, err
+		}
+		return t, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*Tenant), nil
+}
+
 func (s *Store) negativeHostFresh(host string, now time.Time) bool {
 	s.mu.RLock()
 	expires, ok := s.negativeHost[host]
@@ -185,9 +222,11 @@ func (s *Store) rememberNegativeHost(host string, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for h, expires := range s.negativeHost {
-		if !now.Before(expires) {
-			delete(s.negativeHost, h)
+	if len(s.negativeHost) >= maxNegativeHostEntries {
+		for h, expires := range s.negativeHost {
+			if !now.Before(expires) {
+				delete(s.negativeHost, h)
+			}
 		}
 	}
 	if len(s.negativeHost) >= maxNegativeHostEntries {

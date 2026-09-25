@@ -7,6 +7,11 @@ linters:
     - unused
     - ineffassign
     - gosec
+    # Bugs that compile and pass tests but fail quietly in production:
+    - errorlint     # == on a wrapped error silently stops matching
+    - bodyclose     # unclosed HTTP response body leaks a pooled connection
+    - nilerr        # checks err != nil, then returns nil anyway
+    - sqlclosecheck # unclosed database rows hold a pool connection
   exclusions:
     rules:
       # Unchecked errors on test helpers (store.Add, w.Write, l.Close)
