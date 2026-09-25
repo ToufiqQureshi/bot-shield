@@ -64,7 +64,7 @@ func TestPostgresRevisionIsolationAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := NewStore(pool)
-	doc := Document{Mode: "shadow", Rules: []policy.Rule{{ID: "rule-a", Name: "block login", Enabled: true, Action: policy.ActionBlock, Conditions: []policy.Condition{{Field: policy.FieldRequestClass, Operator: policy.OpEquals, Value: policy.ClassLogin}}}}}
+	doc := Document{Mode: "shadow", RouteClasses: map[string]string{"/account/signin": policy.ClassLogin}, Rules: []policy.Rule{{ID: "rule-a", Name: "block login", Enabled: true, Action: policy.ActionBlock, Conditions: []policy.Condition{{Field: policy.FieldRequestClass, Operator: policy.OpEquals, Value: policy.ClassLogin}}}}}
 	first, err := s.Save(ctx, "alice", "ta", "alice", 0, doc)
 	if err != nil || first.Version != 1 {
 		t.Fatalf("first revision=%+v err=%v", first, err)
@@ -84,7 +84,7 @@ func TestPostgresRevisionIsolationAndRollback(t *testing.T) {
 		t.Fatalf("second revision=%+v err=%v", second, err)
 	}
 	loaded, err := s.LoadForTenant(ctx, "ta")
-	if err != nil || loaded.OwnerUserID != "alice" || loaded.Version != 2 || loaded.Document.Mode != "enforce" {
+	if err != nil || loaded.OwnerUserID != "alice" || loaded.Version != 2 || loaded.Document.Mode != "enforce" || loaded.Document.RouteClasses["/account/signin"] != policy.ClassLogin {
 		t.Fatalf("proxy load=%+v err=%v", loaded, err)
 	}
 	rolled, err := s.Rollback(ctx, "alice", "ta", "alice", 2, 2)

@@ -43,8 +43,12 @@ import (
 const maxModelBytes = 1 << 20
 
 // modelVersion is the on-disk format version. Load refuses anything else
-// rather than guessing at fields a future format may have moved.
-const modelVersion = 1
+// rather than guessing at fields a future format may have moved. Version
+// 2 added the provenance record (dataset hash, training options,
+// evaluation summary, approval, feature-version stamp) — a v1 file has
+// none of that and is refused, because an artifact nobody can explain
+// must not be loaded.
+const modelVersion = 2
 
 // Model is a trained linear classifier over the pkg/signals checks.
 // It is immutable once loaded, so the request path can share one across
@@ -56,6 +60,7 @@ type Model struct {
 	challengeAt float64
 	blockAt     float64
 	trainedOn   int
+	provenance  Provenance
 }
 
 // Prediction is one request's typed decision. It carries no strings and
@@ -87,13 +92,14 @@ type Contribution struct {
 // savedModel is the on-disk shape. It is separate from Model so the
 // exported API does not become whatever JSON happened to be convenient.
 type savedModel struct {
-	Version     int       `json:"version"`
-	Features    []string  `json:"features"`
-	Weights     []float64 `json:"weights"`
-	Bias        float64   `json:"bias"`
-	ChallengeAt float64   `json:"challenge_at"`
-	BlockAt     float64   `json:"block_at"`
-	TrainedOn   int       `json:"trained_on"`
+	Version     int        `json:"version"`
+	Features    []string   `json:"features"`
+	Weights     []float64  `json:"weights"`
+	Bias        float64    `json:"bias"`
+	ChallengeAt float64    `json:"challenge_at"`
+	BlockAt     float64    `json:"block_at"`
+	TrainedOn   int        `json:"trained_on"`
+	Provenance  Provenance `json:"provenance"`
 }
 
 // ErrFeatureMismatch reports a model whose features are not the checks
@@ -143,6 +149,12 @@ func Load(r io.Reader, liveFeatures []string) (*Model, error) {
 	if err := validThresholds(saved.ChallengeAt, saved.BlockAt); err != nil {
 		return nil, err
 	}
+	// The provenance stamp is part of the artifact, not decoration: a
+	// model whose embedded check-list hash disagrees with its own feature
+	// list describes a build that never existed.
+	if got, want := saved.Provenance.FeatureVersion, schemaVersion(saved.Features); got != want {
+		return nil, fmt.Errorf("decide: model provenance names check list %q but its features hash to %q", got, want)
+	}
 
 	return &Model{
 		features:    append([]string(nil), saved.Features...),
@@ -151,6 +163,7 @@ func Load(r io.Reader, liveFeatures []string) (*Model, error) {
 		challengeAt: saved.ChallengeAt,
 		blockAt:     saved.BlockAt,
 		trainedOn:   saved.TrainedOn,
+		provenance:  saved.Provenance,
 	}, nil
 }
 
@@ -166,6 +179,7 @@ func (m *Model) Save(w io.Writer) error {
 		ChallengeAt: m.challengeAt,
 		BlockAt:     m.blockAt,
 		TrainedOn:   m.trainedOn,
+		Provenance:  m.provenance,
 	})
 }
 

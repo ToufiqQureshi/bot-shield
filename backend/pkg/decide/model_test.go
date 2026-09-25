@@ -170,13 +170,19 @@ func TestExtremeScoresStayInRange(t *testing.T) {
 func TestSaveLoadRoundTrip(t *testing.T) {
 	original := model(-2.5, []float64{1.25, -0.75, 3.5}, 0.4, 0.95)
 	original.trainedOn = 4321
+	// A saved artifact must carry its provenance stamp: Load refuses one
+	// without it, since v2 made the origin record part of the format.
+	original, err := original.WithProvenance(Provenance{FeatureVersion: schemaVersion(testFeatures)})
+	if err != nil {
+		t.Fatalf("WithProvenance() error: %v", err)
+	}
 
 	var buf bytes.Buffer
 	if err := original.Save(&buf); err != nil {
 		t.Fatalf("Save() error: %v", err)
 	}
 
-	loaded, err := Load(&buf, testFeatures)
+	loaded, err := Load(bytes.NewReader(buf.Bytes()), testFeatures)
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
@@ -205,47 +211,52 @@ func TestLoadRejectsUnusableModels(t *testing.T) {
 	}{
 		{
 			"a renamed feature",
-			`{"version":1,"features":["handshake","ua_lie","fingerprint"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","fingerprint"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
 			"position 2",
 		},
 		{
 			"features in a different order",
-			`{"version":1,"features":["ua_lie","handshake","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["ua_lie","handshake","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
 			"position 0",
 		},
 		{
 			"a check this build does not have",
-			`{"version":1,"features":["handshake","ua_lie","headers","extra"],"weights":[1,1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers","extra"],"weights":[1,1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
 			"build has 3",
 		},
 		{
 			"more features than weights",
-			`{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
 			"3 features but 2 weights",
 		},
 		{
 			"a future format version",
-			`{"version":2,"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
-			"model version 2",
+			`{"version":3,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
+			"model version 3",
+		},
+		{
+			"a v1 artifact without provenance",
+			`{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`,
+			"model version 1, want 2",
 		},
 		{
 			"a block bar below the challenge bar",
-			`{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.9,"block_at":0.5,"trained_on":10}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.9,"block_at":0.5,"trained_on":10}`,
 			"must be above",
 		},
 		{
 			"a threshold outside (0,1)",
-			`{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0,"block_at":0.9,"trained_on":10}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0,"block_at":0.9,"trained_on":10}`,
 			"not inside (0,1)",
 		},
 		{
 			"a threshold of exactly 1",
-			`{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":1,"trained_on":10}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":1,"trained_on":10}`,
 			"not inside (0,1)",
 		},
 		{
 			"an unknown field",
-			`{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10,"enforce":true}`,
+			`{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10,"enforce":true}`,
 			"unknown field",
 		},
 		{"not JSON at all", `not a model`, "read model"},
@@ -272,7 +283,7 @@ func TestLoadRejectsUnusableModels(t *testing.T) {
 // pinned here rather than trusted to stay true.
 func TestJSONCannotCarryNonFiniteNumbers(t *testing.T) {
 	for _, literal := range []string{"1e999", "-1e999"} {
-		raw := `{"version":1,"features":["handshake","ua_lie","headers"],"weights":[` + literal + `,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
+		raw := `{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[` + literal + `,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
 		if _, err := Load(strings.NewReader(raw), testFeatures); err == nil {
 			t.Fatalf("Load accepted an out-of-range weight %s: the finiteness guard removed from Load is needed after all", literal)
 		}
@@ -283,7 +294,7 @@ func TestJSONCannotCarryNonFiniteNumbers(t *testing.T) {
 // model, not a crash or a NaN that would compare false against every
 // threshold and quietly allow the request.
 func TestHugeButFiniteWeightsStaySane(t *testing.T) {
-	raw := `{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1e308,1e308,-1e308],"bias":-1e308,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
+	raw := `{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1e308,1e308,-1e308],"bias":-1e308,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
 	m, err := Load(strings.NewReader(raw), testFeatures)
 	if err != nil {
 		t.Fatalf("Load() rejected finite weights: %v", err)
@@ -297,7 +308,7 @@ func TestHugeButFiniteWeightsStaySane(t *testing.T) {
 }
 
 func TestFeatureMismatchIsIdentifiable(t *testing.T) {
-	raw := `{"version":1,"features":["handshake","ua_lie"],"weights":[1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
+	raw := `{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie"],"weights":[1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
 	_, err := Load(strings.NewReader(raw), testFeatures)
 	if !errors.Is(err, ErrFeatureMismatch) {
 		t.Fatalf("Load() error = %v, want it to wrap ErrFeatureMismatch so a caller can tell it from a corrupt file", err)
@@ -307,7 +318,7 @@ func TestFeatureMismatchIsIdentifiable(t *testing.T) {
 // Load must not hand back a model that aliases the decoded slices, or a
 // later caller could change the weights a running Guard is scoring with.
 func TestLoadedModelDoesNotAliasItsInput(t *testing.T) {
-	raw := `{"version":1,"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
+	raw := `{"version":2,"provenance":{"feature_version":"c85d7935ea0b"},"features":["handshake","ua_lie","headers"],"weights":[1,1,1],"bias":-2,"challenge_at":0.5,"block_at":0.9,"trained_on":10}`
 	m, err := Load(strings.NewReader(raw), testFeatures)
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)

@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"math"
 	"sync/atomic"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
@@ -23,6 +24,13 @@ type Stats struct {
 	blocked     atomic.Int64
 	deceived    atomic.Int64
 	rateLimited atomic.Int64
+
+	// P1 measurement (docs/CLIENT_READY_IMPLEMENTATION_PLAN.md):
+	// egress bytes are the dominant hosting cost of an inline proxy, and
+	// challenge solve/failure counts are the plan's human-burden numbers.
+	egressBytes     atomic.Int64
+	challengeSolved atomic.Int64
+	challengeFailed atomic.Int64
 }
 
 func (s *Stats) Record(d signals.Decision) {
@@ -47,3 +55,34 @@ func (s *Stats) Challenged() int64  { return s.challenged.Load() }
 func (s *Stats) Blocked() int64     { return s.blocked.Load() }
 func (s *Stats) Deceived() int64    { return s.deceived.Load() }
 func (s *Stats) RateLimited() int64 { return s.rateLimited.Load() }
+
+// RecordEgressBytes adds one proxied response's body size to the
+// tenant's cost meter. The add saturates at MaxInt64 instead of
+// wrapping negative: an attacker driving terabytes through a counter
+// must not be able to turn the cost number into garbage (or into a
+// negative number the dashboard would happily render).
+func (s *Stats) RecordEgressBytes(n int64) {
+	if n <= 0 {
+		return
+	}
+	for {
+		cur := s.egressBytes.Load()
+		if cur > math.MaxInt64-n {
+			s.egressBytes.Store(math.MaxInt64)
+			return
+		}
+		if s.egressBytes.CompareAndSwap(cur, cur+n) {
+			return
+		}
+	}
+}
+
+func (s *Stats) EgressBytes() int64 { return s.egressBytes.Load() }
+
+// RecordChallengeSolved/RecordChallengeFailed count verify outcomes per
+// tenant, the plan's challenge-burden measure next to the global
+// observability counters.
+func (s *Stats) RecordChallengeSolved()   { s.challengeSolved.Add(1) }
+func (s *Stats) RecordChallengeFailed()   { s.challengeFailed.Add(1) }
+func (s *Stats) ChallengeSolves() int64   { return s.challengeSolved.Load() }
+func (s *Stats) ChallengeFailures() int64 { return s.challengeFailed.Load() }

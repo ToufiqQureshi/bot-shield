@@ -45,10 +45,13 @@ func TestDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp struct {
-			TotalRequests int64 `json:"total_requests"`
-			Passed        int64 `json:"passed"`
-			Challenged    int64 `json:"challenged"`
-			Blocked       int64 `json:"blocked"`
+			TotalRequests     int64 `json:"total_requests"`
+			Passed            int64 `json:"passed"`
+			Challenged        int64 `json:"challenged"`
+			Blocked           int64 `json:"blocked"`
+			EgressBytes       int64 `json:"egress_bytes"`
+			ChallengeSolves   int64 `json:"challenge_solves"`
+			ChallengeFailures int64 `json:"challenge_failures"`
 		}
 		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
@@ -64,6 +67,25 @@ func TestDashboardStatsHandler(t *testing.T) {
 		}
 		if resp.Blocked != 1 {
 			t.Errorf("expected 1 blocked request, got %d", resp.Blocked)
+		}
+		// P1 measurement fields must be present and numeric; a missing
+		// field decodes as 0, which is indistinguishable from "no traffic
+		// served" and would hide a wiring bug.
+		ten.Stats.RecordEgressBytes(1234)
+		ten.Stats.RecordChallengeSolved()
+		ten.Stats.RecordChallengeFailed()
+		w2 := httptest.NewRecorder()
+		handler.ServeHTTP(w2, req)
+		var resp2 struct {
+			EgressBytes       int64 `json:"egress_bytes"`
+			ChallengeSolves   int64 `json:"challenge_solves"`
+			ChallengeFailures int64 `json:"challenge_failures"`
+		}
+		if err := json.NewDecoder(w2.Body).Decode(&resp2); err != nil {
+			t.Fatalf("failed to decode measurement response: %v", err)
+		}
+		if resp2.EgressBytes != 1234 || resp2.ChallengeSolves != 1 || resp2.ChallengeFailures != 1 {
+			t.Errorf("measurement fields wrong: %+v", resp2)
 		}
 	})
 

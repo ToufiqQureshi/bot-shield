@@ -163,12 +163,13 @@ belong to the product owner.**
 Before non-trivial work, read:
 
 1. `docs/AGENT.md`
-2. `docs/ARCHITECTURE.md`
-3. `docs/ROADMAP.md`
-4. `docs/DECISIONS.md`
-5. `docs/RESEARCH.md`
-6. `docs/PROGRESS.md`
-7. this `CLAUDE.md`
+2. `docs/CURRENT_STATUS.md`
+3. `docs/ARCHITECTURE.md`
+4. `docs/ROADMAP.md`
+5. `docs/DECISIONS.md`
+6. `docs/RESEARCH.md`
+7. `docs/PROGRESS.md`
+8. this `CLAUDE.md`
 
 Then inspect relevant source files, tests, callers, configuration, and interfaces.
 
@@ -179,6 +180,7 @@ contains the answer.
 
 | Document | Purpose |
 |---|---|
+| `CURRENT_STATUS.md` | Current product/launch truth, what was completed and what remains, including behavioural detection gaps |
 | `WHAT_IS_BUILT.md` | Plain-language inventory of what actually works today and what does not — for explaining the product to someone |
 | `DEPLOYMENT.md` | Where hakaishield is hosted and why, which platforms are ruled out by the TLS-termination constraint, what bandwidth costs as traffic grows, and what the large vendors do architecturally |
 | `AGENT.md` | Product purpose and engineering standard |

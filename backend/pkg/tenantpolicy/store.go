@@ -28,11 +28,12 @@ const MaxRules = 200
 var ruleIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
 type Document struct {
-	Mode           string        `json:"mode"` // shadow or enforce
-	Rules          []policy.Rule `json:"rules"`
-	Allowlist      []string      `json:"allowlist,omitempty"` // CIDRs, verified against the resolved client IP
-	ChallengeTheme string        `json:"challengeTheme,omitempty"`
-	BlockMessage   string        `json:"blockMessage,omitempty"`
+	Mode           string            `json:"mode"` // shadow or enforce
+	Rules          []policy.Rule     `json:"rules"`
+	RouteClasses   map[string]string `json:"routeClasses,omitempty"` // exact paths; activated policies only
+	Allowlist      []string          `json:"allowlist,omitempty"`    // CIDRs, verified against the resolved client IP
+	ChallengeTheme string            `json:"challengeTheme,omitempty"`
+	BlockMessage   string            `json:"blockMessage,omitempty"`
 }
 
 type Revision struct {
@@ -57,6 +58,22 @@ func (d Document) Validate() error {
 	}
 	if len(d.Rules) > MaxRules {
 		return fmt.Errorf("%w: too many rules", ErrInvalid)
+	}
+	if len(d.RouteClasses) > 64 {
+		return fmt.Errorf("%w: too many route labels", ErrInvalid)
+	}
+	for raw, class := range d.RouteClasses {
+		path, ok := signals.NormalizePath(raw)
+		if !ok || path != raw || len(raw) > 256 || strings.ContainsAny(raw, "?# \t\r\n") || raw == "/" {
+			return fmt.Errorf("%w: invalid route label path", ErrInvalid)
+		}
+		if class != signals.ClassLogin && class != signals.ClassCheckout {
+			return fmt.Errorf("%w: route label must be login or checkout", ErrInvalid)
+		}
+		defaultClass := signals.Classify(path, "POST")
+		if (defaultClass == signals.ClassLogin || defaultClass == signals.ClassCheckout) && defaultClass != class {
+			return fmt.Errorf("%w: built-in sensitive route cannot change class", ErrInvalid)
+		}
 	}
 	if len(d.Allowlist) > 100 {
 		return fmt.Errorf("%w: too many allowlist entries", ErrInvalid)

@@ -43,9 +43,9 @@ services:
       # Port 80 is NOT published. certbot runs on the host and needs it
       # free for the HTTP-01 challenge during renewal.
     volumes:
-      # Certificates live on the host where certbot renews them. Read-only:
-      # the proxy never needs to write here.
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # setup.sh copies the current lineage here with key mode 0640 and
+      # group 65532. Certbot's root-only tree is never exposed to the app.
+      - /etc/hakaishield/tls:/run/hakaishield/tls:ro
     environment:
       HAKAISHIELD_CHALLENGE_SECRET: ${HAKAISHIELD_CHALLENGE_SECRET:?Set a stable random challenge secret}
       EVIDENCE_TOKEN: ${EVIDENCE_TOKEN:?Set a random evidence token}
@@ -54,12 +54,13 @@ services:
       - "-addr=:8443"
       - "-target=${HAKAISHIELD_ORIGIN:?Set the protected origin URL}"
       - "-host=${HAKAISHIELD_DOMAIN:?Set the public hostname}"
-      - "-tls-cert=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN:?Set the public hostname}/fullchain.pem"
-      - "-tls-key=/etc/letsencrypt/live/${HAKAISHIELD_DOMAIN:?Set the public hostname}/privkey.pem"
+      - "-tls-cert=/run/hakaishield/tls/fullchain.pem"
+      - "-tls-key=/run/hakaishield/tls/privkey.pem"
       - "-mode=${HAKAISHIELD_MODE:-shadow}"
       - "-redis-url=redis://redis:6379"
       - "-db-url=${DATABASE_URL:?Set the pilot PostgreSQL connection URL}"
       - "-supabase-url=${SUPABASE_URL:?Set the Supabase project URL for dashboard auth}"
+      - "-sample-retention-days=${HAKAISHIELD_SAMPLE_RETENTION_DAYS:-30}"
       # -collect-labels is deliberately absent. While you are attacking your
       # own site, every solved challenge and honeypot trip would become a
       # training sample and the model would learn what YOUR bots look like.

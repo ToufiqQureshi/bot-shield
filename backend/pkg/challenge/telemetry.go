@@ -187,6 +187,7 @@ const (
 	counterFastSolve       = "challenge_solved_fast_total"
 	counterTelemetryBad    = "challenge_telemetry_malformed_total"
 	counterEscalatedIssued = "challenge_issued_escalated_total"
+	counterVerifyOverload  = "challenge_verify_overload_total"
 )
 
 // recordChallengeOutcome adds one solve outcome to the aggregate counters,

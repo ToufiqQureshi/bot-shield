@@ -17,6 +17,25 @@ type blockingTenantPolicies struct {
 	release chan struct{}
 }
 
+type routeTenantPolicies struct{}
+
+func (routeTenantPolicies) LoadForTenant(_ context.Context, id string) (*tenantpolicy.Revision, error) {
+	return &tenantpolicy.Revision{TenantID: id, Version: 2, OwnerUserID: "owner-1", Document: tenantpolicy.Document{
+		Mode: "enforce", RouteClasses: map[string]string{"/account/signin": policy.ClassLogin},
+	}}, nil
+}
+
+func TestLoadedTenantRouteLabelsAreIsolated(t *testing.T) {
+	p := New(fakeTenants{"one": "owner-1", "other": "owner-2"}, newFakeRules(), fakeSettings{}).WithTenantPolicies(routeTenantPolicies{})
+	pol, found := p.loadTenant("one", "owner-1", p.currentEpoch())
+	if !found || pol == nil || pol.ClassifyRoute("/account/signin", "POST") != policy.ClassLogin {
+		t.Fatalf("tenant route label lost: policy=%+v found=%v", pol, found)
+	}
+	if pol, found := p.loadTenant("other", "owner-2", p.currentEpoch()); found || pol != nil {
+		t.Fatalf("wrong owner received route labels: policy=%+v found=%v", pol, found)
+	}
+}
+
 func (b *blockingTenantPolicies) LoadForTenant(_ context.Context, id string) (*tenantpolicy.Revision, error) {
 	select {
 	case b.started <- struct{}{}:

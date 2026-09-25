@@ -34,6 +34,30 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — tenant route labels and sample retention
+
+`b76a8583` — Owner-scoped exact login/checkout labels are saved as versioned
+shadow drafts and feed the existing velocity buckets only after activation;
+candidate samples now have bounded startup/hourly Postgres pruning.
+Gotcha: the existing policy activation gate measures overall local traffic,
+not traffic on each tagged route; review route and shared-IP impact first.
+Mutation checks: route activation, SQL batch limit, retention cutoff and
+dashboard authorization each made the relevant tests fail before restoration.
+
+### 2026-09-25 — client-ready plan code slices (P1 measurement, P2 detection, decide gates)
+
+`f730c14e` — Endpoint-class velocity buckets (login/API/checkout/nav/asset) via a
+shared classifier moved into `pkg/signals`; per-tenant saturating egress-byte
+counter + challenge solve/fail stats wired proxy→API→dashboard; bounded
+concurrent admission ceiling (64) on the verify path with a counted 503;
+model artifacts v2 with provenance (dataset hash, options, eval summary,
+approver) and a leakage-safe evaluation + rules-vs-model promotion gate.
+Model stays shadow-only.
+Gotcha: splitting one backing array into train/holdout slices means growing
+either side in place clobbers the other — `SplitLeakageSafe` rebuilds both
+sides as fresh copies; the first version of this test passed vacuously
+because no identity straddled the time boundary.
+
 ### 2026-09-22 — deployment setup, bot ladder, PROGRESS split
 `14de934` — `deploy/` (Dockerfile, production compose, systemd unit, setup.sh
 for a fresh box), `bot-testing/ladder/` (seven rungs, each adding one
@@ -136,7 +160,7 @@ adapter is built. See `DECISIONS.md` for the full reasoning.
 policy matcher, bounded rule input, hardened malformed-policy matching,
 repaired the two-tenant shadow test, and passed Go tests/vet/build plus an
 isolated real-Postgres rule/ownership check. Full findings:
-`docs/PHASE1_PRODUCTION_REVIEW.md`.
+the historical review in commit `31053427`.
 Gotcha: `main.go` still attaches no policy provider; stored rules do not yet
 produce live shadow opinions or enforce traffic.
 
@@ -163,7 +187,8 @@ ground truth. The model remains shadow-only; do not enable learned enforcement.
 rollback, preview and shadow summary APIs, compiled matcher, asynchronous
 provider, and action enforcement after a measured activation gate. The staged
 snapshot passed full Go test/vet/build, real Postgres isolation, and a
-hard-block PASS mutation check. See `PHASE1_POLICY.md`.
+hard-block PASS mutation check. See the Phase 1 API contract in
+`BACKEND_IMPLEMENTATION_PLAN.md`.
 Gotcha: production activation still needs representative traffic review and
 durable cross-node telemetry. Concurrent uncommitted Phase 2 challenge work
 in the shared tree currently fails a challenge flow test; it is not in this
@@ -174,7 +199,7 @@ commit.
 guard's risk score (1–3 hex zeros, clamped), escalation via a signed attempt
 cookie, trust decay 30/15/5 min on the passed cookie, bounded telemetry with
 browser-class counters, guard wiring, 16 new tests, 5 mutation checks, docs
-(PLAN/ROADMAP/DECISIONS/RESEARCH/PHASE2_STATUS).
+(PLAN/ROADMAP/DECISIONS/RESEARCH; the dated status file was consolidated).
 Gotcha: html/template's JS escaper pads interpolated numbers
 (`var difficulty =  1 ;`), so strict regexes silently match nothing — and
 test helpers must read the difficulty from the served page, never hardcode
@@ -251,9 +276,8 @@ survive in the served page (mutation-verified), not by executing it.
 
 ### 2026-09-24 - session handoff report
 
-`docs/SESSION_HANDOFF_2026-09-24.md` records this session's changes, verification
-evidence, deployment and client-traffic gates, known limitations, and pre-existing
-workspace changes for the next agent. Documentation-only; no tests rerun.
+The dated handoff from this commit was later consolidated into
+`docs/CURRENT_STATUS.md` with detection, dashboard and deployment findings.
 
 ### 2026-09-24 — challenge browser shadow candidates
 
@@ -267,3 +291,23 @@ Gotcha: exact-host evidence is skipped on a cold node until its tenant is loaded
 
 `12115dae` — Defer DNSBL/IP reputation for the low-cost managed pilot;
 revisit after labelled client traffic shows a specific coverage gap.
+
+### 2026-09-24 — dashboard evidence and pilot TLS audit
+
+`5f773e98` — Scope dashboard evidence to the selected owned domain, show
+observed signals separately, and provide the non-root container a restricted
+certificate copy that the renewal hook refreshes.
+
+### 2026-09-24 — current status and documentation cleanup
+
+`c44b83d6` — Consolidate completed work, behavioural detection gaps and
+client launch gates in `CURRENT_STATUS.md`; remove obsolete snapshots and
+correct stale product and architecture claims.
+
+### 2026-09-24 — client-ready detection plan
+
+`ea136178` — Sequence the managed-client launch, fifteen reviewed detection
+tracks, `pkg/decide` evidence gates, and cloud-cost controls in
+`CLIENT_READY_IMPLEMENTATION_PLAN.md`.
+Gotcha: 80% blocked bots requires measured hard-block recall on independent
+labels; challenges cannot be counted as blocks.

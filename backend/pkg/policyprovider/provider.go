@@ -219,7 +219,7 @@ func (p *Provider) loadTenant(tenantID, ownerID string, epoch uint64) (*policy.P
 		p.storeTenant(tenantID, nil, negativeCacheTTL, epoch)
 		return nil, true
 	}
-	pol := &policy.Policy{TenantID: tenantID, OwnerUserID: ownerID, Version: r.Version, Mode: r.Document.Mode, Rules: r.Document.Rules, ChallengeTheme: r.Document.ChallengeTheme, BlockMessage: r.Document.BlockMessage}
+	pol := &policy.Policy{TenantID: tenantID, OwnerUserID: ownerID, Version: r.Version, Mode: r.Document.Mode, Rules: r.Document.Rules, RouteClasses: r.Document.RouteClasses, ChallengeTheme: r.Document.ChallengeTheme, BlockMessage: r.Document.BlockMessage}
 	for _, raw := range r.Document.Allowlist {
 		_, cidr, _ := net.ParseCIDR(raw)
 		pol.Allowlist = append(pol.Allowlist, cidr)

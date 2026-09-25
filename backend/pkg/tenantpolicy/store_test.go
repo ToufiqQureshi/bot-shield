@@ -38,3 +38,26 @@ func TestDocumentValidation(t *testing.T) {
 		t.Fatalf("duplicate ID = %v", err)
 	}
 }
+
+func TestRouteClassDraftValidation(t *testing.T) {
+	valid := Document{Mode: "shadow", RouteClasses: map[string]string{
+		"/account/signin": policy.ClassLogin,
+		"/order/confirm":  policy.ClassCheckout,
+	}}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid route labels: %v", err)
+	}
+	for _, routes := range []map[string]string{
+		{"/account/signin": policy.ClassAPI}, // loose API limit is unsafe
+		{"/login": policy.ClassCheckout},     // built-in login cannot be weakened
+		{"/account/../signin": policy.ClassLogin},
+		{"/account/%73ignin": policy.ClassLogin},
+		{"account/signin": policy.ClassLogin},
+		{"/account/signin?x=1": policy.ClassLogin},
+	} {
+		doc := Document{Mode: "shadow", RouteClasses: routes}
+		if err := doc.Validate(); !errors.Is(err, ErrInvalid) {
+			t.Errorf("routes=%v err=%v, want invalid", routes, err)
+		}
+	}
+}
