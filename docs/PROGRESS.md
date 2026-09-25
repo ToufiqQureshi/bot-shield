@@ -34,6 +34,18 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — public Pages frontend while backend is offline
+
+`bdd6c9de` — Published the tested marketing-only frontend to Cloudflare Pages
+preview and production; added a separate Vite entry and `docs/FRONTEND.md`
+handoff. No backend/Supabase values enter this public bundle.
+Gotcha: `interviewyaar.lol` custom domain is attached but still pending a
+proxied root CNAME to `hakaishield-dashboard.pages.dev` and TLS activation.
+Mutation: an unisolated marketing build bundled dashboard configuration and
+failed the build test; forcing empty Vite env and splitting the entry fixed it.
+
+---
+
 ### 2026-09-25 — Cloudflare Pages dashboard preparation
 
 `145438e9` — Created the separate `hakaishield-dashboard` Pages project; pinned
