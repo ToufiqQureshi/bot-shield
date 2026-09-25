@@ -7,8 +7,8 @@ counter isolation and challenge replay/deployment hardening are in the pilot
 branch. Real traffic precision/recall, live server/domain/TLS, durable evidence,
 and multi-node resilience remain open. See `CLIENT_PILOT_RELEASE.md`; do not
 advertise a 70–80% catch rate without a measured, labelled traffic sample.
-The pilot dashboard now exposes managed setup only: unverified self-service
-domain creation, misleading live-policy controls, and unimplemented billing
+The pilot dashboard now exposes managed setup and shadow route-tag drafts only: unverified self-service
+domain creation, direct live-policy controls, and unimplemented billing
 claims are not available to customers. Automated ownership proof, certificate
 issuance and customer activation remain item 21 below.
 
@@ -534,8 +534,9 @@ production self-service feature. See `BACKEND_IMPLEMENTATION_PLAN.md` and
       `LEARNED_SCORING.md`) is an unmade product decision, and the parked
       challenge samples are per-process, so behind several nodes a
       visitor challenged on one and verified on another produces no
-      label. Retention (`db.DeleteSamplesBefore`) exists but nothing
-      calls it on a schedule yet.
+      label. Candidate sample retention now runs at startup and hourly in
+      batches of 1000 (up to 10 batches/run), defaulting to 30 days; confirm
+      the approved period before enabling collection.
 
       Also see `docs/DECISIONS.md`, "Learned decision weights are a linear
       model over existing signals".
@@ -637,14 +638,15 @@ production self-service feature. See `BACKEND_IMPLEMENTATION_PLAN.md` and
       `pkg/policy` into `pkg/signals` (`Classify`/`NormalizePath`);
       `pkg/policy` re-exports it so dashboard rules and rate buckets
       cannot disagree. See `DECISIONS.md` 2026-09-25.
-      **Still open:** per-tenant route labeling/config so a client can
-      tag *their* sensitive routes (e.g. custom login paths) rather
-      than relying on the fixed default classifier; the defaults are
-      reasoned guesses, not tuned against real traffic.
-      **Risk (from the original scoping, still true):** wrong category
-      tagging is worse than no tagging — a client mislabeling their
-      login endpoint as "generic" gets the loose threshold on their
-      most sensitive route, silently, with no warning.
+      **Done 2026-09-25:** authenticated customers can tag up to 64 exact
+      login/checkout paths in a tenant's versioned shadow policy. Tags
+      use the existing velocity signal only after policy activation; the
+      default classifier remains in force before that. The first pilot
+      domain owner is loaded from a matching active database row on startup.
+      **Remaining risk:** an ordinary high-volume path mislabelled as login
+      gets a stricter 10/s per-IP bucket after activation; review shared-IP
+      clients and route samples first. The validator rejects generic/API
+      downgrades and changing built-in login/checkout classes.
 - [x] **10. Honeypot fields** — invisible form fields/links only a
       blind selector-based script would interact with.
       **Done 2026-09-20:** an `aria-hidden`, `tabindex="-1"`,

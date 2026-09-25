@@ -1,7 +1,6 @@
 # HakaiShield: current status and remaining work
 
-**Snapshot:** 2026-09-24, branch `release/client-pilot-hardening` at
-`fdd28614` before this documentation cleanup. Read this file first for the
+**Snapshot:** 2026-09-25, branch `release/client-pilot-hardening`. Read this file first for the
 handoff; `CLIENT_PILOT_RELEASE.md` is the operational release checklist,
 `SIGNAL_COVERAGE.md` is the signal inventory, and `CLIENT_READY_IMPLEMENTATION_PLAN.md`
 is the client-ready and detection implementation plan. Code and tests remain the final source
@@ -27,12 +26,12 @@ Inspect `git status` before staging and do not sweep those into a docs commit.
 | Area | Current behavior | Limit that matters |
 |---|---|---|
 | Inline proxy | Go terminates TLS, captures ClientHello/JA4, checks Host/SNI, forwards to an origin, and supports `shadow` or `enforce`. | The pilot is one node; live TLS, latency and recovery are unmeasured. |
-| Scored detection | Nine scored checks cover TLS/UA/header mismatch, known bad JA4, openly named scripting tools, per-IP velocity in **five endpoint-class buckets** (login 10/s, API 100, checkout 20, nav 20, assets 300 per 1s window), per-JA4 velocity, distinct-path crawling, and a tenant honeypot. Redis keys are tenant-scoped. | A real browser with plausible headers and slow requests can evade these checks. Existing thresholds need client traffic calibration. |
+| Scored detection | Nine scored checks cover TLS/UA/header mismatch, known bad JA4, openly named scripting tools, per-IP velocity in **five endpoint-class buckets** (login 10/s, API 100, checkout 20, nav 20, assets 300 per 1s window), per-JA4 velocity, distinct-path crawling, and a tenant honeypot. Authenticated customers can save exact login/checkout route labels in a versioned shadow policy; labels affect the existing velocity check only after policy activation. Redis keys are tenant-scoped. | A real browser with plausible headers and slow requests can evade these checks. Existing thresholds and custom-route labels need client traffic calibration. |
 | Challenge and continuous trust | Signed, host-bound challenge/cookies, bounded proof-of-work and canvas checks, nonce replay protection, adaptive difficulty, and rescoring after a passed cookie. The verify path now has a bounded concurrent admission ceiling (64; overflow gets a counted 503), and per-tenant solve/fail outcomes feed the dashboard. Fresh high-confidence evidence can still block; velocity/crawl can rate-limit. | A scripted client can forge browser telemetry and PNG proof. In proxy shadow mode visitors never see this challenge. |
 | Additional observations | Chromium client-hint contradictions are recorded as `shadowSignals` during normal proxy shadow traffic. Four more candidates—WebGPU f16 absence, duplicate canvas output, pointer inactivity, and legacy automation globals—are recorded only after a valid **enforced** challenge solve. | None changes score or action. The four challenge-only candidates collect **no real-visitor samples in initial proxy shadow mode**. |
 | Verified bots and false-positive controls | Search crawler claims use bounded reverse/forward DNS verification. Policies have explicit owner checks, versioning, shadow preview, rollback, and an activation gate. | The policy gate uses local aggregates and needs real traffic review. The dashboard's legacy rule/settings pages do not control live policy. |
 | Evidence and dashboard | Tenant-scoped evidence, stats and offenders; selected-domain queries are ownership checked. Dashboard distinguishes scored signals from yellow observed candidates and cancels stale domain-switch requests. P1 measurement is wired end to end: per-tenant egress bytes (saturating counter, measured at the response writer) and challenge solve/fail counts appear in `/api/v1/dashboard/stats` and the Overview page. | Evidence and several aggregates are in memory and disappear on restart; UI test coverage is still small. |
-| Learned scoring | Candidate label pipeline and pure-Go trainer/model exist. Loaded model predictions are recorded alongside rule decisions. Model artifacts are version 2: they embed a provenance record (check-list hash, dataset hash, training options, held-out summary, optional approver) and `Load` refuses one whose stamp contradicts its feature list. The trainer gained `SplitLeakageSafe` evaluation (later-time, identity-clean holdout), per-side metrics (intervention recall, hard-block human FPR, challenge burden, Brier), calibration buckets, and a rules-vs-model promotion gate that holds unless the model matches rule recall at equal-or-lower human harm. | Model is **shadow-only**. No representative, independently reviewed labels or measured model quality exist. Collected challenge/honeypot candidates are not ground truth. |
+| Learned scoring | Candidate label pipeline and pure-Go trainer/model exist. Candidate samples in Postgres are pruned at startup and hourly in bounded batches, default 30 days (operator configurable). Loaded model predictions are recorded alongside rule decisions. Model artifacts are version 2 with provenance and leakage-safe evaluation/promotion checks. | Model is **shadow-only**. No representative, independently reviewed labels or measured model quality exist. Client-approved sample retention still needs confirmation before traffic collection. |
 | Managed onboarding and packaging | Self-service domain creation is disabled; operator binds the verified client domain. Compose requires stable secrets, Postgres, Supabase and dashboard origin. Certbot key is copied to a restricted directory for the non-root container; the renewal hook refreshes it before restart. | Domain ownership, TLS and origin checks are manual for this pilot; automatic multi-domain onboarding and billing are not built. |
 
 The five `inspired/` repositories were reviewed for ideas, with no code copied.
@@ -64,6 +63,18 @@ Relevant commits: `da9b44b3`, `0a886dcc`, `2094da41`, `3f64e5c3`,
 `0f5478b7`, `0e4b3674`, `12115dae`, `5f773e98`. The short commit index is
 `PROGRESS.md`; commit messages hold the detailed tests and trade-offs.
 
+## Work completed on 2026-09-25
+
+- Per-tenant exact-path login/checkout labels use the existing velocity signal,
+  with strict validation, owner-scoped versioned shadow drafts, an activation
+  gate, and dashboard editing. Built-in sensitive routes cannot be weakened.
+- Candidate training samples now have a configurable, bounded hourly cleanup;
+  the default pilot owner is loaded from a matching active database row on
+  startup, so policy ownership does not rely on a visitor-supplied value.
+- P2 review found no additional safe new signal without client traffic or an
+  approved browser collection surface. Route sequences, asset fidelity and
+  client-hint promotion remain evidence/calibration work.
+
 ## What remains, in execution order
 
 ### 1. Before the first client request — launch gate
@@ -80,7 +91,8 @@ Relevant commits: `da9b44b3`, `0a886dcc`, `2094da41`, `3f64e5c3`,
    exactly as in `deploy/README.md`. Never commit secrets.
 4. Build the static dashboard with its Supabase and API URLs, configure Auth
    redirects, manually bind the verified pilot tenant using the SQL in
-   `CLIENT_PILOT_RELEASE.md`, and test the authenticated dashboard.
+   `CLIENT_PILOT_RELEASE.md`, restart the proxy to load the default tenant's
+   owner, and test the authenticated dashboard and route-tag drafts.
 5. Smoke-test the **real** HTTPS request path: SNI/Host, JA4 variation across
    clients, origin routing, normal login/checkout/API journeys, good crawlers,
    challenge and rollback paths, health, Redis outage/recovery, reboot and
@@ -116,7 +128,8 @@ same-day hard-block switch.
 ### 3. Product/platform work after one-domain validation
 
 Automated domain ownership verification and ACME, durable evidence and shadow
-aggregates, dashboard editing of tenant policy, usage metering/billing, support
+aggregates, full dashboard editing of tenant policy beyond route tags,
+usage metering/billing, support
 operations, multi-node replay/failover, load/soak testing, and reviewed legal
 documents remain. These are requirements for a self-service hosted product,
 not capabilities of the managed single-client pilot. The detailed backlog is
@@ -127,14 +140,15 @@ in `CLIENT_READY_IMPLEMENTATION_PLAN.md` and `ROADMAP.md`.
 On the current release branch, local checks passed: backend
 `go test ./... -count=1`, `go vet ./...`, `go build ./...`, and
 `golangci-lint run ./...` (0 issues); dashboard `npm run typecheck`,
-`npm test` (3 tests), and `npm run build`; Compose config with dummy values;
-production Docker image build and binary `-h`; and shell syntax plus a TLS
-permission/renewal fixture test that confirmed UID/GID 65532 can read the key
-while an unrelated user cannot. Focused tenant and UI tests were run red before
-fixes and with meaningful mutations. A previous local browser smoke covered
-public pages, but **no browser smoke was rerun after the latest dashboard
-change**. No production HTTPS, representative load, cert renewal on the target
-host, or measured bot-catch test has passed.
+`npm test` (12 tests), and `npm run build`; Compose config with dummy values.
+The route-label and retention changes passed focused red/green and mutation
+checks, including temporary-Postgres tests for batch deletion and policy
+persistence. Earlier branch work passed a production Docker image build,
+binary `-h`, shell syntax, and a TLS permission/renewal fixture confirming
+UID/GID 65532 can read the key while an unrelated user cannot. The current
+image has not been rebuilt or browser-smoked after these changes. No production
+HTTPS, representative load, cert renewal on the target host, or measured
+bot-catch test has passed.
 
 ## Documentation cleanup and next-agent entry point
 

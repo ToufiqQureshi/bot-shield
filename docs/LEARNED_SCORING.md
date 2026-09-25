@@ -28,7 +28,7 @@
 | `training_samples` table + `-collect-labels` | **built** |
 | `cmd/hakaishield-train -db-url` — candidate-data experiment | **built, explicit opt-in only** |
 | **Selection-bias correction (§3)** | **not built — an unmade decision** |
-| Retention on a schedule | `db.DeleteSamplesBefore` exists, nothing calls it |
+| Retention on a schedule | **built**: startup/hourly bounded cleanup, 30 days by default, operator configurable |
 | Dashboard surface for any of it | not built, deliberately |
 
 The trainer eats one JSON object per line:
@@ -218,39 +218,38 @@ Additional defences worth building with the collector, not after:
 
 ## 5. Storage
 
-Nothing durable exists yet. `pkg/evidence.Trail` is a 1000-entry
-in-memory ring buffer that resets on restart — it is for answering "why
-was this blocked" today, not for accumulating a training set.
-
-Postgres is already there (Supabase, `pkg/db`). A table is the obvious
-home.
+`pkg/evidence.Trail` is a 1000-entry in-memory ring buffer that resets on
+restart; it is for recent decisions. Candidate training samples instead live
+in Postgres (`training_samples`), behind the off-by-default `-collect-labels`
+flag. They are observations, not verified human/bot ground truth.
 
 **Store the bitmask, not the request.** A sample needs the fired checks
 and the label. It does not need the IP, the user agent, the path or the
 body. Storing less is cheaper, safer, and makes the retention
 conversation short.
 
-Sketch, not a migration:
+Current table shape:
 
 ```text
-training_sample
+training_samples
   tenant_id      -- scoped, always (CLAUDE.md §16)
   fired          -- the bitmask (int)
-  feature_names  -- or a build/version tag: the vector is POSITIONAL,
-                 -- so a sample is meaningless without knowing which
-                 -- check list produced it
+  feature_version -- hash of the positional check list
   automated      -- the label
   source         -- 'challenge_solved' | 'honeypot' | 'customer_report'
   created_at     -- for retention and for finding a poisoning window
 ```
 
-`feature_names` or an equivalent version tag is not optional. The same
+`feature_version` is not optional. The same
 positional-vector reasoning that makes `decide.Load` refuse a mismatched
 model applies to stored samples: reorder the `checks` list and every old
 row silently starts meaning something else.
 
-Retention has to be bounded like every other traffic-derived store
-(`CLAUDE.md` §15).
+The proxy deletes expired samples at startup and hourly, in batches of 1000
+with at most 10 batches per run. `-sample-retention-days` accepts 1-365 and
+defaults to 30; Compose exposes `HAKAISHIELD_SAMPLE_RETENTION_DAYS`. Agree the
+period with the client before collection. Cleanup runs off the request path;
+an outage is logged and retried on the next tick.
 
 ---
 
@@ -267,7 +266,7 @@ signals.Evaluate → Evaluation{Score, Signals, Fired}
   │
   └─ first honeypot hit → automated candidate, trap bit cleared
                           ↓
-                    training_samples table (tenant-scoped; retention pending)
+                    training_samples table (tenant-scoped; bounded retention)
                           ↓
                     source review / independently verified JSONL
                           ↓

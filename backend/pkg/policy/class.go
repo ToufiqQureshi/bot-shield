@@ -27,6 +27,25 @@ func Classify(normalizedPath, method string) string {
 	return signals.Classify(normalizedPath, method)
 }
 
+// ClassifyRoute applies an activated policy's exact path labels. Shadow
+// drafts never alter live rate limits, and malformed paths keep the default.
+func (p *Policy) ClassifyRoute(rawPath, method string) string {
+	normalized, ok := signals.NormalizePath(rawPath)
+	if !ok {
+		return signals.ClassBrowse
+	}
+	defaultClass := signals.Classify(normalized, method)
+	if defaultClass == ClassLogin || defaultClass == ClassCheckout {
+		return defaultClass
+	}
+	if p != nil && p.Mode == "enforce" {
+		if class := p.RouteClasses[normalized]; class == ClassLogin || class == ClassCheckout {
+			return class
+		}
+	}
+	return defaultClass
+}
+
 func validClass(class string) bool {
 	switch class {
 	case ClassLogin, ClassAPI, ClassBrowse, ClassCheckout, ClassStatic:

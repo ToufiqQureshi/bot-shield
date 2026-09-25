@@ -67,6 +67,10 @@ func VelocityExceeded(tenant, ip, ja4, path, method string) bool {
 // bar while a browser clicking around and loading subresources is never
 // mistaken for any of it.
 func checkVelocitySpike(tenant, ip, path, method string) bool {
+	return checkVelocitySpikeForClass(tenant, ip, path, method, "")
+}
+
+func checkVelocitySpikeForClass(tenant, ip, path, method, routeClass string) bool {
 	if tenant == "" || ip == "" || !redisRequestAllowed() {
 		return false
 	}
@@ -75,7 +79,7 @@ func checkVelocitySpike(tenant, ip, path, method string) bool {
 	defer cancel()
 
 	window := time.Now().UnixMilli() / int64(rateLimitMs)
-	key, limit := velocityBucket(tenant, ip, path, method, window)
+	key, limit := velocityBucketForClass(tenant, ip, path, method, routeClass, window)
 
 	pipe := rdb.Pipeline()
 	incr := pipe.Incr(ctx, key)
@@ -94,10 +98,18 @@ func checkVelocitySpike(tenant, ip, path, method string) bool {
 // its endpoint class. The class comes from the normalized path and the
 // method; an unparseable path still counts, as a navigation.
 func velocityBucket(tenant, ip, path, method string, window int64) (string, int64) {
+	return velocityBucketForClass(tenant, ip, path, method, "", window)
+}
+
+func velocityBucketForClass(tenant, ip, path, method, routeClass string, window int64) (string, int64) {
 	bucket := "nav"
 	var limit int64 = maxNavPerWindow
 	if normalized, ok := NormalizePath(path); ok {
-		switch Classify(normalized, method) {
+		class := Classify(normalized, method)
+		if class != ClassLogin && class != ClassCheckout && (routeClass == ClassLogin || routeClass == ClassCheckout) {
+			class = routeClass
+		}
+		switch class {
 		case ClassStatic:
 			bucket, limit = "asset", maxAssetPerWindow
 		case ClassLogin:

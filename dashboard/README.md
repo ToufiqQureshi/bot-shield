@@ -2,7 +2,9 @@
 
 React/Vite dashboard for the managed single-client pilot. It displays real
 domain status, request totals, evidence and saved rule drafts from the Go API.
-It does not activate domains, process payments, or change live policy.
+It does not activate domains or process payments. Customers can save exact
+login/checkout route tags as versioned shadow policy drafts in Settings; those
+tags change live velocity buckets only after the policy activation gate.
 Evidence rows distinguish scored signals from yellow "Observed" candidates.
 The proxy's shadow mode does not serve challenge pages, so challenge-only
 observations appear only for visitors who later solve an enforced challenge.
@@ -38,4 +40,6 @@ reset redirect URL to the Supabase Auth allowlist. Set `DATABASE_URL` and
 
 The first client domain is provisioned by the operator after ownership, TLS,
 origin and shadow-mode checks. See `../docs/CLIENT_PILOT_RELEASE.md` for the
-gate and account-to-domain binding. A pending row does not protect traffic.
+gate and account-to-domain binding. Restart the proxy after binding the
+default owner so owner-scoped route drafts can load. A pending row does not
+protect traffic.

@@ -7,13 +7,16 @@ customer, an investor, or a new hire — without overclaiming.
 demo that promises more than the code does is a problem you find out about in
 front of the person you were trying to impress.
 
-Last checked against the code: **2026-09-24**.
+Last checked against the code: **2026-09-25**.
 
 The first client release is a single-node shadow pilot. No measured bot catch
 rate or live availability claim exists yet. The tenant-scoped dynamic counters,
 stable challenge key, replay cap and host-bound production configuration are
 pilot hardening; client-hint major/platform/mobile mismatches are evidence-only
 in `shadowSignals`. Passed sessions are rescored after the first challenge.
+The dashboard can save exact login/checkout route tags in a shadow policy
+draft; activated labels reuse the existing velocity signal. Candidate training
+samples have an hourly bounded retention job, default 30 days.
 See `CURRENT_STATUS.md` for the current handoff and
 `CLIENT_PILOT_RELEASE.md` for the release gate.
 

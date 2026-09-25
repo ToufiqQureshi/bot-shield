@@ -102,3 +102,24 @@ func TestEndpointBucketsIsolatedPerTenant(t *testing.T) {
 		t.Fatal("tenant B inherited tenant A's login counter")
 	}
 }
+
+func TestCustomLoginRouteUsesExistingVelocitySignal(t *testing.T) {
+	newTestRedis(t)
+	var last Evaluation
+	for i := 0; i < maxLoginPerWindow+1; i++ {
+		last = Evaluate(RequestFacts{Tenant: "custom", IP: "6.6.6.6", Path: "/account/signin", Method: "POST", RouteClass: ClassLogin})
+	}
+	if !slices.Contains(last.Signals, "velocity_spike") {
+		t.Fatal("custom login route did not use the stricter existing velocity signal")
+	}
+	if other := Evaluate(RequestFacts{Tenant: "other", IP: "6.6.6.6", Path: "/account/signin", Method: "POST"}); slices.Contains(other.Signals, "velocity_spike") {
+		t.Fatal("route label leaked across tenants")
+	}
+}
+
+func TestRouteOverrideCannotLoosenBuiltInLogin(t *testing.T) {
+	_, limit := velocityBucketForClass("t", "1.2.3.4", "/login", "POST", ClassCheckout, 0)
+	if limit != maxLoginPerWindow {
+		t.Fatalf("malformed policy loosened built-in login limit to %d", limit)
+	}
+}

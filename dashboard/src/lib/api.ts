@@ -87,6 +87,38 @@ export async function listDomains() {
   return request<Domain[]>('/domains');
 }
 
+export interface PolicyDocument {
+  mode: 'shadow' | 'enforce';
+  rules: unknown[];
+  routeClasses?: Record<string, 'login' | 'checkout'>;
+  allowlist?: string[];
+  challengeTheme?: string;
+  blockMessage?: string;
+}
+
+export interface PolicyRevision {
+  version: number;
+  document: PolicyDocument;
+}
+
+// A missing revision is normal for a new pilot domain. PUT checks ownership
+// against the authenticated account before it can create version one.
+export async function getTenantPolicy(tenantId: string, signal?: AbortSignal): Promise<PolicyRevision | null> {
+  try {
+    return await request<PolicyRevision>(`/domains/${encodeURIComponent(tenantId)}/policy`, { signal });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export async function saveTenantPolicy(tenantId: string, expectedVersion: number, document: PolicyDocument): Promise<PolicyRevision> {
+  return request<PolicyRevision>(`/domains/${encodeURIComponent(tenantId)}/policy`, {
+    method: 'PUT',
+    body: JSON.stringify({ expectedVersion, document }),
+  });
+}
+
 // ---- Mitigation Rules ----
 
 export interface ManagedRule {

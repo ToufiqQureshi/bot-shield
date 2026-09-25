@@ -158,6 +158,14 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	measured = tenant.Stats
+	var activePolicy *policy.Policy
+	if g.policyProvider != nil {
+		activePolicy = g.policyProvider(tenant.ID)
+	}
+	routeClass := ""
+	if activePolicy != nil {
+		routeClass = activePolicy.ClassifyRoute(r.URL.Path, r.Method)
+	}
 
 	enforced := tenant.Config.Mode == config.ModeEnforce
 
@@ -227,7 +235,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Passing a puzzle grants temporary challenge relief, not a bypass
 		// of later TLS, tool, honeypot, or crawl evidence. Evaluate once so
 		// Redis counters are incremented only once per request.
-		facts := signals.RequestFacts{IP: ip, JA4: ja4, UA: r.UserAgent(), Header: r.Header, Path: r.URL.Path, Method: r.Method, Tenant: tenant.ID}
+		facts := signals.RequestFacts{IP: ip, JA4: ja4, UA: r.UserAgent(), Header: r.Header, Path: r.URL.Path, Method: r.Method, RouteClass: routeClass, Tenant: tenant.ID}
 		evaluation := signals.Evaluate(facts)
 		shadowSignals := signals.ShadowSignals(facts)
 		for _, signal := range shadowSignals {
@@ -267,13 +275,14 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	facts := signals.RequestFacts{
-		IP:     ip,
-		JA4:    ja4,
-		UA:     r.UserAgent(),
-		Header: r.Header,
-		Path:   r.URL.Path,
-		Method: r.Method,
-		Tenant: tenant.ID,
+		IP:         ip,
+		JA4:        ja4,
+		UA:         r.UserAgent(),
+		Header:     r.Header,
+		Path:       r.URL.Path,
+		Method:     r.Method,
+		RouteClass: routeClass,
+		Tenant:     tenant.ID,
 	}
 	evaluation := signals.Evaluate(facts)
 	shadowSignals := signals.ShadowSignals(facts)
@@ -290,10 +299,6 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	baseline := decision
 	var opinion *evidence.PolicyOpinion
-	var activePolicy *policy.Policy
-	if g.policyProvider != nil {
-		activePolicy = g.policyProvider(tenant.ID)
-	}
 	if activePolicy != nil {
 		decision, opinion = evaluateTenantPolicy(activePolicy, facts, evaluation.Signals, score, strings.ToUpper(r.Method), verifiedBot, baseline, enforced)
 		if opinion.Matched {
@@ -421,7 +426,7 @@ func evaluateTenantPolicy(p *policy.Policy, facts signals.RequestFacts, fired []
 		opinion.SkippedReason = "ambiguous_path"
 		return baseline, opinion
 	}
-	class := policy.Classify(path, method)
+	class := p.ClassifyRoute(path, method)
 	opinion.Class = class
 	opinion.Method = method
 	allowlisted := p.Allowlisted(facts.IP)

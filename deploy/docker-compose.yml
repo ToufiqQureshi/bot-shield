@@ -60,6 +60,7 @@ services:
       - "-redis-url=redis://redis:6379"
       - "-db-url=${DATABASE_URL:?Set the pilot PostgreSQL connection URL}"
       - "-supabase-url=${SUPABASE_URL:?Set the Supabase project URL for dashboard auth}"
+      - "-sample-retention-days=${HAKAISHIELD_SAMPLE_RETENTION_DAYS:-30}"
       # -collect-labels is deliberately absent. While you are attacking your
       # own site, every solved challenge and honeypot trip would become a
       # training sample and the model would learn what YOUR bots look like.

@@ -50,6 +50,19 @@ These are designs to evaluate, **not** code to copy or a promise that every idea
 
 **Selection rule:** implement the next track only when it covers a measured evasion class and adds incremental recall at an acceptable false-positive, latency and spend cost. Eleven weak/browser-claimed signals stacked together do not become independent proof. For DNS-only onboarding, request-path signals work immediately; ordinary-page behaviour requires the client's opt-in snippet or separately reviewed HTML injection. Document that installation requirement clearly.
 
+**2026-09-25 P2 code review:** Endpoint-class velocity and customer-authored
+exact login/checkout labels are built using the existing `velocity_spike`
+signal. Route labels enter a versioned shadow draft and change live buckets
+only after policy activation. Candidate training samples now have bounded,
+configurable retention at startup and hourly. Track 4 route sequences,
+track 5 resource fidelity, track 6 client-hint weighting, and track 7 session
+continuity need real client baselines or an approved session/collection surface
+before they can be implemented safely. Track 2's global verify ceiling is
+built; per-tenant admission remains a multi-tenant scaling task. Track 13's
+solve/fail counts are built, but abandonment needs a reviewed session
+definition. Track 14's trap rotation needs measured value and false-positive
+review. None of those gaps justifies a new scored signal for this pilot.
+
 ## Behavioural collection contract (P3)
 
 1. Serve a small versioned first-party script from the protected domain on *selected* HTML pages. The managed client approves placement and privacy notice/CSP changes. Keep APIs, webhooks and pages without script functional.

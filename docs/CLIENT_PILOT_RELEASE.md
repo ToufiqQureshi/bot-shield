@@ -113,6 +113,8 @@ Replace every example value. An existing `default` row or host conflict means
 stop and inspect the current owner; do not overwrite it. The `active` row is
 for dashboard ownership/status. Live routing still comes from the running
 proxy's `HAKAISHIELD_DOMAIN`, `HAKAISHIELD_ORIGIN` and `HAKAISHIELD_MODE`.
+Restart the proxy after the SQL bind. It checks that the row's host and origin
+match the live settings and loads the owner for policy drafts at startup.
 Check authenticated `GET /api/v1/domains`, dashboard stats/evidence, and the
 real browser before handing credentials to the client. Configure the dashboard
 build variables and Auth redirects as described in `../dashboard/README.md`.

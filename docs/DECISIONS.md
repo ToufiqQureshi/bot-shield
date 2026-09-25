@@ -1887,3 +1887,33 @@ buckets cannot disagree about what a "login endpoint" is. Bucket limits are
 deliberately conservative and need client-traffic calibration; the login
 limit is strictest because no person posts ten logins a second while NAT
 sharing makes strictness elsewhere risky.
+
+---
+
+## Tenant route drafts and bounded sample retention — 2026-09-25
+
+**Decision:** Customers may label up to 64 canonical exact paths as login or
+checkout in the existing owner-scoped, versioned tenant policy. Dashboard
+Settings saves a shadow revision through the authenticated policy API.
+The labels reuse `velocity_spike` only when that revision is activated; they
+cannot weaken built-in sensitive routes or create a new model feature.
+The default pilot tenant loads its owner from a matching active database row
+at startup. Candidate training samples are pruned off the request path at
+startup and hourly, with 1000-row SQL batches, at most 10 per run, and a
+configurable 1-365 day retention period (default 30).
+
+**Why:** A client may use `/account/signin` instead of `/login`; the global
+classifier otherwise gives it the navigation limit. Versioned shadow drafts
+preserve existing ownership, validation, history and activation gates. Exact
+paths avoid broad prefixes that could capture unrelated traffic. Restricting
+to sensitive classes prevents a customer typo from silently loosening their
+login bucket. Retention cannot depend on an operator remembering to run SQL,
+and a single unbounded delete could stall the pilot database.
+
+**Limits:** The existing policy activation gate uses overall local traffic,
+not per-route samples, so the operator must review each tagged route and
+shared-IP impact before activation. The 30-day default must be confirmed
+against the client's agreed retention period before label collection. The
+current P2 plan offers no evidence that another uncalibrated browser signal
+would improve bot recall; resource/session/route-sequence work waits for
+real baselines or an approved collection surface.

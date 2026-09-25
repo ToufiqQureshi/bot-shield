@@ -173,7 +173,8 @@ func run(opts runOptions) error {
 func datasetHash(samples []decide.Sample) string {
 	h := sha256.New()
 	for _, s := range samples {
-		fmt.Fprintf(h, "%d:%d\n", s.Fired, boolInt(s.Automated))
+		// A hash.Hash Write never returns an error.
+		_, _ = fmt.Fprintf(h, "%d:%d\n", s.Fired, boolInt(s.Automated))
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }

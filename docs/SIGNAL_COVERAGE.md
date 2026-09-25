@@ -6,7 +6,7 @@ in the request path today, exactly how it's implemented, and — separately
 design doc. Source of truth is the code in `backend/pkg/signals/`,
 `backend/pkg/core/`, `backend/pkg/challenge/`, `backend/pkg/deception/`;
 cross-checked against `docs/ROADMAP.md`, `docs/DECISIONS.md`,
-`docs/RESEARCH.md`, `docs/PROGRESS.md` as of 2026-09-24.
+`docs/RESEARCH.md`, `docs/PROGRESS.md` as of 2026-09-25.
 
 Keep this updated whenever a signal is added, removed, or reweighted —
 see `CLAUDE.md` Section 22.
@@ -47,6 +47,14 @@ See `docs/DECISIONS.md` for the threshold rationale.
 | `crawl_pattern` | `pattern.go` | 50 | One tenant/IP touching >60 distinct page paths inside a 60s window (HyperLogLog cardinality estimate, ~12KB bounded memory); static assets and non-browser-claiming UAs excluded | Redis PFADD/PFCOUNT, 50ms timeout | Yes, same circuit |
 | `honeypot_trap` | `honeypot.go`, `deception.go` | 50 | Fetched the invisible (`aria-hidden`, `tabindex="-1"`, `rel=nofollow`, `display:none`) trap link injected into **deceived** HTML responses. Keyed on (tenant, IP, JA4), 6h TTL, capped at 50k entries in-memory per node | Server-injected link + server-observed fetch | N/A — absence of a fetch just means no signal |
 | automation-tool probe | `challenge.go` (not `score.go`) | hard fail, not scored | Inside the JS challenge page: checks `navigator.webdriver` and known Selenium/PhantomJS/Nightmare.js globals. Fires *in addition to* the SHA-256/canvas proof — fails the challenge outright (no passed cookie), doesn't add to the score | Client-side JS, self-reported | N/A — only runs for traffic already reaching the challenge |
+
+### 2026-09-25 route classification update
+
+The existing `velocity_spike` check now accepts up to 64 exact-path
+login/checkout labels from an activated, owner-scoped tenant policy. Shadow
+drafts do not change live buckets. Built-in login/checkout classes cannot be
+weakened by a malformed label. The same login 10/s and checkout 20/s limits
+apply; no new scored signal or model feature was added.
 
 ### 2026-09-24 pilot detection changes
 

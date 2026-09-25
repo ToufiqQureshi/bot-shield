@@ -68,6 +68,11 @@ slash); the API rejects arbitrary browser origins in the deployed stack.
 
 Keep the domain's A record pointed at the box. Keep `HAKAISHIELD_CHALLENGE_SECRET`
 stable across restarts; changing it invalidates active challenges and cookies.
+Set `HAKAISHIELD_SAMPLE_RETENTION_DAYS` to the client-approved period (1-365;
+example/default 30) before collecting candidate labels. The proxy prunes old
+samples at startup and hourly, at most 10,000 rows per run, without a request
+path query. After binding the pilot Auth owner in Postgres, restart the proxy
+so the host-bound default tenant loads that owner and its policy drafts.
 
 ---
 

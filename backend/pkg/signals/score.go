@@ -83,6 +83,9 @@ type RequestFacts struct {
 	// velocity buckets. It is client-controlled and only ever compared
 	// case-insensitively, never trusted as a decision input by itself.
 	Method string
+	// RouteClass is a trusted, activated tenant-policy override for this
+	// exact path. The visitor cannot set it; unknown values are ignored.
+	RouteClass string
 	// Tenant scopes per-customer state (currently the honeypot trap) so
 	// one customer's traffic can never influence another's decisions.
 	Tenant string
@@ -127,7 +130,9 @@ var checks = []struct {
 		return isScraper || badJA4Hashes[f.JA4]
 	}},
 	{"scripting_tool", 100, func(f RequestFacts) bool { return IsScriptingTool(f.UA) }},
-	{"velocity_spike", 50, func(f RequestFacts) bool { return checkVelocitySpike(f.Tenant, f.IP, f.Path, f.Method) }},
+	{"velocity_spike", 50, func(f RequestFacts) bool {
+		return checkVelocitySpikeForClass(f.Tenant, f.IP, f.Path, f.Method, f.RouteClass)
+	}},
 	{"ja4_velocity_spike", 50, func(f RequestFacts) bool { return checkJA4VelocitySpike(f.Tenant, f.JA4) }},
 	// crawl_pattern is a server-observed behaviour signal, not a client
 	// claim: a real browser's requests per page look nothing like a

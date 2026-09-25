@@ -1,6 +1,6 @@
 # hakaishield Architecture
 
-**Pilot reality (2026-09-24):** The current deploy path is one TLS-terminating
+**Pilot reality (2026-09-25):** The current deploy path is one TLS-terminating
 Go proxy with a host-bound default tenant and private Redis. Velocity, JA4
 velocity and crawl counters are tenant-scoped. Redis persists nonce markers
 without eviction; on outage, nonce fallback is local to the node. A bounded
@@ -16,6 +16,12 @@ challenge-only observations appear only when an enforced challenge is solved.
 Hosted global availability, automated tenant certificate
 issuance and durable evidence are planned architecture, not current pilot
 capabilities. See `CLIENT_PILOT_RELEASE.md`.
+Exact custom login/checkout paths are stored in a tenant's owner-scoped,
+versioned policy. Shadow drafts are inert for velocity; after activation, the
+existing `velocity_spike` check uses the tagged route's bucket. The default
+pilot tenant's owner is bound from a matching active database row at startup.
+Candidate training samples are pruned off the request path at startup and
+hourly in bounded batches; evidence/history still use in-memory storage.
 The client dashboard is a separate static app with Supabase Auth and an
 authenticated Go API. The first-client domain is operator-provisioned;
 unverified customer-created routing rows and automated certificate issuance
