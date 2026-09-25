@@ -36,7 +36,7 @@ learn the label back.
 
 ### 2026-09-25 — close UA-only crawler exemption in path detection
 
-`acbdfc45` — The existing `crawl_pattern` now counts declared crawler UAs
+`98088429` — The existing `crawl_pattern` now counts declared crawler UAs
 unless supported-crawler reverse/forward DNS verification succeeds. Unknown
 crawlers follow ordinary scoring; no signal or model feature was added.
 Gotcha: unverified crawlers above 60 distinct pages/minute may be challenged
