@@ -187,6 +187,19 @@ func main() {
 	}
 
 	store := tenant.NewStore()
+	challengeHandler.SetOutcomeRecorder(func(host string, solved bool) {
+		// The verify route is unauthenticated; like the shadow recorder,
+		// only an already-loaded cached tenant is charged, so a forged
+		// Host can never create a database lookup or touch another
+		// tenant's numbers.
+		if tn := store.GetCachedByHost(host); tn != nil {
+			if solved {
+				tn.Stats.RecordChallengeSolved()
+			} else {
+				tn.Stats.RecordChallengeFailed()
+			}
+		}
+	})
 	challengeHandler.SetShadowRecorder(func(host string, signals []string) {
 		// The verify route is unauthenticated. Only use a tenant already
 		// resolved by its original request; never trigger a new DB lookup here.
@@ -255,7 +268,14 @@ func main() {
 			log.Fatalf("hakaishield: -model: %v", err)
 		}
 		guard.WithShadowModel(model)
-		log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests); it records opinions and decides nothing", *modelPath, model.TrainedOn())
+		// Approval state is visible at startup so an operator can tell a
+		// shadow-analysis artifact from one a person signed off. Either
+		// way it decides nothing here; enforcement is a separate gate.
+		if model.Approved() {
+			log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests, approved by %s); it records opinions and decides nothing", *modelPath, model.TrainedOn(), model.Provenance().ApprovedBy)
+		} else {
+			log.Printf("hakaishield: shadow model loaded from %s (trained on %d requests, UNAPPROVED - shadow analysis only); it records opinions and decides nothing", *modelPath, model.TrainedOn())
+		}
 	}
 
 	// The proxy loads versioned tenant policy asynchronously. Legacy account

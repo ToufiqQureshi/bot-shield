@@ -34,6 +34,20 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — client-ready plan code slices (P1 measurement, P2 detection, decide gates)
+
+(this commit) — Endpoint-class velocity buckets (login/API/checkout/nav/asset) via a
+shared classifier moved into `pkg/signals`; per-tenant saturating egress-byte
+counter + challenge solve/fail stats wired proxy→API→dashboard; bounded
+concurrent admission ceiling (64) on the verify path with a counted 503;
+model artifacts v2 with provenance (dataset hash, options, eval summary,
+approver) and a leakage-safe evaluation + rules-vs-model promotion gate.
+Model stays shadow-only.
+Gotcha: splitting one backing array into train/holdout slices means growing
+either side in place clobbers the other — `SplitLeakageSafe` rebuilds both
+sides as fresh copies; the first version of this test passed vacuously
+because no identity straddled the time boundary.
+
 ### 2026-09-22 — deployment setup, bot ladder, PROGRESS split
 `14de934` — `deploy/` (Dockerfile, production compose, systemd unit, setup.sh
 for a fresh box), `bot-testing/ladder/` (seven rungs, each adding one

@@ -14,14 +14,17 @@ import (
 )
 
 type statsResponse struct {
-	TotalRequests int64  `json:"total_requests"`
-	Passed        int64  `json:"passed"`
-	Challenged    int64  `json:"challenged"`
-	Blocked       int64  `json:"blocked"`
-	Deceived      int64  `json:"deceived"`
-	RateLimited   int64  `json:"rateLimited"`
-	Mode          string `json:"mode"`
-	Enforcing     bool   `json:"enforcing"`
+	TotalRequests     int64  `json:"total_requests"`
+	Passed            int64  `json:"passed"`
+	Challenged        int64  `json:"challenged"`
+	Blocked           int64  `json:"blocked"`
+	Deceived          int64  `json:"deceived"`
+	RateLimited       int64  `json:"rateLimited"`
+	EgressBytes       int64  `json:"egress_bytes"`
+	ChallengeSolves   int64  `json:"challenge_solves"`
+	ChallengeFailures int64  `json:"challenge_failures"`
+	Mode              string `json:"mode"`
+	Enforcing         bool   `json:"enforcing"`
 }
 
 func DashboardStatsHandler(store *tenant.Store, verifier *auth.Verifier) http.Handler {
@@ -64,14 +67,17 @@ func DashboardStatsHandler(store *tenant.Store, verifier *auth.Verifier) http.Ha
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		if err := json.NewEncoder(w).Encode(statsResponse{
-			TotalRequests: s.Total(),
-			Passed:        s.Passed(),
-			Challenged:    s.Challenged(),
-			Blocked:       s.Blocked(),
-			Deceived:      s.Deceived(),
-			RateLimited:   s.RateLimited(),
-			Mode:          s.Mode.String(),
-			Enforcing:     s.Mode == config.ModeEnforce,
+			TotalRequests:     s.Total(),
+			Passed:            s.Passed(),
+			Challenged:        s.Challenged(),
+			Blocked:           s.Blocked(),
+			Deceived:          s.Deceived(),
+			RateLimited:       s.RateLimited(),
+			EgressBytes:       s.EgressBytes(),
+			ChallengeSolves:   s.ChallengeSolves(),
+			ChallengeFailures: s.ChallengeFailures(),
+			Mode:              s.Mode.String(),
+			Enforcing:         s.Mode == config.ModeEnforce,
 		}); err != nil {
 			log.Printf("hakaishield: encoding dashboard stats response: %v", err)
 		}

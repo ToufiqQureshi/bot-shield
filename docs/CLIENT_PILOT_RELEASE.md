@@ -24,7 +24,7 @@ code was copied into the product.
 
 ## Code gate complete in this branch
 
-- Tenant-scoped Redis counters for navigation/asset velocity, JA4 velocity,
+- Tenant-scoped Redis counters for endpoint-class velocity (login/API/checkout/nav/asset buckets), JA4 velocity,
   and distinct-path crawl. Cross-tenant tests cover each key family.
 - Public puzzle-minting route closed in the production mux; Guard can issue
   only after resolving a tenant. Replay and short-secret regressions pass.

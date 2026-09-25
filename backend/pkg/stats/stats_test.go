@@ -1,6 +1,7 @@
 package stats_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/ToufiqQureshi/hakaishield/pkg/config"
@@ -49,6 +50,44 @@ func TestStats_ModeReported(t *testing.T) {
 	s := newStats(config.ModeShadow)
 	if s.Mode != config.ModeShadow {
 		t.Errorf("mode: want shadow, got %v", s.Mode)
+	}
+}
+
+// P1 measurement (docs/CLIENT_READY_IMPLEMENTATION_PLAN.md): the plan's
+// cost numbers are egress bytes and challenge outcomes, so Stats must
+// carry them alongside the decision counts.
+func TestStats_RecordsBytesAndChallengeOutcomes(t *testing.T) {
+	s := newStats(config.ModeEnforce)
+
+	s.RecordEgressBytes(1024)
+	s.RecordEgressBytes(512)
+	s.RecordChallengeSolved()
+	s.RecordChallengeSolved()
+	s.RecordChallengeFailed()
+
+	if got := s.EgressBytes(); got != 1536 {
+		t.Errorf("EgressBytes: want 1536, got %d", got)
+	}
+	if got := s.ChallengeSolves(); got != 2 {
+		t.Errorf("ChallengeSolves: want 2, got %d", got)
+	}
+	if got := s.ChallengeFailures(); got != 1 {
+		t.Errorf("ChallengeFailures: want 1, got %d", got)
+	}
+}
+
+// Egress bytes are the biggest hosting cost line (plan, cloud-bill
+// section). A hostile client must not be able to overflow the counter
+// into negative territory by wrapping it, so the increment saturates.
+func TestStats_EgressBytesSaturatesNotOverflows(t *testing.T) {
+	s := newStats(config.ModeEnforce)
+	s.RecordEgressBytes(math.MaxInt64)
+	s.RecordEgressBytes(1)
+	if got := s.EgressBytes(); got != math.MaxInt64 {
+		t.Errorf("EgressBytes after overflow: want %d, got %d", int64(math.MaxInt64), got)
+	}
+	if got := s.EgressBytes(); got < 0 {
+		t.Errorf("EgressBytes went negative: %d", got)
 	}
 }
 

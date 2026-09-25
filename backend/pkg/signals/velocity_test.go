@@ -48,7 +48,7 @@ func TestCheckVelocitySpikeNoRedisFailsOpen(t *testing.T) {
 	rdb = nil
 	defer func() { rdb = prev }()
 
-	if checkVelocitySpike("test-tenant", "1.2.3.4", "/") {
+	if checkVelocitySpike("test-tenant", "1.2.3.4", "/", "GET") {
 		t.Fatal("checkVelocitySpike with nil rdb must fail open (false)")
 	}
 }
@@ -56,7 +56,7 @@ func TestCheckVelocitySpikeNoRedisFailsOpen(t *testing.T) {
 func TestCheckVelocitySpikeUnderLimit(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow; i++ {
-		if checkVelocitySpike("test-tenant", "1.2.3.4", "/pricing") {
+		if checkVelocitySpike("test-tenant", "1.2.3.4", "/pricing", "GET") {
 			t.Fatalf("request %d: spiked before exceeding maxNavPerWindow=%d", i, maxNavPerWindow)
 		}
 	}
@@ -66,7 +66,7 @@ func TestCheckVelocitySpikeOverLimit(t *testing.T) {
 	newTestRedis(t)
 	var lastSpiked bool
 	for i := 0; i < maxNavPerWindow+1; i++ {
-		lastSpiked = checkVelocitySpike("test-tenant", "5.6.7.8", "/pricing")
+		lastSpiked = checkVelocitySpike("test-tenant", "5.6.7.8", "/pricing", "GET")
 	}
 	if !lastSpiked {
 		t.Fatalf("request %d: want spike after exceeding maxNavPerWindow=%d", maxNavPerWindow+1, maxNavPerWindow)
@@ -79,7 +79,7 @@ func TestCheckVelocitySpikeOverLimit(t *testing.T) {
 func TestCheckVelocitySpikeExemptsAssets(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow*5; i++ {
-		if checkVelocitySpike("test-tenant", "7.7.7.7", "/static/app.js") {
+		if checkVelocitySpike("test-tenant", "7.7.7.7", "/static/app.js", "GET") {
 			t.Fatalf("asset request %d: assets must not count against the navigation limit", i)
 		}
 	}
@@ -88,18 +88,18 @@ func TestCheckVelocitySpikeExemptsAssets(t *testing.T) {
 func TestCheckVelocitySpikeIsolatedPerIP(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow+1; i++ {
-		checkVelocitySpike("test-tenant", "9.9.9.9", "/")
+		checkVelocitySpike("test-tenant", "9.9.9.9", "/", "GET")
 	}
-	if checkVelocitySpike("test-tenant", "1.1.1.1", "/") {
+	if checkVelocitySpike("test-tenant", "1.1.1.1", "/", "GET") {
 		t.Fatal("a fresh IP must not be flagged by another IP's velocity")
 	}
 }
 
 func TestVelocityBucketClassifies(t *testing.T) {
-	if _, limit := velocityBucket("test-tenant", "1.2.3.4", "/static/app.js", 0); limit != maxAssetPerWindow {
+	if _, limit := velocityBucket("test-tenant", "1.2.3.4", "/static/app.js", "GET", 0); limit != maxAssetPerWindow {
 		t.Errorf("asset path: want asset limit %d, got %d", maxAssetPerWindow, limit)
 	}
-	if _, limit := velocityBucket("test-tenant", "1.2.3.4", "/pricing", 0); limit != maxNavPerWindow {
+	if _, limit := velocityBucket("test-tenant", "1.2.3.4", "/pricing", "GET", 0); limit != maxNavPerWindow {
 		t.Errorf("navigation path: want nav limit %d, got %d", maxNavPerWindow, limit)
 	}
 }
@@ -141,12 +141,12 @@ func TestCheckJA4VelocitySpikeOverLimit(t *testing.T) {
 func TestVelocityExceededCombinesBothChecks(t *testing.T) {
 	newTestRedis(t)
 	for i := 0; i < maxNavPerWindow+1; i++ {
-		VelocityExceeded("test-tenant", "2.2.2.2", "", "/")
+		VelocityExceeded("test-tenant", "2.2.2.2", "", "/", "GET")
 	}
-	if !VelocityExceeded("test-tenant", "2.2.2.2", "", "/") {
+	if !VelocityExceeded("test-tenant", "2.2.2.2", "", "/", "GET") {
 		t.Fatal("VelocityExceeded must reflect an IP-only spike")
 	}
-	if VelocityExceeded("test-tenant", "3.3.3.3", "", "/") {
+	if VelocityExceeded("test-tenant", "3.3.3.3", "", "/", "GET") {
 		t.Fatal("VelocityExceeded must not flag an unrelated, low-volume IP")
 	}
 }

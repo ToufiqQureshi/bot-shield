@@ -21,6 +21,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -51,6 +53,7 @@ func main() {
 	holdout := flag.Float64("holdout", 0.2, "share of the data held back to score the model on traffic it was not trained on")
 	blockAt := flag.Float64("block-at", decide.DefaultOptions().BlockAt, "probability at or above which the model would block")
 	challengeAt := flag.Float64("challenge-at", decide.DefaultOptions().ChallengeAt, "probability at or above which the model would challenge")
+	approvedBy := flag.String("approved-by", "", "name of the person accepting the held-out evaluation; empty saves an unapproved model that stays shadow-only")
 	flag.Parse()
 
 	if err := run(runOptions{
@@ -63,6 +66,7 @@ func main() {
 		holdout:               *holdout,
 		challengeAt:           *challengeAt,
 		blockAt:               *blockAt,
+		approvedBy:            *approvedBy,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "hakaishield-train: %v\n", err)
 		os.Exit(1)
@@ -82,6 +86,7 @@ type runOptions struct {
 	holdout               float64
 	challengeAt           float64
 	blockAt               float64
+	approvedBy            string
 }
 
 func run(opts runOptions) error {
@@ -123,13 +128,30 @@ func run(opts runOptions) error {
 	}
 
 	report(os.Stderr, "training set", model.Score(train))
+	var heldOut decide.Quality
 	if len(test) > 0 {
 		// The held-out score is the one worth believing. A model that
 		// does well on the data it was fitted to and poorly here has
 		// memorised the sample, not learned the traffic.
-		report(os.Stderr, "held-out set", model.Score(test))
+		heldOut = model.Score(test)
+		report(os.Stderr, "held-out set", heldOut)
 	} else {
 		fmt.Fprintln(os.Stderr, "no held-out data: the training score below is not evidence the model generalises")
+	}
+
+	// Stamp the artifact with what produced it: the check-list version,
+	// a hash of the labelled rows, the training options and the held-out
+	// evaluation. Load refuses an artifact whose stamp contradicts its
+	// own feature list, so the origin record cannot silently rot.
+	model, err = model.WithProvenance(decide.Provenance{
+		FeatureVersion: signals.FeatureVersion(),
+		DatasetHash:    datasetHash(samples),
+		TrainedWith:    fmt.Sprintf("iterations=%d lr=%v l2=%v challenge_at=%v block_at=%v", trainOpts.Iterations, trainOpts.LearningRate, trainOpts.L2, trainOpts.ChallengeAt, trainOpts.BlockAt),
+		EvalSummary:    fmt.Sprintf("held-out samples=%d logloss=%.4f accuracy=%.3f fp=%d fn=%d", heldOut.Samples, heldOut.LogLoss, heldOut.Accuracy, heldOut.FalsePositives, heldOut.FalseNegatives),
+		ApprovedBy:     opts.approvedBy,
+	})
+	if err != nil {
+		return err
 	}
 
 	if opts.out == "" {
@@ -143,6 +165,24 @@ func run(opts runOptions) error {
 		return err
 	}
 	return saveModel(model, f)
+}
+
+// datasetHash fingerprints the labelled rows in order, so two artifacts
+// claiming the same data can be told apart. It is a record-keeping hash,
+// not a secret.
+func datasetHash(samples []decide.Sample) string {
+	h := sha256.New()
+	for _, s := range samples {
+		fmt.Fprintf(h, "%d:%d\n", s.Fired, boolInt(s.Automated))
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // saveModel writes the model and reports the close error rather than

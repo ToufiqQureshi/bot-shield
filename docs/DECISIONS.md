@@ -1818,3 +1818,72 @@ velocity, challenge, and honeypot signals already provide the first pilot
 baseline. Revisit after labelled traffic shows whether IP reputation would
 add useful coverage without harming legitimate shared-IP visitors. Any later
 provider choice must be reviewed for terms, cost, latency, and false positives.
+
+---
+
+## Model artifacts become v2 with provenance and a promotion gate — 2026-09-25
+
+**Decision:** the saved model format moves to version 2 and every v2 artifact
+carries a provenance record: the check-list hash the training masks used, a
+hash of the labelled dataset, the training options, the held-out evaluation
+summary, and an optional approver. `decide.Load` refuses any artifact whose
+provenance contradicts its own feature list, and v1 files (no provenance) are
+refused outright. The trainer stamps provenance automatically; `-approved-by`
+records the human sign-off, and the proxy logs whether a loaded model is
+approved at startup. Evaluation gained `SplitLeakageSafe` (a later-time,
+identity-clean holdout), plan metrics (intervention recall, hard-block human
+FPR, challenge burden, Brier), calibration buckets, and `RunPromotion`, which
+holds the model unless it matches rule recall on the holdout at equal-or-lower
+hard-block human harm. None of this changes enforcement: the model stays
+shadow-only.
+
+**Why:** the plan's `pkg/decide` section required label provenance, leakage-
+safe evaluation and a promotion test before the model may influence anything.
+A model file that cannot explain where it came from is operator input nobody
+can audit; a promotion decision made on aggregate accuracy can hide human
+harm. The gate encodes the plan's threshold language (recall at no more human
+harm, minimum holdout size) in code so "it looked good" cannot promote a
+model. Enforcing remains a separate, explicit, later step.
+
+---
+
+## Egress bytes and challenge burden are first-class tenant stats — 2026-09-25
+
+**Decision:** per-tenant stats gained a saturating egress-bytes counter fed
+from a measuring response writer wrapped once in `Guard.ServeHTTP`, plus
+per-tenant challenge solve/fail counters fed from the challenge verify path
+through a host-scoped recorder. Both surface through the existing
+`/api/v1/dashboard/stats` response and the Overview page (egress formatted
+MB/GB).
+
+**Why:** the plan's measurement stage (P1) and its cloud-bill section name
+egress bytes as the dominant hosting cost and challenge burden as the human-
+impact number; neither existed per tenant. Counting at the response writer
+means every response path (origin body, challenge page, block page) is
+counted without each path remembering to. The counter saturates instead of
+wrapping so hostile traffic cannot corrupt the cost number. Challenge
+outcomes are recorded against an already-loaded cached tenant only, so the
+unauthenticated verify route cannot create database lookups or touch another
+tenant's numbers.
+
+---
+
+## Endpoint-class velocity buckets and a shared classifier — 2026-09-25
+
+**Decision:** `velocity_spike` now counts per-IP requests in five endpoint-
+class buckets — login 10, API 100, checkout 20, navigation 20, assets 300
+per 1s window — with class computed from the normalized path plus HTTP
+method. The classifier (`Classify`, `NormalizePath`) moved from `pkg/policy`
+into `pkg/signals`; `pkg/policy` re-exports it. The verify path's admission
+ceiling (64 concurrent, counted 503 shed) implements the plan's admission
+budgets for the only unauthenticated endpoint with attacker-supplied work.
+
+**Why:** credential stuffing is a login-shaped flood, scraping is a browse-
+shaped flood, and no single global rate limits both without either missing
+the stuffing or breaking real browsing. The classifier lives in `pkg/signals`
+because `pkg/policy` already imports `pkg/signals` and the reverse edge would
+be a cycle; delegation keeps one vocabulary so dashboard rules and rate
+buckets cannot disagree about what a "login endpoint" is. Bucket limits are
+deliberately conservative and need client-traffic calibration; the login
+limit is strictest because no person posts ten logins a second while NAT
+sharing makes strictness elsewhere risky.

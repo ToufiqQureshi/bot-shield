@@ -627,19 +627,24 @@ production self-service feature. See `BACKEND_IMPLEMENTATION_PLAN.md` and
       Missing: referrer-chain analysis,
       per-fingerprint request *rate* (not just distinct paths), and the
       caps are reasoned guesses, not tuned against real traffic.
-- [ ] **9a. API-aware endpoint rules** — tag endpoints by category
-      (login, checkout, listing, generic) in config so item 9's rate
-      thresholds differ per category, instead of one global rate limit
-      for the whole site. Reuses items 9 + 11's machinery — a config
-      field, not a new signal or new package. Competitor gap: see
-      `docs/RESEARCH.md`'s 2026-09-15 competitor scan (DataDome's
-      stated differentiator).
-      **Risk:** wrong category tagging is worse than no tagging — a
-      client mislabeling their login endpoint as "generic" gets the
-      loose threshold on their most sensitive route, silently, with no
-      warning. Needs a sane default (unlabeled endpoint = strictest
-      category, not loosest) and validation that catches an empty/
-      missing category rather than defaulting quietly.
+- [x] **9a. API-aware endpoint rules** — tag endpoints by category
+      so item 9's rate thresholds differ per category, instead of one
+      global rate limit for the whole site.
+      **Done 2026-09-25:** per-IP velocity now counts five endpoint-
+      class buckets (login 10, API 100, checkout 20, navigation 20,
+      assets 300 per 1s window). Classification is by normalized path
+      plus HTTP method using the shared classifier that moved from
+      `pkg/policy` into `pkg/signals` (`Classify`/`NormalizePath`);
+      `pkg/policy` re-exports it so dashboard rules and rate buckets
+      cannot disagree. See `DECISIONS.md` 2026-09-25.
+      **Still open:** per-tenant route labeling/config so a client can
+      tag *their* sensitive routes (e.g. custom login paths) rather
+      than relying on the fixed default classifier; the defaults are
+      reasoned guesses, not tuned against real traffic.
+      **Risk (from the original scoping, still true):** wrong category
+      tagging is worse than no tagging — a client mislabeling their
+      login endpoint as "generic" gets the loose threshold on their
+      most sensitive route, silently, with no warning.
 - [x] **10. Honeypot fields** — invisible form fields/links only a
       blind selector-based script would interact with.
       **Done 2026-09-20:** an `aria-hidden`, `tabindex="-1"`,

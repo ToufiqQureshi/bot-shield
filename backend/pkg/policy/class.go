@@ -1,18 +1,31 @@
 package policy
 
-import (
-	"net/url"
-	"path"
-	"strings"
+import "github.com/ToufiqQureshi/hakaishield/pkg/signals"
+
+// Endpoint classes, re-exported so pkg/policy callers keep their existing
+// vocabulary. The definitions live in pkg/signals (see the note on the
+// import direction there).
+const (
+	ClassLogin    = signals.ClassLogin
+	ClassAPI      = signals.ClassAPI
+	ClassBrowse   = signals.ClassBrowse
+	ClassCheckout = signals.ClassCheckout
+	ClassStatic   = signals.ClassStatic
 )
 
-const (
-	ClassLogin    = "login"
-	ClassAPI      = "api"
-	ClassBrowse   = "browse"
-	ClassCheckout = "checkout"
-	ClassStatic   = "static_asset"
-)
+// NormalizePath rejects ambiguous escape forms and removes dot segments.
+// It forwards to the shared implementation in pkg/signals.
+func NormalizePath(raw string) (string, bool) {
+	return signals.NormalizePath(raw)
+}
+
+// Classify puts a request into one of a few endpoint classes from the
+// already-normalized path and method. It forwards to the shared
+// implementation in pkg/signals so the policy engine and the request-path
+// velocity buckets classify every URL the same way.
+func Classify(normalizedPath, method string) string {
+	return signals.Classify(normalizedPath, method)
+}
 
 func validClass(class string) bool {
 	switch class {
@@ -20,42 +33,4 @@ func validClass(class string) bool {
 		return true
 	}
 	return false
-}
-
-// NormalizePath rejects ambiguous escape forms and removes dot segments.
-// The caller uses the returned path only for policy matching, not proxy routing.
-func NormalizePath(raw string) (string, bool) {
-	if raw == "" {
-		return "/", true
-	}
-	if !strings.HasPrefix(raw, "/") || strings.Contains(raw, "\\") {
-		return "", false
-	}
-	decoded, err := url.PathUnescape(raw)
-	if err != nil || strings.Contains(decoded, "\\") || strings.Contains(decoded, "//") || strings.ContainsRune(decoded, 0) {
-		return "", false
-	}
-	if strings.Contains(decoded, "%") {
-		return "", false
-	}
-	return path.Clean(decoded), true
-}
-
-// Classify uses fixed, reviewable defaults. Unknown routes are browse.
-func Classify(normalizedPath, method string) string {
-	p := strings.ToLower(normalizedPath)
-	switch {
-	case p == "/login" || p == "/signin" || p == "/sign-in" || strings.HasPrefix(p, "/auth/"):
-		return ClassLogin
-	case p == "/checkout" || strings.HasPrefix(p, "/checkout/") || p == "/cart" || strings.HasPrefix(p, "/payment/"):
-		return ClassCheckout
-	case p == "/api" || strings.HasPrefix(p, "/api/"):
-		return ClassAPI
-	case method == "GET" || method == "HEAD":
-		switch strings.ToLower(path.Ext(p)) {
-		case ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2", ".webp", ".avif":
-			return ClassStatic
-		}
-	}
-	return ClassBrowse
 }

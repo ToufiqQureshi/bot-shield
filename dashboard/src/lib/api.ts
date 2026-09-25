@@ -129,6 +129,12 @@ export interface DashboardStats {
   challenged: number;
   blocked: number;
   deceived: number;
+  rateLimited: number;
+  // P1 measurement: egress bytes are the inline proxy's dominant hosting
+  // cost, and challenge solves/failures are the human-burden numbers.
+  egress_bytes: number;
+  challenge_solves: number;
+  challenge_failures: number;
   mode: string;
   enforcing: boolean;
 }
