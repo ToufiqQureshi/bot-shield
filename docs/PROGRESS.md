@@ -34,6 +34,11 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — rate-limit visibility in the pilot dashboard
+
+`0c0a7ad1` — Overview now shows the existing rate-limited count, and evidence
+logs can filter `rate_limit` decisions. Removed unused App hooks.
+
 ### 2026-09-25 — model evaluation and pilot image audit
 
 `4fa0f778` — Repaired time/identity holdout splitting, promotion class coverage,
