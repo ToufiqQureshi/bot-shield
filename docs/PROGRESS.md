@@ -267,3 +267,11 @@ Gotcha: exact-host evidence is skipped on a cold node until its tenant is loaded
 
 `12115dae` — Defer DNSBL/IP reputation for the low-cost managed pilot;
 revisit after labelled client traffic shows a specific coverage gap.
+
+### 2026-09-25 — bounded host lookups + CI bug-finding
+
+`b2d5ad4` — Unknown Host headers now cost at most 8 concurrent DB lookups per
+node (same host shared); CI adds errorlint/bodyclose/nilerr/sqlclosecheck,
+govulncheck and four 20 s fuzz runs.
+Gotcha: during a random-host flood a brand-new domain's first request can get
+"not found" — by design, it is not negative-cached and resolves next request.
