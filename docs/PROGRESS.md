@@ -34,6 +34,18 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — Cloudflare Pages dashboard preparation
+
+`145438e9` — Created the separate `hakaishield-dashboard` Pages project; pinned
+Node 24 and added a tested production build gate for public Supabase and HTTPS
+backend API values. Documented `interviewyaar.lol` as the frontend hostname.
+Gotcha: no first deployment yet; Direct Upload does not follow Git pushes, and
+the current backend API lives on the protected client hostname, still unknown.
+Mutation checks: missing validator module and an accepted `sb_secret_` key each
+made the new tests fail before implementation.
+
+---
+
 ### 2026-09-25 — rate-limit visibility in the pilot dashboard
 
 `0c0a7ad1` — Overview now shows the existing rate-limited count, and evidence
