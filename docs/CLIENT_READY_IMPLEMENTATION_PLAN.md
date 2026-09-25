@@ -63,6 +63,14 @@ solve/fail counts are built, but abandonment needs a reviewed session
 definition. Track 14's trap rotation needs measured value and false-positive
 review. None of those gaps justifies a new scored signal for this pilot.
 
+**2026-09-25 crawler-claim hardening:** The existing `crawl_pattern` check now
+counts distinct page paths for declared crawlers unless a supported search
+crawler passed reverse/forward DNS verification. This closes the UA-only
+exemption for spoofed and unknown crawler claims without adding a signal or
+changing the 60-path threshold. A legitimate but unverified crawler may be
+challenged above that rate once enforcement is enabled; review the client’s
+crawler list during shadow traffic.
+
 ## Behavioural collection contract (P3)
 
 1. Serve a small versioned first-party script from the protected domain on *selected* HTML pages. The managed client approves placement and privacy notice/CSP changes. Keep APIs, webhooks and pages without script functional.

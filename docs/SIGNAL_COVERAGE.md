@@ -83,7 +83,7 @@ analysis.
 |---|---|---|
 | `isCommonBrowserJA4` | `ja4db.go` | Redis-fed set of genuine browser JA4 prefixes; exempts them from the JA4 aggregate velocity check |
 | `IsVerifiedGoodBot` | `goodbots.go` | Reverse-DNS + forward-DNS verification for Googlebot/Bingbot/Applebot/DuckDuckBot/YandexBot/Baiduspider claims (exact domain-suffix match, not plain substring, so `evilgooglebot.com` doesn't pass), 6h cache, bounded to 100k entries and 64 concurrent DNS lookups |
-| crawler UA exemption | `useragent.go`, `pattern.go` | Any UA containing `bot`/`spider`/`crawl` is treated as an honest declared crawler, not scored for browser-impersonation checks |
+| crawler UA handling | `useragent.go`, `goodbots.go`, `pattern.go` | A `bot`/`spider`/`crawl` claim no longer exempts path behavior: unverified crawler claims are counted by the existing `crawl_pattern`; a supported crawler is exempt only after reverse/forward DNS verification |
 
 ### Response-layer mechanisms (not signals, but part of the pipeline)
 

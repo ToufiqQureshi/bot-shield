@@ -1917,3 +1917,27 @@ against the client's agreed retention period before label collection. The
 current P2 plan offers no evidence that another uncalibrated browser signal
 would improve bot recall; resource/session/route-sequence work waits for
 real baselines or an approved collection surface.
+
+---
+
+## Crawler claims do not bypass path-behavior detection — 2026-09-25
+
+**Decision:** Keep the existing `crawl_pattern` feature and threshold, but
+count distinct page paths for User-Agents that declare themselves as a
+crawler. Only supported crawler families whose source IP passes
+reverse/forward DNS verification receive the crawler exemption. `Guard`
+passes that server-verified fact into scoring; a visitor cannot supply it.
+
+**Why:** Previously any `bot`, `spider` or `crawl` substring made
+`claimsBrowser` false, which exempted the request from `crawl_pattern` even
+when a spoofed Googlebot traversed more than 60 distinct pages per minute.
+The same marker also hid the request from browser-consistency checks. The plan
+requires unknown crawlers to receive ordinary evaluation and forbids UA-only
+trust. This change improves the existing behavior signal without changing the
+model feature list or adding another scored check.
+
+**Limits and cost:** An unverified legitimate crawler may receive the existing
+challenge after 60 distinct page paths in a 60-second window once enforcement
+is enabled. Review the client's crawler traffic in shadow mode. Only declared
+crawlers add the existing bounded Redis HyperLogLog work; Redis failures still
+fail open, and DNS verification retains its concurrency budget.
