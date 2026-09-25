@@ -34,9 +34,19 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — tenant route labels and sample retention
+
+`b76a8583` — Owner-scoped exact login/checkout labels are saved as versioned
+shadow drafts and feed the existing velocity buckets only after activation;
+candidate samples now have bounded startup/hourly Postgres pruning.
+Gotcha: the existing policy activation gate measures overall local traffic,
+not traffic on each tagged route; review route and shared-IP impact first.
+Mutation checks: route activation, SQL batch limit, retention cutoff and
+dashboard authorization each made the relevant tests fail before restoration.
+
 ### 2026-09-25 — client-ready plan code slices (P1 measurement, P2 detection, decide gates)
 
-(this commit) — Endpoint-class velocity buckets (login/API/checkout/nav/asset) via a
+`f730c14e` — Endpoint-class velocity buckets (login/API/checkout/nav/asset) via a
 shared classifier moved into `pkg/signals`; per-tenant saturating egress-byte
 counter + challenge solve/fail stats wired proxy→API→dashboard; bounded
 concurrent admission ceiling (64) on the verify path with a counted 503;
