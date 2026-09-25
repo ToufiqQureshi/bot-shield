@@ -16,13 +16,16 @@ target, not a measured result.** A local build and bot ladder cannot establish
 population-level recall or false-positive rate. Do not promise production
 availability or enable enforcement from this document alone.
 
-The `hakaishield-dashboard` Cloudflare Pages Direct Upload project exists, but
-has no first deployment. Its Node 24 build now has a Pages-specific validation
-gate for the public Supabase URL/key and HTTPS backend API URL. The final values,
-Supabase Auth redirects and backend CORS origin remain open. The owner chose
-`https://interviewyaar.lol` as the frontend hostname; the client-facing API URL
-will be `https://<protected-client-domain>/api/v1` under the current single-host
-backend deployment, so it cannot be finalized before that domain is known.
+The `hakaishield-dashboard` Cloudflare Pages Direct Upload project has a public
+marketing deployment at `https://hakaishield-dashboard.pages.dev`. The owner
+chose `https://interviewyaar.lol`; its custom-domain DNS/certificate activation
+is being verified. This build serves landing, pricing, docs, contact and legal
+pages, with no authenticated dashboard route. The full dashboard build has a
+Pages-specific validation gate for public Supabase and HTTPS backend API values.
+Supabase Auth redirects and backend CORS origin remain open. The client-facing
+API URL is `https://<protected-client-domain>/api/v1` under the current
+single-host backend deployment, so it cannot be finalized before that domain
+is known. The proxy/detection backend has not been deployed.
 
 PR #19 merged an earlier release snapshot to `main`. Later audit commits are
 pushed only to `release/client-pilot-hardening`; the workflow

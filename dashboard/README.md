@@ -26,20 +26,27 @@ npm run build
 ## Pilot deployment
 
 The dashboard is a static React/Vite app. Its Cloudflare Pages project is
-`hakaishield-dashboard` (Direct Upload); the first deployment is still pending.
+`hakaishield-dashboard` (Direct Upload). The first production deployment is the
+public marketing build while the backend API is not live. It includes landing,
+pricing, docs, contact and legal pages; authenticated dashboard routes are not
+exposed in that build.
 The chosen production hostname is `https://interviewyaar.lol`.
-From `dashboard/`, use Node 24.19.0, `npm ci`, then `npm run build:pages`.
+From `dashboard/`, use Node 24.19.0 and `npm ci`. Run
+`npm run build:pages:marketing` for the public site. Once the protected client
+API is live, set the public configuration below and use `npm run build:pages`
+for the full authenticated dashboard.
 Upload `dist/` for a preview with:
 
 ```bash
 npx wrangler pages deploy dist --project-name hakaishield-dashboard --branch=release/client-pilot-hardening
 ```
 
-Use `--branch=main` only for the approved production revision. Direct Upload
+Use `--branch=main` for the production upload. Direct Upload
 does not automatically publish GitHub pushes.
 
-Set these **build-time** variables in the build environment before running
-`build:pages` (Vite embeds them in public JavaScript):
+Set these **build-time** variables in the build environment before running the
+full `build:pages` (Vite embeds them in public JavaScript). The marketing build
+does not need or bundle them:
 Setting them only in Cloudflare Pages project settings does not change a bundle
 built and uploaded locally.
 

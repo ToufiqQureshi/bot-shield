@@ -14,9 +14,10 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 **Decision.** Host the static React dashboard on Cloudflare Pages in its own
 `hakaishield-dashboard` Direct Upload project. Pin Node 24 and validate public
-build-time Supabase/API values before upload. Deploy the release branch as a
-preview, then the approved `main` revision as production. Direct Upload needs
-an explicit upload for each release; GitHub pushes alone do not deploy it.
+build-time Supabase/API values before a full-dashboard upload. Since the backend
+API is not live, publish only public marketing routes in the first Pages build;
+the authenticated dashboard is a separate later build. Direct Upload needs an
+explicit upload for each release; GitHub pushes alone do not deploy it.
 
 **Why.** Pages is suitable for static dashboard files. It is kept separate
 from the inline customer proxy, which must terminate visitor TLS itself to
