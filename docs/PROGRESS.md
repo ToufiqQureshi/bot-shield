@@ -26,11 +26,13 @@ learn the label back.
 | Question | Look here |
 |---|---|
 | What exactly changed, and how was it verified? | `git show <commit>` |
-| Why was it done this way, and what was rejected? | `docs/DECISIONS.md` |
-| What is known about this threat or vendor? | `docs/RESEARCH.md` |
-| How does this part work? | the topic doc — `SCORING_EXPLAINED`, `LEARNED_SCORING`, `DEPLOYMENT`, `ARCHITECTURE` |
-| What is built and what is not? | `docs/WHAT_IS_BUILT.md` |
-| Sessions before 2026-09-22 | `docs/PROGRESS_ARCHIVE.md` |
+| Why was it done, what was rejected? | `docs/DECISIONS.md` |
+| What works, what's next? | `docs/STATUS.md` |
+| How does it work? | `docs/ARCHITECTURE.md`, `docs/DEPLOYMENT.md` |
+| Older long-form notes (deleted 2026-09-25) | `git show a7fe7ce:docs/PROGRESS_ARCHIVE.md` |
+
+Doc names in older entries below may point at files merged into the five
+above on 2026-09-25; `git show <commit>:<path>` still has them.
 
 ---
 

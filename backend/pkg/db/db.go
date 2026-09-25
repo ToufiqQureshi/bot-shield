@@ -102,7 +102,7 @@ func InitSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	-- on which checks fired, and nothing else here is worth the storage
 	-- or the retention argument. feature_version names the check list
 	-- that produced the mask, which is positional and uninterpretable
-	-- without it. See docs/LEARNED_SCORING.md.
+	-- without it. See docs/ARCHITECTURE.md.
 	CREATE TABLE IF NOT EXISTS training_samples (
 		id BIGSERIAL PRIMARY KEY,
 		tenant_id VARCHAR(255) NOT NULL,
@@ -177,7 +177,7 @@ func ListDomains(ctx context.Context, ownerUserID string) ([]Domain, error) {
 }
 
 // SampleStore writes and reads labelled traffic for pkg/decide. It is
-// the labels.Writer implementation; see docs/LEARNED_SCORING.md.
+// the labels.Writer implementation; see docs/ARCHITECTURE.md.
 type SampleStore struct{}
 
 // WriteSamples inserts a batch of labelled requests.

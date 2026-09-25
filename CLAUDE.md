@@ -162,14 +162,14 @@ belong to the product owner.**
 
 Before non-trivial work, read:
 
-1. `docs/AGENT.md`
-2. `docs/CURRENT_STATUS.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/ROADMAP.md`
-5. `docs/DECISIONS.md`
-6. `docs/RESEARCH.md`
-7. `docs/PROGRESS.md`
-8. this `CLAUDE.md`
+1. `docs/STATUS.md`
+2. `docs/ARCHITECTURE.md`
+3. `docs/DECISIONS.md`
+4. `docs/PROGRESS.md` (latest entries)
+5. this `CLAUDE.md`
+
+`docs/` holds exactly five files. Do not add a sixth; put new content in
+the one that owns it. Keep lines short and each entry to a few lines.
 
 Then inspect relevant source files, tests, callers, configuration, and interfaces.
 
@@ -180,18 +180,11 @@ contains the answer.
 
 | Document | Purpose |
 |---|---|
-| `CURRENT_STATUS.md` | Current product/launch truth, what was completed and what remains, including behavioural detection gaps |
-| `WHAT_IS_BUILT.md` | Plain-language inventory of what actually works today and what does not — for explaining the product to someone |
-| `DEPLOYMENT.md` | Where hakaishield is hosted and why, which platforms are ruled out by the TLS-termination constraint, what bandwidth costs as traffic grows, and what the large vendors do architecturally |
-| `AGENT.md` | Product purpose and engineering standard |
-| `ARCHITECTURE.md` | Current architecture and system behavior |
-| `ROADMAP.md` | What should be built and current status |
-| `DECISIONS.md` | Why important choices were made |
-| `RESEARCH.md` | Threats, techniques, vendors, libraries, research |
-| `PROGRESS.md` | An **index** of past work: commit id + one or two lines + a gotcha when there is one. Not a journal — the detail lives in the commit message |
-| `PROGRESS_ARCHIVE.md` | Long-form session records from before that split. Read only when a commit message and the topic docs do not answer the question |
-| `SCORING_EXPLAINED.md` | How scoring and the learned model work, from zero — the onboarding read for anyone touching either |
-| `LEARNED_SCORING.md` | How the learned scoring model gets its data, and what must be true before it may decide anything |
+| `STATUS.md` | What works, what doesn't, launch gate, owner decisions, what's next (roadmap item numbers) |
+| `ARCHITECTURE.md` | Request flow, scored checks, challenge, policy, learned model rules, limits |
+| `DEPLOYMENT.md` | Hosting rule (we terminate TLS), host choice, bandwidth cost, pilot launch steps |
+| `DECISIONS.md` | One or two lines per decision and why; threats studied |
+| `PROGRESS.md` | An **index**: commit id + one or two lines + a gotcha when there is one. Detail lives in the commit message |
 | `CLAUDE.md` | How engineering work must be performed |
 
 If documentation conflicts, do not silently invent an answer. Identify the
@@ -202,9 +195,8 @@ possible, and update affected documentation after resolving it.
 
 For meaningful work:
 
-- update `ROADMAP.md` when roadmap status changes
-- update `DECISIONS.md` for meaningful technical/product decisions
-- update `RESEARCH.md` for new threat/technique/tool research
+- update `STATUS.md` when what works or what's next changes
+- update `DECISIONS.md` for meaningful decisions and new threat research
 - update `ARCHITECTURE.md` or `README.md` when behavior/API/architecture changes
 - commit the work, then append **one entry** to `PROGRESS.md`: the commit id,
   one or two lines, and a gotcha line only when there is one (see §22)
@@ -849,11 +841,11 @@ Do not build new code on top of obvious dead code when it can safely be removed.
 
 Do not wait for the owner to remind you.
 
-Update `ROADMAP.md` when:
+Update `STATUS.md` when:
 
-- a roadmap item is completed
-- status materially changes
-- scope/priority changes
+- something starts or stops working
+- a roadmap item is completed, reprioritised or cut
+- an owner decision is made or a new one appears
 
 Update `DECISIONS.md` when:
 
@@ -863,11 +855,9 @@ Update `DECISIONS.md` when:
 - an alternative is rejected
 - a product/technical trade-off is resolved
 
-Update `RESEARCH.md` when:
+Add to the "Threats we have studied" part of `DECISIONS.md` when:
 
-- a new threat is researched
-- a detection technique is researched
-- an important library/vendor/tool is evaluated
+- a new threat, detection technique, vendor or tool is researched
 - new security knowledge affects implementation
 
 Update `DEPLOYMENT.md` when:
@@ -876,7 +866,7 @@ Update `DEPLOYMENT.md` when:
 - anything changes what a request costs in bandwidth, compute or external calls
 - a platform is evaluated and rejected (record the reason, not just the choice)
 
-Before proposing any managed platform, CDN or load balancer, read its §1: the
+Before proposing any managed platform, CDN or load balancer, read "The one rule": the
 product terminates TLS itself to read the ClientHello, and anything that
 terminates TLS first silently degrades detection rather than failing.
 
@@ -915,8 +905,8 @@ next person and that reading the diff would not reveal. Most entries have none.
 then read instead of the code.
 
 Anything that stays true beyond this change belongs in a topic document, not in
-`PROGRESS.md`: a decision in `DECISIONS.md`, a threat or vendor finding in
-`RESEARCH.md`, how something works in its own doc.
+`PROGRESS.md`: a decision or threat finding in `DECISIONS.md`, how something works in
+`ARCHITECTURE.md` or `DEPLOYMENT.md`, what's next in `STATUS.md`.
 
 ### Committing and pushing
 
@@ -938,10 +928,10 @@ Before finishing, check:
 
 ```text
 README
+STATUS
 ARCHITECTURE
-ROADMAP
+DEPLOYMENT
 DECISIONS
-RESEARCH
 PROGRESS
 CLAUDE
 ```
@@ -1121,7 +1111,7 @@ time frontend or backend code changes, not just when someone asks.
   handler that only updates local state or shows a fake success toast.
 - If the backend has an endpoint, data model, or feature with no frontend
   surface for it, either wire it into the dashboard or explicitly record in
-  `docs/PROGRESS.md`/`docs/ROADMAP.md` why it is intentionally backend-only
+  `docs/STATUS.md` why it is intentionally backend-only
   or not yet exposed. Do not let backend capability silently sit unused
   while the dashboard shows something unrelated or fake in its place.
 - When adding or changing a frontend API call, verify the request
@@ -1330,14 +1320,14 @@ The owner should not need to separately say:
 
 ```text
 read CLAUDE.md
-read ROADMAP
+read STATUS
 write tests
 run tests
 check security
 check performance
 review your diff
 update PROGRESS
-update ROADMAP
+update STATUS
 check for bugs
 ```
 

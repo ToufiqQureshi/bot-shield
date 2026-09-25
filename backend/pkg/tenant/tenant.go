@@ -26,7 +26,7 @@ type TenantConfig struct {
 	Mode          config.Mode       // Enforce or Shadow
 	Policy        config.PolicyMode // Balanced or Strict
 	EvidenceToken string            // Bearer token for the per-request evidence endpoint
-	Deception     bool              // If true, high-confidence bot traffic is deceived instead of 403 blocked (ROADMAP 11a)
+	Deception     bool              // If true, high-confidence bot traffic is deceived instead of 403 blocked (docs/STATUS.md item 11a)
 	Status        string            // Domain lifecycle status; only active domains route visitor traffic.
 	// OwnerUserID identifies the dashboard account this tenant belongs
 	// to. mitigation_rules and protection_settings are keyed by this,

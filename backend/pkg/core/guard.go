@@ -19,7 +19,7 @@ import (
 )
 
 // Guard is the first thing in this codebase that actually acts on a
-// signal instead of just labeling it (ROADMAP item 5). It scores each
+// signal instead of just labeling it. It scores each
 // request and either forwards it to the origin, serves the JS
 // challenge in its place, or refuses it outright.
 type Guard struct {
@@ -347,7 +347,7 @@ func (g *Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "60")
 		http.Error(w, "too many requests", http.StatusTooManyRequests)
 	case signals.DecisionDeceive:
-		// ROADMAP Item 11a: Deception mode (decoy response).
+		// Deception mode (decoy response), docs/STATUS.md item 11a.
 		// Forward the request with X-HakaiShield-Decision: deceive so the origin
 		// can serve dummy data/poisoned pricing and waste the scraper's resources.
 		ctx := WithDecision(r.Context(), signals.DecisionDeceive.String(), score)

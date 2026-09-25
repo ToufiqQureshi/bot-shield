@@ -4,7 +4,7 @@ The reasoning — why this host, why not the managed ones, what bandwidth
 costs — is in [`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md). This file is
 the commands.
 
-**Read `DEPLOYMENT.md` §1 before substituting any platform.** hakaishield
+**Read "The one rule" in `DEPLOYMENT.md` before substituting any platform.** hakaishield
 terminates TLS itself to read the ClientHello. Anything that terminates TLS
 first (Cloudflare proxied, Railway, Vercel, an ALB) silently turns JA4 into a
 constant and quietly guts detection. Nothing errors.
@@ -16,7 +16,7 @@ constant and quietly guts detection. Nothing errors.
 ```text
 One Linux server near the protected origin; size and price are chosen when
 the pilot domain and traffic estimate are known. Keep the ORIGIN nearby to
-avoid an extra long network hop (see docs/DEPLOYMENT.md §3).
+avoid an extra long network hop (see "Where" in docs/DEPLOYMENT.md).
 ├── hakaishield   :443, in Docker
 └── Redis         no published port; only hakaishield reaches it
 
@@ -28,7 +28,7 @@ Vercel / Pages  the dashboard. Static files, free, not in the request
 
 Do not self-host Postgres on the same box. Redis also holds spent challenge
 nonces, so Compose uses a persistent AOF volume and `noeviction`. Back up and
-monitor that volume; see `../docs/CLIENT_PILOT_RELEASE.md` for outage limits.
+monitor that volume; see `../docs/DEPLOYMENT.md` for outage limits.
 
 ---
 
@@ -61,7 +61,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs -f
 Set `DATABASE_URL` and `SUPABASE_URL` as well: the client dashboard API is part
 of this pilot and Compose fails if either is missing. After TLS/origin checks,
 bind the client's Supabase Auth ID to the default tenant using the exact SQL in
-[`../docs/CLIENT_PILOT_RELEASE.md`](../docs/CLIENT_PILOT_RELEASE.md).
+[`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md).
 Set `HAKAISHIELD_DASHBOARD_ORIGIN` to the exact HTTPS origin serving the static
 dashboard (for example `https://dashboard.example.com`, without a trailing
 slash); the API rejects arbitrary browser origins in the deployed stack.
@@ -110,7 +110,7 @@ account — the same is true of every provider on that list.
 **Keep `-collect-labels` off while you do this.** It is deliberately absent
 from the compose file. Every solved challenge and honeypot trip would become a
 training sample, and the model would learn what *your* bots look like rather
-than what real ones do. See [`../docs/LEARNED_SCORING.md`](../docs/LEARNED_SCORING.md).
+than what real ones do. See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
 
 ---
 
@@ -155,7 +155,7 @@ openssl s_client -connect customer.example:443 -servername customer.example </de
 ```
 
 **Every JA4 looks identical** → something is terminating TLS in front of you.
-Re-read `DEPLOYMENT.md` §1.
+Re-read "The one rule" in `DEPLOYMENT.md`.
 
 **Certificate errors 90 days in** → the renewal hook never ran. That is what
 the hook and `certbot renew --dry-run` checks are meant to catch. Inspect

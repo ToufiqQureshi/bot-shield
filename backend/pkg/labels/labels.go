@@ -8,7 +8,7 @@
 //   - a solved challenge, which can also be forged by a purpose-built client
 //   - a honeypot hit, which can also come from prefetch or accessibility tools
 //
-// docs/LEARNED_SCORING.md is the full write-up: which other sources look
+// docs/ARCHITECTURE.md is the full write-up: which other sources look
 // obvious and are traps, the selection bias in this data, and why
 // training must never run automatically.
 //
@@ -134,7 +134,7 @@ func (c *Collector) Record(s Sample) {
 	// One client must not be able to fill the training set with its own
 	// labels. A bot that deliberately solves challenges is injecting
 	// "human" labels for its own fingerprint, and without a cap it can
-	// do that as often as it likes (docs/LEARNED_SCORING.md).
+	// do that as often as it likes (docs/ARCHITECTURE.md).
 	if !c.cap.allow(s.Identity, time.Now()) {
 		observability.Inc("label_sample_capped_total")
 		return

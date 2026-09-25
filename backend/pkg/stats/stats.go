@@ -8,14 +8,14 @@ import (
 	"github.com/ToufiqQureshi/hakaishield/pkg/signals"
 )
 
-// Stats counts what core.Guard has decided, for the dashboard (ROADMAP
-// item 12). In-memory only - resets on restart, same class of
+// Stats counts what core.Guard has decided, for the dashboard.
+// In-memory only - resets on restart, same class of
 // limitation as challenge.Challenge's in-memory secret (docs/DECISIONS.md).
 // Real durable analytics need the planned Postgres store.
 type Stats struct {
 	// config.Mode is reported alongside the counts so nobody can read them
 	// without knowing whether they describe what happened or only what
-	// would have happened (docs/ROADMAP.md item 18).
+	// would have happened.
 	Mode config.Mode
 
 	total       atomic.Int64
@@ -25,7 +25,7 @@ type Stats struct {
 	deceived    atomic.Int64
 	rateLimited atomic.Int64
 
-	// P1 measurement (docs/CLIENT_READY_IMPLEMENTATION_PLAN.md):
+	// P1 measurement (docs/STATUS.md):
 	// egress bytes are the dominant hosting cost of an inline proxy, and
 	// challenge solve/failure counts are the plan's human-burden numbers.
 	egressBytes     atomic.Int64

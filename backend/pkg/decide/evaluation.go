@@ -14,8 +14,8 @@ import (
 // The identity is the same capped (tenant, IP, JA4) string label
 // collection uses — it is never persisted with training rows, and here
 // it exists only so evaluation can keep one client's sessions on one
-// side of the split (docs/CLIENT_READY_IMPLEMENTATION_PLAN.md, label
-// contract: "split by time and identity/session").
+// side of the split (split by time and identity/session; see
+// docs/ARCHITECTURE.md, Learned model).
 type EvalSample struct {
 	Sample
 	Identity string

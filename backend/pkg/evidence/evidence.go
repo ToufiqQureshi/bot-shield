@@ -86,7 +86,7 @@ type ModelReason struct {
 // Trail holds the most recent decisions in a fixed-size ring buffer,
 // oldest overwritten first. In-memory only, so it resets on restart —
 // same limitation as stats.Stats, and durable history needs the planned
-// store (docs/ROADMAP.md item 12).
+// store (docs/STATUS.md).
 type Trail struct {
 	mu     sync.Mutex
 	buf    []Evidence

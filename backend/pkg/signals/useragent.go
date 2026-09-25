@@ -21,7 +21,7 @@ var crawlerMarkers = []string{"bot", "spider", "crawl"}
 // that hasn't bothered to fake its User-Agent. A stealth automation
 // stack (Patchright-class) that drives a real, unmodified browser
 // engine sends a real browser's UA and is invisible to this check by
-// construction — see docs/SIGNAL_COVERAGE.md Section 4. Closing that
+// construction — see docs/STATUS.md, "What a good bot still gets past". Closing that
 // gap is behavioral/browser-integrity scoring (Phase 3), not a bigger
 // list here.
 var scriptingMarkers = []string{

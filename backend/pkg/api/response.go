@@ -14,7 +14,7 @@ func decodeJSON(r *http.Request, v any) error {
 }
 
 // envelope matches the {"success", "data"|"message"|"error"} shape
-// dashboard/BACKEND_WIRING_DOCS.md specifies for every JWT-authenticated
+// dashboard/src/lib/api.ts expects for every JWT-authenticated
 // endpoint, so the frontend's existing expectations don't have to change.
 type envelope struct {
 	Success bool   `json:"success"`

@@ -22,9 +22,8 @@ Whether you're fighting credential stuffing, scalpers, aggressive scrapers, or A
 > ones those are, and what bandwidth costs as traffic grows.
 >
 > **New here, or need to explain this to someone?**
-> [`docs/WHAT_IS_BUILT.md`](docs/WHAT_IS_BUILT.md) is a plain-language inventory of
-> what is implemented. [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) is
-> the current handoff with verification and remaining launch work.
+> [`docs/STATUS.md`](docs/STATUS.md) says what works, what does not, and
+> what comes next.
 
 ## Why this exists
 
@@ -120,9 +119,8 @@ Two read-only endpoints are served alongside your traffic:
 
 ### Learned scoring (shadow only)
 
-> Working on this? [`docs/SCORING_EXPLAINED.md`](docs/SCORING_EXPLAINED.md)
-> explains how scoring and the model work from zero, with worked numbers and
-> no machine-learning background assumed.
+> Working on this? Read "Learned model" in
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first.
 
 hakaishield's scoring weights are chosen by hand: a fragmented handshake
 is worth 50, a header anomaly 25, and so on. Those are reasonable
@@ -192,7 +190,7 @@ The database candidates can be used for shadow-only experiments with
 good-bot lookup is not a usable training label either. The collection
 pipeline and the bar a model has
 to clear before it may decide anything are in
-[`docs/LEARNED_SCORING.md`](docs/LEARNED_SCORING.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 The evidence endpoint is off unless you set a token, and it never gets
 wildcard CORS — it returns visitor fingerprints, and left open it would
@@ -251,8 +249,8 @@ startup, so you don't have to pass them on the command line every run.
 
 ## Documentation
 
-Start with `docs/AGENT.md` (why this exists), then
-`docs/ARCHITECTURE.md` (our enterprise-grade pipeline architecture), then `docs/ROADMAP.md` (Upcoming Enterprise Innovations).
+Five files in `docs/`: `STATUS.md` (start here), `ARCHITECTURE.md`,
+`DEPLOYMENT.md`, `DECISIONS.md`, `PROGRESS.md`.
 `CLAUDE.md` holds the enterprise stability guidelines every change must follow.
 
 ## Responsible use

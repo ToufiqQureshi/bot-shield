@@ -64,8 +64,7 @@ func validSignal(name string) bool {
 
 // ValidateRule is the single place a candidate rule is approved, called
 // both by the dashboard-facing Create/Update handler in pkg/rules and by
-// any future migration path — see docs/BACKEND_IMPLEMENTATION_PLAN.md
-// Phase 1 guardrails. blockThreshold is the account's configured block
+// any future migration path. blockThreshold is the account's configured block
 // score (pkg/settings Protection.BlockThreshold); pass 0 when validating
 // a rule that carries no DECEIVE action, since it is only consulted for
 // that check.
