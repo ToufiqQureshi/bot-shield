@@ -10,6 +10,22 @@ your session. See `CLAUDE.md` Section 0 / the mandatory update rule.
 
 ---
 
+## Cloudflare Pages for the dashboard — 2026-09-25
+
+**Decision.** Host the static React dashboard on Cloudflare Pages in its own
+`hakaishield-dashboard` Direct Upload project. Pin Node 24 and validate public
+build-time Supabase/API values before upload. Deploy the release branch as a
+preview, then the approved `main` revision as production. Direct Upload needs
+an explicit upload for each release; GitHub pushes alone do not deploy it.
+
+**Why.** Pages is suitable for static dashboard files. It is kept separate
+from the inline customer proxy, which must terminate visitor TLS itself to
+retain the visitor's ClientHello/JA4. Missing Vite values otherwise produce a
+successful static build that fails at runtime; the validation gate refuses that
+state and obvious server-side Supabase keys.
+
+---
+
 ## Managed first-client onboarding — 2026-09-24
 
 **Decision.** The first client uses one operator-provisioned domain, origin,

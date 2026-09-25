@@ -7,6 +7,19 @@ happens; don't let it go stale silently.
 
 ---
 
+## 2026-09-25 — Cloudflare Pages dashboard deployment
+
+Cloudflare's Pages documentation lists React/Vite build output as `dist`,
+supports `.node-version` to choose Node, and serves unmatched SPA paths from
+`index.html` when no top-level `404.html` exists. Wrangler Direct Upload uses
+`pages deploy <directory>`; this is separate from Git integration. See
+[build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/),
+[build image](https://developers.cloudflare.com/pages/configuration/build-image/),
+[SPA serving](https://developers.cloudflare.com/pages/configuration/serving-pages/),
+and [Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/).
+
+---
+
 ## 2026-09-24 — source review of five local reference repositories
 
 Reviewed `inspired/horizon/HARDENING.md`, its server admission flow and

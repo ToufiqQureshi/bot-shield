@@ -25,18 +25,40 @@ npm run build
 
 ## Pilot deployment
 
-Set these build-time variables on the static site host:
+The dashboard is a static React/Vite app. Its Cloudflare Pages project is
+`hakaishield-dashboard` (Direct Upload); the first deployment is still pending.
+The chosen production hostname is `https://interviewyaar.lol`.
+From `dashboard/`, use Node 24.19.0, `npm ci`, then `npm run build:pages`.
+Upload `dist/` for a preview with:
+
+```bash
+npx wrangler pages deploy dist --project-name hakaishield-dashboard --branch=release/client-pilot-hardening
+```
+
+Use `--branch=main` only for the approved production revision. Direct Upload
+does not automatically publish GitHub pushes.
+
+Set these **build-time** variables in the build environment before running
+`build:pages` (Vite embeds them in public JavaScript):
+Setting them only in Cloudflare Pages project settings does not change a bundle
+built and uploaded locally.
 
 - `VITE_SUPABASE_URL`: the same project used by the Go backend.
 - `VITE_SUPABASE_ANON_KEY`: its public anon key.
-- `VITE_API_BASE_URL`: `https://<pilot-domain>/api/v1`.
+- `VITE_API_BASE_URL`: `https://<protected-client-domain>/api/v1`; the
+  current backend serves its dashboard API on the protected domain.
 - `VITE_PILOT_CONTACT_EMAIL`: a working operator inbox. Until it is set,
   the contact page shows no send action.
 
-Build with `npm ci && npm run build`, publish `dist/`, and configure the host to
-serve `index.html` for dashboard routes. Add the dashboard URL and password
-reset redirect URL to the Supabase Auth allowlist. Set `DATABASE_URL` and
-`SUPABASE_URL` in `deploy/.env` so the authenticated backend API is enabled.
+`build:pages` refuses missing/placeholder values, non-HTTPS URLs, malformed API
+paths, and Supabase server secret keys. Never provide a `service_role` or
+`sb_secret_` key: only the public anon/publishable key belongs in this bundle.
+Cloudflare Pages serves React's deep links from `index.html` when there is no
+top-level `404.html`; no redirect rule is needed. Add the final Pages/custom
+domain origin and `/sign-in` password-reset URL to the Supabase Auth allowlist.
+Set `HAKAISHIELD_DASHBOARD_ORIGIN` on the backend to that exact HTTPS origin for
+authenticated API CORS. Set `DATABASE_URL` and `SUPABASE_URL` in `deploy/.env`
+so the authenticated backend API is enabled.
 
 The first client domain is provisioned by the operator after ownership, TLS,
 origin and shadow-mode checks. See `../docs/CLIENT_PILOT_RELEASE.md` for the

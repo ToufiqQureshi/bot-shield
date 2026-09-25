@@ -180,13 +180,22 @@ Postgres   -> Supabase. Managed backups, and a dead box does not take the
               customer data with it.
 Redis      -> Docker on the same box, no published port. Velocity counters
               only; losing them fails those signals open.
-Dashboard  -> Vercel or Cloudflare Pages. Static files, free, and NOT in the
+Dashboard  -> Cloudflare Pages. Static files, free, and NOT in the
               request path — so TLS termination there does not matter.
 TLS certs  -> certbot / Let's Encrypt, auto-renewed with a reload hook.
 ```
 
 **No load balancer, no CDN in front.** Both terminate TLS and would break the
 product — see §1.
+
+The dashboard's separate `hakaishield-dashboard` Pages project was created on
+2026-09-25 as Direct Upload. It has no first deployment until the public
+Supabase configuration and backend HTTPS API URL are known. Build instructions,
+preview/production branches and Auth/CORS setup are in `dashboard/README.md`.
+The chosen frontend hostname is `interviewyaar.lol`; the backend API remains on
+the protected client hostname under the current deployment architecture.
+Cloudflare Pages is only for the dashboard; the customer-facing proxy still
+needs direct TLS passthrough to its own server.
 
 ### Moving later costs nothing
 
