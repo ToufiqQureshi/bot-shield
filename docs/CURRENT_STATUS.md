@@ -16,8 +16,8 @@ target, not a measured result.** A local build and bot ladder cannot establish
 population-level recall or false-positive rate. Do not promise production
 availability or enable enforcement from this document alone.
 
-PR #19 merged an earlier release snapshot to `main`. Commits through
-`38e2bee5` are pushed only to `release/client-pilot-hardening`; the workflow
+PR #19 merged an earlier release snapshot to `main`. Later audit commits are
+pushed only to `release/client-pilot-hardening`; the workflow
 runs on pull requests and `main`, so these later commits have no remote CI run
 yet. The worktree also has concurrent, uncommitted HTTP/2 code and unrelated
 changes in `graphify-out/`, `patchright_test.py`, `bot_shield_test.py`, and
