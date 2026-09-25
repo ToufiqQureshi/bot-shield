@@ -34,6 +34,14 @@ learn the label back.
 
 ---
 
+### 2026-09-25 — model evaluation and pilot image audit
+
+`4fa0f778` — Repaired time/identity holdout splitting, promotion class coverage,
+calibration bounds and trainer approval guards; aligned the production builder
+with Go 1.26 after reproducing the image failure.
+Gotcha: `-approved-by` is a manual record, not evidence of a locked,
+identity-clean holdout; the trainer's JSONL still lacks time and identity.
+
 ### 2026-09-25 — close UA-only crawler exemption in path detection
 
 `98088429` — The existing `crawl_pattern` now counts declared crawler UAs
