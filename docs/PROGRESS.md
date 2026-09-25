@@ -46,6 +46,8 @@ calibration bounds and trainer approval guards; aligned the production builder
 with Go 1.26 after reproducing the image failure.
 `b6281036` — Fixed the only Go 1.26 gofmt mismatch in the committed code so
 the CI formatting gate passes.
+`4fd09030` — Clarified the post-PR #19 branch/main split, local Linux race
+verification, and remaining remote CI and domain gates in CURRENT_STATUS.
 Gotcha: `-approved-by` is a manual record, not evidence of a locked,
 identity-clean holdout; the trainer's JSONL still lacks time and identity.
 
