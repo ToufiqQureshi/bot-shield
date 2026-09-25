@@ -39,6 +39,8 @@ learn the label back.
 `4fa0f778` — Repaired time/identity holdout splitting, promotion class coverage,
 calibration bounds and trainer approval guards; aligned the production builder
 with Go 1.26 after reproducing the image failure.
+`b6281036` — Fixed the only Go 1.26 gofmt mismatch in the committed code so
+the CI formatting gate passes.
 Gotcha: `-approved-by` is a manual record, not evidence of a locked,
 identity-clean holdout; the trainer's JSONL still lacks time and identity.
 
