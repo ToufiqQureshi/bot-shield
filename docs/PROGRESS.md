@@ -321,3 +321,10 @@ node (same host shared); CI adds errorlint/bodyclose/nilerr/sqlclosecheck,
 govulncheck and four 20 s fuzz runs.
 Gotcha: during a random-host flood a brand-new domain's first request can get
 "not found" — by design, it is not negative-cached and resolves next request.
+
+### 2026-09-25 — docs collapsed to five files
+
+`a7ea917` — docs/ went from 16 files / 11.3k lines to five short files
+(STATUS, ARCHITECTURE, DEPLOYMENT, DECISIONS, PROGRESS); references updated.
+Gotcha: CLAUDE.md now says docs/ holds exactly five files — extend one,
+never add a sixth.
