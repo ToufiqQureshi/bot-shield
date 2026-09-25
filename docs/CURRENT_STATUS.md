@@ -16,9 +16,12 @@ target, not a measured result.** A local build and bot ladder cannot establish
 population-level recall or false-positive rate. Do not promise production
 availability or enable enforcement from this document alone.
 
-The release branch was pushed; it has not been merged to `main` by this work.
-There are unrelated pre-existing workspace changes in `graphify-out/`,
-`patchright_test.py`, `bot_shield_test.py`, and `CODEX_TODO_bot_detection.txt`.
+PR #19 merged an earlier release snapshot to `main`. Commits through
+`38e2bee5` are pushed only to `release/client-pilot-hardening`; the workflow
+runs on pull requests and `main`, so these later commits have no remote CI run
+yet. The worktree also has concurrent, uncommitted HTTP/2 code and unrelated
+changes in `graphify-out/`, `patchright_test.py`, `bot_shield_test.py`, and
+`CODEX_TODO_bot_detection.txt`.
 Inspect `git status` before staging and do not sweep those into a docs commit.
 
 ## What is implemented
@@ -147,14 +150,16 @@ regressions failed before each fix and passed afterwards. The production Docker
 build initially failed because the uncommitted HTTP/2 dependency update raised
 `go.mod` to Go 1.26 while the builder stayed at 1.25; the builder was aligned
 and a local image build passed. The uncommitted HTTP/2 implementation also has
-parser and preface-timeout fixes under verification; it is not part of the
-committed pilot release yet.
+parser and preface-timeout fixes; the current worktree passed focused HTTP/2
+tests and Linux `go test -race ./...` in a Go 1.26 container. It is not part of
+the committed pilot release yet.
 The route-label and retention changes passed focused red/green and mutation
 checks, including temporary-Postgres tests for batch deletion and policy
 persistence. Earlier branch work passed a production Docker image build,
 binary `-h`, shell syntax, and a TLS permission/renewal fixture confirming
 UID/GID 65532 can read the key while an unrelated user cannot. The current
-image has not been rebuilt or browser-smoked after these changes. No production
+local image was rebuilt and its `-h` command started; it has not been
+browser-smoked on a real domain. No production
 HTTPS, representative load, cert renewal on the target host, or measured
 bot-catch test has passed.
 
