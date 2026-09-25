@@ -335,6 +335,13 @@ on the data it was fitted to and poorly on the rest has memorised the
 sample. And read **false-positives** before accuracy: each one is a real
 visitor a customer would have lost.
 
+`-approved-by` is a manual sign-off field, not an automatic promotion gate.
+The trainer now refuses it for candidate labels, an empty holdout, or a
+holdout with fewer than 50 samples and 5 humans and 5 bots. Its JSONL input
+still has no event time or pseudonymous identity, so the trainer cannot prove
+that its tail split is a later, identity-clean holdout. Arrange that review
+outside the trainer and keep the loaded model in shadow mode.
+
 ---
 
 ## 8. Before a model may enforce anything

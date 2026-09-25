@@ -31,7 +31,7 @@ Inspect `git status` before staging and do not sweep those into a docs commit.
 | Additional observations | Chromium client-hint contradictions are recorded as `shadowSignals` during normal proxy shadow traffic. Four more candidates—WebGPU f16 absence, duplicate canvas output, pointer inactivity, and legacy automation globals—are recorded only after a valid **enforced** challenge solve. | None changes score or action. The four challenge-only candidates collect **no real-visitor samples in initial proxy shadow mode**. |
 | Verified bots and false-positive controls | Search crawler claims use bounded reverse/forward DNS verification. Policies have explicit owner checks, versioning, shadow preview, rollback, and an activation gate. | The policy gate uses local aggregates and needs real traffic review. The dashboard's legacy rule/settings pages do not control live policy. |
 | Evidence and dashboard | Tenant-scoped evidence, stats and offenders; selected-domain queries are ownership checked. Dashboard distinguishes scored signals from yellow observed candidates and cancels stale domain-switch requests. P1 measurement is wired end to end: per-tenant egress bytes (saturating counter, measured at the response writer) and challenge solve/fail counts appear in `/api/v1/dashboard/stats` and the Overview page. | Evidence and several aggregates are in memory and disappear on restart; UI test coverage is still small. |
-| Learned scoring | Candidate label pipeline and pure-Go trainer/model exist. Candidate samples in Postgres are pruned at startup and hourly in bounded batches, default 30 days (operator configurable). Loaded model predictions are recorded alongside rule decisions. Model artifacts are version 2 with provenance and leakage-safe evaluation/promotion checks. | Model is **shadow-only**. No representative, independently reviewed labels or measured model quality exist. Client-approved sample retention still needs confirmation before traffic collection. |
+| Learned scoring | Candidate label pipeline and pure-Go trainer/model exist. Candidate samples in Postgres are pruned at startup and hourly in bounded batches, default 30 days (operator configurable). Loaded model predictions are recorded alongside rule decisions. Model artifacts are version 2 with provenance. The evaluation helper now keeps its holdout strictly later and identity-clean, and refuses a holdout without both classes. The trainer refuses an approval stamp for candidate labels, zero holdout, or a holdout with fewer than 50 rows and 5 of either class. | Model is **shadow-only**. The trainer's JSONL format lacks event time and identity, so its own holdout is not yet the locked, leakage-safe evaluation needed for promotion. No representative, independently reviewed labels or measured model quality exist. Client-approved sample retention still needs confirmation before traffic collection. |
 | Managed onboarding and packaging | Self-service domain creation is disabled; operator binds the verified client domain. Compose requires stable secrets, Postgres, Supabase and dashboard origin. Certbot key is copied to a restricted directory for the non-root container; the renewal hook refreshes it before restart. | Domain ownership, TLS and origin checks are manual for this pilot; automatic multi-domain onboarding and billing are not built. |
 
 The five `inspired/` repositories were reviewed for ideas, with no code copied.
@@ -141,6 +141,14 @@ On the current release branch, local checks passed: backend
 `go test ./... -count=1`, `go vet ./...`, `go build ./...`, and
 `golangci-lint run ./...` (0 issues); dashboard `npm run typecheck`,
 `npm test` (12 tests), and `npm run build`; Compose config with dummy values.
+The 2026-09-25 audit fixed a model split chronology leak, a one-class promotion
+gate, a calibration bucket panic, and unsafe trainer approval stamps. Focused
+regressions failed before each fix and passed afterwards. The production Docker
+build initially failed because the uncommitted HTTP/2 dependency update raised
+`go.mod` to Go 1.26 while the builder stayed at 1.25; the builder was aligned
+and a local image build passed. The uncommitted HTTP/2 implementation also has
+parser and preface-timeout fixes under verification; it is not part of the
+committed pilot release yet.
 The route-label and retention changes passed focused red/green and mutation
 checks, including temporary-Postgres tests for batch deletion and policy
 persistence. Earlier branch work passed a production Docker image build,
