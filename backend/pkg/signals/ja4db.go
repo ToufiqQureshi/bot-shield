@@ -2,6 +2,7 @@ package signals
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -53,13 +54,13 @@ func syncJA4FromRedis(ctx context.Context, rdb *redis.Client) {
 	defer cancel()
 
 	scrapers, err := rdb.HGetAll(timeoutCtx, "ja4:scrapers").Result()
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
 		log.Printf("hakaishield: error syncing ja4 scrapers from redis: %v", err)
 		return
 	}
 
 	browsers, err := rdb.SMembers(timeoutCtx, "ja4:browsers").Result()
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
 		log.Printf("hakaishield: error syncing ja4 browsers from redis: %v", err)
 		return
 	}

@@ -29,7 +29,7 @@ var secCHUANames = []string{
 // navigation. It is deliberately never a block on its own — a page
 // fetched inside a real browser's devtools-driven fetch, a privacy
 // browser, or any unusual-but-real client can drop one of these, so the
-// result is a scoring signal (ROADMAP item 8's consistency layer), not
+// result is a scoring signal (the consistency layer, docs/STATUS.md item 8), not
 // a decision. A UA that isn't claiming to be a browser, or that openly
 // names itself a crawler, is exempt — there is no claimed identity to
 // hold to its headers (fail open, CLAUDE.md Section 8).

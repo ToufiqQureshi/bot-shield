@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -111,7 +112,7 @@ func TestVerify_RejectsExpiredToken(t *testing.T) {
 	v := tj.verifier(t)
 
 	token := tj.sign(t, "usr", -time.Hour) // already expired
-	if _, err := v.Verify(token); err != ErrInvalidToken {
+	if _, err := v.Verify(token); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Verify(expired) = %v, want ErrInvalidToken", err)
 	}
 }
@@ -123,7 +124,7 @@ func TestVerify_RejectsTokenFromDifferentKey(t *testing.T) {
 	other := newTestJWKS(t) // different key, own kid
 	forged := other.sign(t, "attacker", time.Hour)
 
-	if _, err := v.Verify(forged); err != ErrInvalidToken {
+	if _, err := v.Verify(forged); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Verify(forged) = %v, want ErrInvalidToken", err)
 	}
 }
@@ -144,7 +145,7 @@ func TestVerify_RejectsUnknownKeyID(t *testing.T) {
 		t.Fatalf("signing: %v", err)
 	}
 
-	if _, err := v.Verify(s); err != ErrInvalidToken {
+	if _, err := v.Verify(s); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Verify(unknown kid) = %v, want ErrInvalidToken", err)
 	}
 }
@@ -165,7 +166,7 @@ func TestVerify_UnknownKeyIDRefreshIsBounded(t *testing.T) {
 		if err != nil {
 			t.Fatalf("signing: %v", err)
 		}
-		if _, err := v.Verify(signed); err != ErrInvalidToken {
+		if _, err := v.Verify(signed); !errors.Is(err, ErrInvalidToken) {
 			t.Fatalf("Verify(unknown kid) = %v, want ErrInvalidToken", err)
 		}
 	}
@@ -189,7 +190,7 @@ func TestVerify_RejectsAlgNone(t *testing.T) {
 		t.Fatalf("signing alg=none token: %v", err)
 	}
 
-	if _, err := v.Verify(s); err != ErrInvalidToken {
+	if _, err := v.Verify(s); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Verify(alg=none) = %v, want ErrInvalidToken", err)
 	}
 }
@@ -198,10 +199,10 @@ func TestVerify_RejectsGarbage(t *testing.T) {
 	tj := newTestJWKS(t)
 	v := tj.verifier(t)
 
-	if _, err := v.Verify("not.a.jwt"); err != ErrInvalidToken {
+	if _, err := v.Verify("not.a.jwt"); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Verify(garbage) = %v, want ErrInvalidToken", err)
 	}
-	if _, err := v.Verify(""); err != ErrInvalidToken {
+	if _, err := v.Verify(""); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Verify(empty) = %v, want ErrInvalidToken", err)
 	}
 }
@@ -211,7 +212,7 @@ func TestVerify_RejectsMissingSubject(t *testing.T) {
 	v := tj.verifier(t)
 
 	token := tj.sign(t, "", time.Hour)
-	if _, err := v.Verify(token); err != ErrInvalidToken {
+	if _, err := v.Verify(token); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("Verify(no subject) = %v, want ErrInvalidToken", err)
 	}
 }

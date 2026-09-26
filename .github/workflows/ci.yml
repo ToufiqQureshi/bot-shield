@@ -58,6 +58,19 @@ jobs:
       - name: go test
         run: go test -race ./...
 
+      - name: govulncheck
+        # Reports only vulnerabilities in code paths we actually call.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      - name: fuzz visitor-controlled parsers
+        # A short run per target on every push. These parse hostile input
+        # on the request path, where a panic is an outage for the customer.
+        run: |
+          go test -run='^$' -fuzz='^FuzzClientIP$'    -fuzztime=20s ./pkg/core/
+          go test -run='^$' -fuzz='^FuzzVerifyBody$'  -fuzztime=20s ./pkg/challenge/
+          go test -run='^$' -fuzz='^FuzzParseJA4$'    -fuzztime=20s ./pkg/signals/
+          go test -run='^$' -fuzz='^FuzzUAMismatch$'  -fuzztime=20s ./pkg/signals/
+
       - name: golangci-lint
         # v6 of this action does not support golangci-lint v2 at all
         # ("golangci-lint v2 is not supported by golangci-lint-action

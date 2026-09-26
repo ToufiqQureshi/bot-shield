@@ -26,7 +26,7 @@ func RiskFromContext(ctx context.Context) int {
 	return 0
 }
 
-// Phase 2 of docs/BACKEND_IMPLEMENTATION_PLAN.md: the challenge a visitor
+// Adaptive challenge (docs/DECISIONS.md, Challenge): the challenge a visitor
 // receives is not fixed. Difficulty is chosen by the server from the risk
 // score it already computed for the request, and from how many times this
 // client has already failed to solve one. Both inputs are bounded, so a

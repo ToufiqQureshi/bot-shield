@@ -42,7 +42,7 @@ func (d Decision) String() string {
 }
 
 // Signal weights and thresholds. Fixed for now, not yet configurable
-// per client — that's docs/ROADMAP.md item 11. fragmentedWeight and
+// per client — that's docs/STATUS.md item 11. fragmentedWeight and
 // uaMismatchWeight are deliberately equal and additive: a fragmented
 // handshake (fingerprint-layer anomaly, true regardless of what the
 // client claims to be) and a UA mismatch (consistency-layer lie,

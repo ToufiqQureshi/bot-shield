@@ -68,7 +68,7 @@ func (r *Recorder) ChallengeSolved(nonce string) {
 // fired must already have the honeypot_trap bit cleared. Leaving it in
 // would make the model learn "honeypot_trap means automated", which is
 // the label rather than a finding — the other checks on the same request
-// are the part worth learning from (docs/LEARNED_SCORING.md).
+// are the part worth learning from (docs/ARCHITECTURE.md).
 func (r *Recorder) HoneypotTripped(s Sample) {
 	if r == nil {
 		return

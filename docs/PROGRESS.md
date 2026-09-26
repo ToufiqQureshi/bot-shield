@@ -26,11 +26,13 @@ learn the label back.
 | Question | Look here |
 |---|---|
 | What exactly changed, and how was it verified? | `git show <commit>` |
-| Why was it done this way, and what was rejected? | `docs/DECISIONS.md` |
-| What is known about this threat or vendor? | `docs/RESEARCH.md` |
-| How does this part work? | the topic doc — `SCORING_EXPLAINED`, `LEARNED_SCORING`, `DEPLOYMENT`, `ARCHITECTURE` |
-| What is built and what is not? | `docs/WHAT_IS_BUILT.md` |
-| Sessions before 2026-09-22 | `docs/PROGRESS_ARCHIVE.md` |
+| Why was it done, what was rejected? | `docs/DECISIONS.md` |
+| What works, what's next? | `docs/STATUS.md` |
+| How does it work? | `docs/ARCHITECTURE.md`, `docs/DEPLOYMENT.md` |
+| Older long-form notes (deleted 2026-09-25) | `git show a7fe7ce:docs/PROGRESS_ARCHIVE.md` |
+
+Doc names in older entries below may point at files merged into the five
+above on 2026-09-25; `git show <commit>:<path>` still has them.
 
 ---
 
@@ -311,3 +313,18 @@ tracks, `pkg/decide` evidence gates, and cloud-cost controls in
 `CLIENT_READY_IMPLEMENTATION_PLAN.md`.
 Gotcha: 80% blocked bots requires measured hard-block recall on independent
 labels; challenges cannot be counted as blocks.
+
+### 2026-09-25 — bounded host lookups + CI bug-finding
+
+`b2d5ad4` — Unknown Host headers now cost at most 8 concurrent DB lookups per
+node (same host shared); CI adds errorlint/bodyclose/nilerr/sqlclosecheck,
+govulncheck and four 20 s fuzz runs.
+Gotcha: during a random-host flood a brand-new domain's first request can get
+"not found" — by design, it is not negative-cached and resolves next request.
+
+### 2026-09-25 — docs collapsed to five files
+
+`a7ea917` — docs/ went from 16 files / 11.3k lines to five short files
+(STATUS, ARCHITECTURE, DEPLOYMENT, DECISIONS, PROGRESS); references updated.
+Gotcha: CLAUDE.md now says docs/ holds exactly five files — extend one,
+never add a sixth.

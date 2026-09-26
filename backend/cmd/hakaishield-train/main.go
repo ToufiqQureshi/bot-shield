@@ -300,8 +300,8 @@ func readSamples(r io.Reader, features []string) ([]decide.Sample, error) {
 			return nil, fmt.Errorf("line %d: missing automated label", line)
 		}
 		var extra any
-		if err := dec.Decode(&extra); err != io.EOF {
-			return nil, fmt.Errorf("line %d: extra content after sample: %v", line, err)
+		if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("line %d: extra content after sample: %w", line, err)
 		}
 
 		fired, err := decide.Vector(features, l.Signals)

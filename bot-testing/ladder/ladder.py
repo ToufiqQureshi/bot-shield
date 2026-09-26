@@ -11,7 +11,7 @@ detection stops working, not to invent ways past it.
 Only run this against a site you own. And keep -collect-labels OFF on the
 server while you do: these requests would otherwise become training
 samples and teach the model what YOUR bots look like, not what real ones
-do (docs/LEARNED_SCORING.md).
+do (docs/ARCHITECTURE.md).
 
 Higher rungs need optional packages; each one reports itself as skipped
 rather than failing the run:

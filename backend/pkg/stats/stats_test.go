@@ -53,7 +53,7 @@ func TestStats_ModeReported(t *testing.T) {
 	}
 }
 
-// P1 measurement (docs/CLIENT_READY_IMPLEMENTATION_PLAN.md): the plan's
+// P1 measurement (docs/STATUS.md): the plan's
 // cost numbers are egress bytes and challenge outcomes, so Stats must
 // carry them alongside the decision counts.
 func TestStats_RecordsBytesAndChallengeOutcomes(t *testing.T) {

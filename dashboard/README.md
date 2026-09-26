@@ -39,7 +39,7 @@ reset redirect URL to the Supabase Auth allowlist. Set `DATABASE_URL` and
 `SUPABASE_URL` in `deploy/.env` so the authenticated backend API is enabled.
 
 The first client domain is provisioned by the operator after ownership, TLS,
-origin and shadow-mode checks. See `../docs/CLIENT_PILOT_RELEASE.md` for the
+origin and shadow-mode checks. See `../docs/DEPLOYMENT.md` for the
 gate and account-to-domain binding. Restart the proxy after binding the
 default owner so owner-scoped route drafts can load. A pending row does not
 protect traffic.

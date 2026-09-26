@@ -776,8 +776,8 @@ func (c *Challenge) verify(w http.ResponseWriter, r *http.Request) {
 	// A stock Selenium/Puppeteer/Playwright automation framework
 	// exposes navigator.webdriver, __pwInitScripts, a default 800x600
 	// viewport, or a Chromium-without-Chrome client-hints brand, even
-	// when the browser itself is real (so canvas/sha256 pass) —
-	// ROADMAP item 6. We also detect headless cloud VM renderers
+	// when the browser itself is real (so canvas/sha256 pass).
+	// We also detect headless cloud VM renderers
 	// (SwiftShader/llvmpipe). These values are client-supplied, so they
 	// fail the challenge rather than labelling the visitor, and a
 	// suspiciously fast solve is only measured, never enforced.
